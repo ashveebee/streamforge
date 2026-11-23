@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamForge — one dashboard for your Jellyfin media stack</title>
-  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk: live streams, service health, downloads, requests and storage in one place.">
+  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk: live streams, service health, downloads, requests and storage in one place, with auto-import, stalled-download cleanup and notifications.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
@@ -42,6 +42,7 @@
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+    html, body { overflow-x: clip; }
     body {
       margin: 0;
       background: var(--bg);
@@ -206,6 +207,12 @@
     <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-wand" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+    <symbol id="i-stethoscope" viewBox="0 0 24 24"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   </svg>
 
   <div class="ambient" aria-hidden="true"></div>
@@ -265,32 +272,74 @@
           <article class="card reveal" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Now Playing, live</h3>
-            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details down to codecs and hardware acceleration.</p>
+            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details. Pause, message or stop a stream when you need to.</p>
           </article>
           <article class="card reveal" style="--c:var(--ok)">
             <div class="ico"><svg class="i"><use href="#i-activity"/></svg></div>
             <h3>Health monitoring</h3>
-            <p>Each service is checked every 30 seconds for status, response time, uptime and the problems it reports about itself.</p>
+            <p>Each service is checked every 30 seconds for status, response time, uptime and the problems it reports about itself, with an alert when one goes down.</p>
           </article>
           <article class="card reveal" style="--c:var(--sonarr)">
             <div class="ico"><svg class="i"><use href="#i-download"/></svg></div>
             <h3>Downloads and calendar</h3>
-            <p>Sonarr and Radarr queues with live throughput, plus what's airing and releasing over the next two weeks.</p>
+            <p>Sonarr and Radarr queues with live throughput and one-click blocklist, re-search or remove. See what's missing and what's airing next, across as many instances as you run.</p>
           </article>
           <article class="card reveal" style="--c:var(--seerr)">
             <div class="ico"><svg class="i"><use href="#i-inbox"/></svg></div>
             <h3>Requests</h3>
-            <p>Seerr requests waiting for approval and recently fulfilled, with who asked and when.</p>
+            <p>Seerr requests waiting for approval and recently fulfilled, with who asked and when. Approve or decline right from the dashboard.</p>
           </article>
           <article class="card reveal" style="--c:var(--infinidisk)">
             <div class="ico"><svg class="i"><use href="#i-drive"/></svg></div>
             <h3>Storage</h3>
-            <p>Capacity, usage, temperatures and health for every drive, with warnings before a pool fills up.</p>
+            <p>Capacity, usage, temperatures and health for every drive, plus a forecast of when each volume will fill up and an alert before it does.</p>
           </article>
           <article class="card reveal" style="--c:var(--violet)">
             <div class="ico"><svg class="i"><use href="#i-settings"/></svg></div>
             <h3>Set up from the UI</h3>
-            <p>Add each service's address and API key in Settings, test the connection and save. Changes apply instantly, with no config files or restarts.</p>
+            <p>Add each service's address and API key in Settings, test the connection and save. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="automation" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">Automation and insight</div>
+          <h2>It fixes the usual problems for you</h2>
+          <p class="section-lede">Stuck imports, dead downloads and full disks get handled, and you hear about anything that can't be.</p>
+        </div>
+        <div class="features">
+          <article class="card reveal" style="--c:var(--sonarr)">
+            <div class="ico"><svg class="i"><use href="#i-wand"/></svg></div>
+            <h3>Auto-import</h3>
+            <p>Downloads Sonarr or Radarr couldn't match get matched from grab history, the release name and your library, then imported. Conflicting signals are never guessed at, and Preview shows what it would do first.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--radarr)">
+            <div class="ico"><svg class="i"><use href="#i-refresh"/></svg></div>
+            <h3>Stalled download cleanup</h3>
+            <p>Downloads that stop making progress, or that fail, are removed, blocklisted and searched for again, so the queue keeps moving without you.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--seerr)">
+            <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
+            <h3>Notifications</h3>
+            <p>Discord, ntfy, Pushover, webhooks or push to your phone. Pick the events for each: outages, full disks, failed imports and new requests.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--violet)">
+            <div class="ico"><svg class="i"><use href="#i-chart"/></svg></div>
+            <h3>Playback stats</h3>
+            <p>Plays and watch time per day, direct play vs transcode, top viewers, titles and clients, and a heatmap of when people watch.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--jellyfin)">
+            <div class="ico"><svg class="i"><use href="#i-stethoscope"/></svg></div>
+            <h3>Library health</h3>
+            <p>Series with missing episodes, files that could be upgraded, downloads Jellyfin never picked up, and items nothing is managing.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--cyan)">
+            <div class="ico"><svg class="i"><use href="#i-phone"/></svg></div>
+            <h3>Install it like an app</h3>
+            <p>Add StreamForge to your phone's home screen or your desktop. It opens like any other app, and push notifications reach your phone.</p>
           </article>
         </div>
       </div>
@@ -307,6 +356,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Resolution, HDR, codecs and bitrate</li>
               <li><svg class="i"><use href="#i-check"/></svg>Transcode reasons and hardware acceleration</li>
               <li><svg class="i"><use href="#i-check"/></svg>User, device and client for each session</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop a stream</li>
             </ul>
           </div>
           <div class="shot"><img src="screenshots/now-playing.jpg" width="2880" height="1800" loading="lazy" alt="Now Playing page with active streams, artwork and playback details"></div>
@@ -321,6 +371,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Healthy, degraded and offline at a glance</li>
               <li><svg class="i"><use href="#i-check"/></svg>Issues straight from Sonarr, Radarr and Prowlarr</li>
               <li><svg class="i"><use href="#i-check"/></svg>Host metrics and download throughput</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Storage forecast and stalled download cleanup</li>
             </ul>
           </div>
           <div class="shot"><img src="screenshots/system.jpg" width="2880" height="2200" loading="lazy" alt="System Status page listing each service's health, response time and uptime"></div>
@@ -334,7 +385,8 @@
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Changes apply immediately, with no restart</li>
               <li><svg class="i"><use href="#i-check"/></svg>Environment variables still work as a fallback</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Administrators only</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Add a second Sonarr or Radarr, such as a 4K library</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Switch off services you don't use</li>
             </ul>
           </div>
           <div class="shot"><img src="screenshots/settings.jpg" width="2880" height="2000" loading="lazy" alt="Settings page with an address and API key field for each service"></div>
@@ -342,7 +394,7 @@
 
         <div class="gallery">
           <a class="reveal" href="screenshots/jellyfin.jpg"><figure><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with libraries, server details and recently added items"><figcaption><b>Jellyfin.</b> Libraries, users, server details and new additions.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/sonarr.jpg"><figure><img src="screenshots/sonarr.jpg" width="2880" height="2000" loading="lazy" alt="Sonarr page with the download queue and episodes airing soon"><figcaption><b>Sonarr and Radarr.</b> Queues, upcoming releases and disk space.</figcaption></figure></a>
+          <a class="reveal" href="screenshots/sonarr.jpg"><figure><img src="screenshots/sonarr.jpg" width="2880" height="2000" loading="lazy" alt="Sonarr page with the download queue and episodes airing soon"><figcaption><b>Sonarr and Radarr.</b> Queues, upcoming releases, missing items and auto-import.</figcaption></figure></a>
           <a class="reveal" href="screenshots/seerr.jpg"><figure><img src="screenshots/seerr.jpg" width="2880" height="1800" loading="lazy" alt="Seerr page with requests awaiting approval and recent requests"><figcaption><b>Seerr.</b> Pending approvals and recent requests.</figcaption></figure></a>
           <a class="reveal" href="screenshots/infinidisk.jpg"><figure><img src="screenshots/infinidisk.jpg" width="2880" height="1800" loading="lazy" alt="Infinidisk page with storage capacity and the health of each drive"><figcaption><b>Infinidisk.</b> Capacity, drive health and temperatures.</figcaption></figure></a>
         </div>
@@ -396,7 +448,7 @@
         <h2>Your keys never leave the server</h2>
         <div class="trust">
           <div class="card reveal"><div class="ico" style="--c:var(--ok)"><svg class="i"><use href="#i-key"/></svg></div><h3>Server-side credentials</h3><p>API keys and Jellyfin tokens stay on the server. The browser only gets an opaque, HttpOnly session cookie.</p></div>
-          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Jellyfin sign-in</h3><p>Sign in with your existing Jellyfin account. Only administrators can get in by default.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Jellyfin sign-in</h3><p>Sign in with your existing Jellyfin account. Only administrators get in by default; you choose which pages the rest of the household sees.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Hardened by default</h3><p>CSRF protection, rate-limited login, a strict content security policy and artwork proxied through validated routes.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--radarr)"><svg class="i"><use href="#i-box"/></svg></div><h3>Signed images</h3><p>Every release image ships with an SBOM and build provenance you can verify with <code>gh attestation verify</code>.</p></div>
         </div>
