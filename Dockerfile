@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: compile the UI and server once, on the runner's native platform ----
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -11,13 +11,13 @@ ARG VERSION=""
 RUN STREAMFORGE_VERSION="${VERSION}" npm run build
 
 # ---- deps: production dependencies for the target platform ----
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 # ---- runtime ----
-FROM node:22-alpine
+FROM node:26-alpine
 ARG VERSION=""
 ENV NODE_ENV=production \
     PORT=4000 \
