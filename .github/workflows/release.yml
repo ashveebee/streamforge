@@ -1,0 +1,177 @@
+name: Release
+
+# On every push to main:
+#  1. release-please opens/updates a release PR from Conventional Commits, or —
+#     when that PR is merged — tags vX.Y.Z and publishes the GitHub Release.
+#  2. A multi-arch image is pushed to GHCR (and optionally Docker Hub):
+#     - releases:   X.Y.Z, X.Y, X (from 1.0 onwards) and latest
+#     - every push: edge and sha-<short>
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      major: ${{ steps.release.outputs.major }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          # Optional PAT/App token so CI runs on the release PR (GITHUB_TOKEN-created PRs don't trigger workflows).
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  image:
+    name: Publish Docker image
+    needs: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write # append pull instructions to the release notes
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      RELEASE: ${{ needs.release-please.outputs.release_created == 'true' }}
+      VERSION: ${{ needs.release-please.outputs.version }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve image names and version
+        id: vars
+        run: |
+          ghcr="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo "ghcr=${ghcr}"
+            echo "images<<EOF"
+            echo "${ghcr}"
+            if [ -n "${DOCKERHUB_IMAGE}" ]; then echo "docker.io/${DOCKERHUB_IMAGE,,}"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ "${RELEASE}" = "true" ]; then
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            base="$(node -p "require('./package.json').version")"
+            echo "version=${base}-edge.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_IMAGE != ''
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.vars.outputs.images }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }},enable=${{ env.RELEASE }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.RELEASE }}
+            type=semver,pattern={{major}},value=${{ env.VERSION }},enable=${{ env.RELEASE == 'true' && needs.release-please.outputs.major != '0' }}
+            type=raw,value=latest,enable=${{ env.RELEASE }}
+            type=raw,value=edge
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.title=StreamForge
+            org.opencontainers.image.version=${{ steps.vars.outputs.version }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: VERSION=${{ steps.vars.outputs.version }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.vars.outputs.ghcr }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Add image details to the release notes
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.vars.outputs.ghcr }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          cat >> notes.md <<NOTES
+
+          ---
+
+          ### 🐳 Docker image
+
+          \`\`\`bash
+          docker pull ${IMAGE}:${VERSION}
+          \`\`\`
+
+          Multi-arch: \`linux/amd64\`, \`linux/arm64\` · Digest: \`${DIGEST}\`
+
+          Verify provenance: \`gh attestation verify oci://${IMAGE}:${VERSION} --repo ${GITHUB_REPOSITORY}\`
+          NOTES
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+
+      - name: Summary
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Published StreamForge ${{ steps.vars.outputs.version }}"
+            echo
+            echo "Digest: \`${DIGEST}\`"
+            echo
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

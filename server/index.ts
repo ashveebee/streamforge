@@ -8,6 +8,7 @@ import { authRouter, requireCsrfHeader } from './auth.js';
 import { api } from './routes.js';
 import { startMonitors } from './health.js';
 import { startHostMetrics } from './host.js';
+import { VERSION } from './version.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -35,7 +36,7 @@ app.use(
 );
 app.use(express.json({ limit: '32kb' }));
 
-app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
 app.use('/api', requireCsrfHeader);
 app.use('/api/auth', authRouter);
 app.use('/api', api);
@@ -52,7 +53,7 @@ if (existsSync(webDist)) {
 }
 
 app.listen(config.port, config.host, () => {
-  console.log(`\n  ▲ StreamForge API listening on http://${config.host}:${config.port}`);
+  console.log(`\n  ▲ StreamForge v${VERSION} listening on http://${config.host}:${config.port}`);
   console.log(`    Jellyfin → ${config.jellyfin.baseUrl}`);
   for (const k of ['sonarr', 'radarr', 'prowlarr', 'seerr'] as const) {
     console.log(`    ${k.padEnd(9)}→ ${config[k]?.baseUrl ?? '(not configured)'}`);

@@ -58,15 +58,46 @@ npm run build
 npm start                 # serves UI + API on :4000
 ```
 
-Docker:
+Docker (multi-arch images for `amd64` and `arm64`):
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.example.yml up -d --build
+docker compose -f docker-compose.example.yml up -d
+```
+
+Or run the image directly:
+
+```bash
+docker run -d --name streamforge --env-file .env -p 4000:4000 ghcr.io/ashveebee/streamforge:1
 ```
 
 Only `JELLYFIN_URL` is required. Any service without a URL and API key is shown
 as *Not configured*, and its widgets are hidden.
+
+## Releases and image tags
+
+StreamForge follows [Semantic Versioning](https://semver.org). Releases are
+automated from [Conventional Commits](https://www.conventionalcommits.org/)
+(see [CONTRIBUTING.md](CONTRIBUTING.md)), and each one is published as a
+[GitHub Release](../../releases) with a changelog.
+
+| Tag | Updated when | Use it for |
+| --- | --- | --- |
+| `1.2.3` | never (immutable) | exact, reproducible deployments |
+| `1.2` | every patch release of 1.2 | bug fixes only |
+| `1` | every 1.x release | **recommended**: features and fixes, no breaking changes |
+| `latest` | every release | always the newest stable release |
+| `edge` | every commit to `main` | testing unreleased changes |
+| `sha-abc1234` | that commit only | debugging a specific build |
+
+Every image ships with an SBOM and a signed build-provenance attestation. To
+verify an image:
+
+```bash
+gh attestation verify oci://ghcr.io/ashveebee/streamforge:1 --repo ashveebee/streamforge
+```
+
+The running version appears in the sidebar and at `/healthz`.
 
 ## Architecture
 

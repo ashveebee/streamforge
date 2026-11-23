@@ -1,11 +1,12 @@
 import { config } from '../config.js';
 import { buildUrl, requestJson, requestRaw, UpstreamError } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
+import { VERSION as APP_VERSION } from '../version.js';
 import type { HealthProbe } from './types.js';
 
 const BASE = config.jellyfin.baseUrl;
 const CLIENT = 'StreamForge';
-const VERSION = '1.0.0';
+const VERSION = APP_VERSION;
 const TICKS_PER_MS = 10_000;
 
 export function authHeader(token?: string, deviceId = 'streamforge-server') {

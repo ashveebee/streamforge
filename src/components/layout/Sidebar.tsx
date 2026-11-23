@@ -97,7 +97,7 @@ export function Sidebar({
         {!collapsed && (
           <div className="min-w-0 leading-tight">
             <div className="text-[15px] font-semibold tracking-tight">StreamForge</div>
-            <div className="text-[11px] text-ink-4">Control centre</div>
+            <div className="text-[11px] text-ink-4">Control centre · v{__APP_VERSION__}</div>
           </div>
         )}
       </div>

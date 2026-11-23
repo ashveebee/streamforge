@@ -2,4 +2,10 @@ node_modules
 dist
 dist-server
 .env
+.env.*
+!.env.example
 .git
+.github
+*.md
+!README.md
+docker-compose*.yml

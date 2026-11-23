@@ -1,6 +1,8 @@
 services:
   streamforge:
-    build: .
+    # Pin a major version (":1") for automatic minor/patch updates without
+    # breaking changes, or an exact version (":1.2.3") for full control.
+    image: ghcr.io/ashveebee/streamforge:1
     container_name: streamforge
     env_file: .env
     ports:
