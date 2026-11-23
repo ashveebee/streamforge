@@ -14,6 +14,7 @@ import type {
   AutoImportEntry,
   AutoImportStatus,
   CleanupStatus,
+  NotificationsStatus,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -906,6 +907,22 @@ const cleanup: CleanupStatus = {
   ],
 };
 app.get('/api/downloads/cleanup', json(() => cleanup));
+const notifications: NotificationsStatus = {
+  channels: [
+    { id: 'n1', type: 'discord', name: 'Discord #homelab', enabled: true, events: ['service_down', 'service_up', 'disk_low', 'import_failed', 'request_pending'], config: {}, secrets: { webhookUrl: 'webhook …8812' } },
+    { id: 'n2', type: 'ntfy', name: 'Phone (ntfy)', enabled: true, events: ['service_down', 'disk_low'], config: { server: 'https://ntfy.sh', topic: 'homelab-demo' }, secrets: {} },
+  ],
+  events: ['service_down', 'service_up', 'disk_low', 'import_done', 'import_failed', 'download_removed', 'request_pending'],
+  defaultEvents: ['service_down', 'service_up', 'disk_low', 'import_failed', 'download_removed', 'request_pending'],
+  deliveries: [
+    { at: iso(5 * HOUR), channel: 'Discord #homelab', event: 'download_removed', title: 'Removed stalled download: Small Hours · 2025', ok: true },
+    { at: iso(26 * HOUR), channel: 'Phone (ntfy)', event: 'service_down', title: 'Prowlarr is offline', ok: true },
+  ],
+  push: { publicKey: 'BDemoKeyNotUsable', devices: 1 },
+  publicUrl: 'https://streamforge.example.com',
+};
+app.get('/api/settings/notifications', json(() => notifications));
+app.all('/api/settings/notifications/*rest', (_req, res) => res.json({ ok: true, subscribed: false }));
 app.put('/api/downloads/cleanup', (req, res) => {
   Object.assign(cleanup.settings, req.body);
   res.json(cleanup);

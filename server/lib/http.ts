@@ -16,6 +16,8 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
+  /** Sent as-is instead of JSON-encoding `body`. */
+  rawBody?: string;
   timeoutMs?: number;
   service?: string;
 }
@@ -54,7 +56,7 @@ export async function requestRaw(url: string, opts: RequestOptions = {}): Promis
         ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...opts.headers,
       },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.rawBody ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
       signal: AbortSignal.timeout(opts.timeoutMs ?? config.requestTimeoutMs),
       redirect: 'follow',
     });

@@ -8,6 +8,20 @@ import * as jellyfin from './services/jellyfin.js';
 import { arrProbe } from './services/arr.js';
 import { seerrClient, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe, infinidiskTarget } from './services/infinidisk.js';
+import {
+  addPushSubscription,
+  CHANNEL_TYPES,
+  ChannelError,
+  describeChannel,
+  EVENT_TYPES,
+  hasPushSubscription,
+  notificationsStatus,
+  removeChannel,
+  removePushSubscription,
+  saveChannel,
+  setPublicUrl,
+  testChannel,
+} from './services/notify.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
@@ -303,4 +317,96 @@ settingsRouter.delete('/instances/:id', (req, res) => {
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
   console.log(`[settings] instance ${id} removed by ${req.session!.userName}`);
   res.json({ ok: true });
+});
+
+/* ----------------------------- notifications ---------------------------- */
+
+const channelBody = z
+  .object({
+    type: z.enum(CHANNEL_TYPES),
+    name: z.string().trim().max(60).default(''),
+    enabled: z.boolean().default(true),
+    events: z.array(z.enum(EVENT_TYPES)).max(EVENT_TYPES.length),
+    config: z.record(z.string().max(64), z.string().max(2048)).default({}),
+  })
+  .strict();
+
+function channelError(res: Response, err: unknown) {
+  if (err instanceof ChannelError) return badRequest(res, err.message, err.field ? `config.${err.field}` : undefined);
+  throw err;
+}
+
+settingsRouter.get('/notifications', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json(notificationsStatus());
+});
+
+settingsRouter.put('/notifications/public-url', (req, res) => {
+  const parsed = z.object({ url: urlField }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', 'publicUrl');
+  setPublicUrl(parsed.data.url);
+  res.json(notificationsStatus());
+});
+
+settingsRouter.post('/notifications/channels', (req, res) => {
+  const parsed = channelBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  try {
+    const ch = saveChannel(parsed.data);
+    console.log(`[notify] channel "${ch.name}" (${ch.type}) added by ${req.session!.userName}`);
+    res.json({ channel: describeChannel(ch) });
+  } catch (err) {
+    channelError(res, err);
+  }
+});
+
+settingsRouter.put('/notifications/channels/:id', (req, res) => {
+  const parsed = channelBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  try {
+    const ch = saveChannel({ ...parsed.data, id: String(req.params.id) });
+    res.json({ channel: describeChannel(ch) });
+  } catch (err) {
+    channelError(res, err);
+  }
+});
+
+settingsRouter.delete('/notifications/channels/:id', (req, res) => {
+  if (!removeChannel(String(req.params.id))) return res.status(404).json({ error: 'not_found', message: 'Unknown channel' });
+  res.json({ ok: true });
+});
+
+settingsRouter.post('/notifications/channels/:id/test', async (req, res) => {
+  try {
+    await testChannel(String(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ChannelError) return badRequest(res, err.message);
+    res.json({ ok: false, message: (err as Error).message });
+  }
+});
+
+const pushBody = z
+  .object({
+    endpoint: z.string().url().max(2048),
+    keys: z.object({ p256dh: z.string().max(256), auth: z.string().max(256) }),
+    device: z.string().max(120).optional(),
+  })
+  .strip();
+
+settingsRouter.post('/notifications/push/subscribe', (req, res) => {
+  const parsed = pushBody.safeParse(req.body ?? {});
+  if (!parsed.success || !/^https:\/\//.test(parsed.data.endpoint)) return badRequest(res, 'Invalid push subscription');
+  addPushSubscription(parsed.data, req.session!.userName, parsed.data.device);
+  res.json(notificationsStatus());
+});
+
+settingsRouter.post('/notifications/push/unsubscribe', (req, res) => {
+  const endpoint = (req.body as { endpoint?: unknown } | undefined)?.endpoint;
+  if (typeof endpoint === 'string') removePushSubscription(endpoint);
+  res.json(notificationsStatus());
+});
+
+settingsRouter.post('/notifications/push/status', (req, res) => {
+  const endpoint = (req.body as { endpoint?: unknown } | undefined)?.endpoint;
+  res.json({ subscribed: typeof endpoint === 'string' && hasPushSubscription(endpoint) });
 });

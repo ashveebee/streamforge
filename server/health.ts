@@ -7,6 +7,7 @@ import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
 import { onQueueSample } from './services/queueWatch.js';
 import { stalledMap } from './services/cleanup.js';
+import { emit } from './services/notify.js';
 import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
@@ -108,6 +109,28 @@ onInstancesChange(() => {
   syncInstances();
 });
 
+/*
+ * Outage alerts: a service is reported down after two failed checks in a
+ * row (to ride out blips), and back up on the first success after that.
+ */
+const failures = new Map<string, number>();
+const alerted = new Set<string>();
+
+function track(s: ServiceHealth, ok: boolean) {
+  const path = `/${s.kind}${s.instance ? `?instance=${encodeURIComponent(s.instance)}` : ''}`;
+  if (ok) {
+    failures.delete(s.id);
+    if (alerted.delete(s.id)) emit('service_up', { title: `${s.name} is back online`, message: `${s.name} is responding again.`, url: path });
+    return;
+  }
+  const n = (failures.get(s.id) ?? 0) + 1;
+  failures.set(s.id, n);
+  if (n === 2 && !alerted.has(s.id)) {
+    alerted.add(s.id);
+    emit('service_down', { title: `${s.name} is offline`, message: s.error ?? 'Not responding', url: path });
+  }
+}
+
 async function check(id: string) {
   const probe = (SERVICE_IDS as string[]).includes(id) ? probeFor(id as ServiceId) : extraProbe(id);
   const s = state.get(id);
@@ -151,6 +174,7 @@ async function check(id: string) {
   if (s.history.length > HISTORY) s.history.splice(0, s.history.length - HISTORY);
   const ok = s.history.filter((h) => h.ms !== null).length;
   s.uptime = s.history.length ? ok / s.history.length : undefined;
+  track(s, s.status !== 'offline');
 }
 
 let lastRun = 0;

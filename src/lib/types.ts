@@ -490,3 +490,38 @@ export interface AutoImportStatus {
   stuck: number;
   log: AutoImportEntry[];
 }
+
+/* ------------------------------ notifications ----------------------------- */
+
+export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending';
+export type ChannelType = 'discord' | 'ntfy' | 'pushover' | 'webhook' | 'webpush';
+
+export interface NotifyChannel {
+  id: string;
+  type: ChannelType;
+  name: string;
+  enabled: boolean;
+  events: NotifyEvent[];
+  /** Non-secret fields. */
+  config: Record<string, string>;
+  /** Hints for saved secret fields (undefined = not set). */
+  secrets: Record<string, string | undefined>;
+}
+
+export interface ChannelInput {
+  type: ChannelType;
+  name: string;
+  enabled: boolean;
+  events: NotifyEvent[];
+  /** Omit a secret field to keep the saved value. */
+  config: Record<string, string>;
+}
+
+export interface NotificationsStatus {
+  channels: NotifyChannel[];
+  events: NotifyEvent[];
+  defaultEvents: NotifyEvent[];
+  deliveries: { at: string; channel: string; event: NotifyEvent | 'test'; title: string; ok: boolean; error?: string }[];
+  push: { publicKey: string; devices: number };
+  publicUrl: string;
+}

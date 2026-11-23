@@ -5,6 +5,8 @@ import type {
   ArrInstanceRef,
   ArrInstanceView,
   ArrKind,
+  ChannelInput,
+  NotificationsStatus,
   AutoImportEntry,
   CleanupEntry,
   CleanupStatus,
@@ -279,3 +281,29 @@ export function useRunCleanup() {
     },
   });
 }
+
+/* ------------------------------ notifications ----------------------------- */
+
+export const useNotifications = () =>
+  useQuery({
+    queryKey: ['settings', 'notifications'],
+    queryFn: ({ signal }) => api<NotificationsStatus>('/settings/notifications', { signal }),
+    refetchInterval: 15 * SECOND,
+  });
+
+function useNotifyMutation<V>(fn: (v: V) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings', 'notifications'] }) });
+}
+
+export const useSaveChannel = () =>
+  useNotifyMutation(({ id, ...input }: ChannelInput & { id?: string }) =>
+    id
+      ? api(`/settings/notifications/channels/${id}`, { method: 'PUT', body: input })
+      : api('/settings/notifications/channels', { method: 'POST', body: input }),
+  );
+export const useRemoveChannel = () => useNotifyMutation((id: string) => api(`/settings/notifications/channels/${id}`, { method: 'DELETE' }));
+export const useTestChannel = () =>
+  useNotifyMutation((id: string) => api<{ ok: boolean; message?: string }>(`/settings/notifications/channels/${id}/test`, { method: 'POST' }));
+export const useSavePublicUrl = () =>
+  useNotifyMutation((url: string) => api('/settings/notifications/public-url', { method: 'PUT', body: { url } }));
