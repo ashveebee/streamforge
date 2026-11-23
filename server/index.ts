@@ -53,7 +53,21 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(here, '..', 'dist');
 if (existsSync(webDist)) {
-  app.use(express.static(webDist, { index: false, maxAge: '1y', immutable: true }));
+  // The service worker and manifest must always be revalidated, or updates never arrive.
+  app.get(['/sw.js', '/manifest.webmanifest'], (req, res, next) => {
+    res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+    if (req.path.endsWith('.webmanifest')) res.type('application/manifest+json');
+    next();
+  });
+  app.use(
+    express.static(webDist, {
+      index: false,
+      setHeaders: (res, file) => {
+        // Only Vite's hashed bundles are safe to cache forever.
+        res.set('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    }),
+  );
   app.get(/^(?!\/api\/).*/, (_req, res) => {
     res.set('Cache-Control', 'no-cache').sendFile(path.join(webDist, 'index.html'));
   });
