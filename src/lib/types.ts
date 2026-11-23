@@ -1,0 +1,350 @@
+import type { ArtworkRef } from './api';
+
+/* Client-side view of the StreamForge API. Mirrors server/ responses. */
+
+export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk';
+export type ServiceStatus = 'healthy' | 'degraded' | 'offline' | 'unconfigured';
+
+export interface User {
+  id: string;
+  name: string;
+  isAdmin: boolean;
+  imageTag?: string;
+  expiresAt: string;
+}
+
+export interface HealthIssue {
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  source?: string;
+  wikiUrl?: string;
+}
+
+export interface ServiceHealth {
+  id: ServiceId;
+  name: string;
+  configured: boolean;
+  status: ServiceStatus;
+  version?: string;
+  latencyMs?: number;
+  lastCheck?: string;
+  lastSuccess?: string;
+  error?: string;
+  reason?: string;
+  issues: HealthIssue[];
+  meta?: Record<string, string | number | boolean | undefined>;
+  uptime?: number;
+  history: { t: number; ms: number | null }[];
+}
+
+export interface HealthSnapshot {
+  services: ServiceHealth[];
+  checkedAt?: string;
+  intervalMs: number;
+  summary: { healthy: number; degraded: number; offline: number; unconfigured: number };
+}
+
+export interface HostSnapshot {
+  enabled: boolean;
+  info?: { hostname: string; platform: string; distro?: string; cpuModel: string; cores: number; memTotal: number };
+  current?: {
+    cpu: number;
+    perCore: number[];
+    memUsed: number;
+    memTotal: number;
+    swapUsed: number;
+    swapTotal: number;
+    rx: number;
+    tx: number;
+    load: number[];
+    uptime: number;
+    temperature?: number;
+  };
+  history: { t: number; cpu: number; mem: number; rx: number; tx: number }[];
+  filesystems: { mount: string; fs: string; type: string; size: number; used: number; available: number; usage: number }[];
+  error?: string;
+}
+
+export interface DownloadSnapshot {
+  available: boolean;
+  current: number;
+  peak: number;
+  history: { t: number; sonarr: number; radarr: number }[];
+  itemSpeeds: Record<string, number>;
+  sampleIntervalMs: number;
+}
+
+export interface NowPlaying {
+  sessionId: string;
+  user: { id?: string; name: string; imageTag?: string };
+  client?: string;
+  device?: string;
+  appVersion?: string;
+  remoteAddress?: string;
+  lastActivity?: string;
+  item: {
+    id: string;
+    type: string;
+    mediaType?: string;
+    title: string;
+    seriesName?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    album?: string;
+    artist?: string;
+    year?: number;
+    overview?: string;
+    genres: string[];
+    officialRating?: string;
+    communityRating?: number;
+    runtimeMs: number;
+    resolution?: string;
+    hdr?: string;
+    videoCodec?: string;
+    audio?: string;
+    poster?: ArtworkRef;
+    backdrop?: ArtworkRef;
+    logo?: ArtworkRef;
+    thumb?: ArtworkRef;
+  };
+  state: { positionMs: number; progress: number; isPaused: boolean; isMuted: boolean; playMethod: string };
+  transcode?: {
+    videoCodec?: string;
+    audioCodec?: string;
+    container?: string;
+    bitrate?: number;
+    resolution?: string;
+    framerate?: number;
+    isVideoDirect: boolean;
+    isAudioDirect: boolean;
+    completion?: number;
+    hwAccel?: string;
+    reasons: string[];
+  };
+}
+
+export interface JellyfinOverview {
+  server: { name: string; version: string; os?: string; architecture?: string; hasUpdateAvailable: boolean; hasPendingRestart: boolean };
+  counts: {
+    movies: number;
+    series: number;
+    episodes: number;
+    albums: number;
+    songs: number;
+    artists: number;
+    books: number;
+    musicVideos: number;
+    collections: number;
+  };
+  libraries: {
+    id: string;
+    name: string;
+    type: string;
+    locations: string[];
+    itemCount?: number;
+    refreshing: boolean;
+    refreshProgress?: number;
+    image: ArtworkRef;
+  }[];
+  users: {
+    total: number;
+    active24h: number;
+    list: { id: string; name: string; imageTag?: string; isAdmin: boolean; lastActivity?: string }[];
+  };
+  sessions: { active: number; streams: number; transcoding: number; directPlay: number };
+}
+
+export interface LatestItem {
+  id: string;
+  type: string;
+  title: string;
+  subtitle?: string;
+  year?: number;
+  added?: string;
+  rating?: number;
+  poster?: ArtworkRef;
+  backdrop?: ArtworkRef;
+  thumb?: ArtworkRef;
+}
+
+export interface ActivityEntry {
+  id: number;
+  name: string;
+  overview?: string;
+  type: string;
+  date: string;
+  severity: string;
+  userId?: string;
+}
+
+export interface PlayDay {
+  date: string;
+  plays: number;
+  users: number;
+}
+
+export interface QueueItem {
+  id: number;
+  source: 'sonarr' | 'radarr';
+  title: string;
+  subtitle?: string;
+  releaseTitle: string;
+  status: string;
+  trackedState?: string;
+  trackedStatus?: string;
+  protocol?: string;
+  client?: string;
+  quality?: string;
+  size: number;
+  sizeLeft: number;
+  progress: number;
+  timeLeft?: string;
+  estimatedCompletion?: string;
+  errorMessage?: string;
+  warnings: string[];
+  poster?: string;
+}
+
+export interface UpcomingItem {
+  id: string;
+  source: 'sonarr' | 'radarr';
+  title: string;
+  subtitle?: string;
+  date: string;
+  kind: 'episode' | 'cinema' | 'digital' | 'physical';
+  hasFile: boolean;
+  monitored: boolean;
+  network?: string;
+  poster?: string;
+}
+
+export interface DiskInfo {
+  path: string;
+  label?: string;
+  free: number;
+  total: number;
+}
+
+export interface SonarrOverview {
+  stats: {
+    series: number;
+    monitored: number;
+    continuing: number;
+    ended: number;
+    episodes: number;
+    episodeFiles: number;
+    sizeOnDisk: number;
+    missing: number;
+  };
+  queue: { total: number; items: QueueItem[] };
+  upcoming: UpcomingItem[];
+  recent: { id: number; title: string; year?: number; network?: string; status: string; progress: number; poster?: string }[];
+  disks: DiskInfo[];
+}
+
+export interface RadarrOverview {
+  stats: { movies: number; monitored: number; downloaded: number; missing: number; unreleased: number; sizeOnDisk: number };
+  qualities: { name: string; count: number }[];
+  queue: { total: number; items: QueueItem[] };
+  upcoming: UpcomingItem[];
+  recent: { id: number; title: string; year?: number; hasFile: boolean; poster?: string }[];
+  disks: DiskInfo[];
+}
+
+export interface Indexer {
+  id: number;
+  name: string;
+  enabled: boolean;
+  protocol: string;
+  privacy?: string;
+  priority?: number;
+  implementation?: string;
+  health: 'healthy' | 'failing' | 'disabled';
+  disabledUntil?: string;
+  lastFailure?: string;
+  stats: {
+    avgResponseMs: number;
+    queries: number;
+    grabs: number;
+    rssQueries: number;
+    authQueries: number;
+    failedQueries: number;
+    failedGrabs: number;
+    successRate?: number;
+  };
+}
+
+export interface ProwlarrOverview {
+  summary: {
+    total: number;
+    enabled: number;
+    healthy: number;
+    failing: number;
+    disabled: number;
+    torrent: number;
+    usenet: number;
+    avgResponseMs: number;
+    queries: number;
+    grabs: number;
+    failedQueries: number;
+    failedGrabs: number;
+  };
+  indexers: Indexer[];
+  applications: { id: number; name: string; type?: string; syncLevel?: string }[];
+}
+
+export interface SeerrRequest {
+  id: number;
+  type: 'movie' | 'tv';
+  title: string;
+  year?: number;
+  poster?: string;
+  backdrop?: string;
+  status: 'pending' | 'approved' | 'declined' | 'failed' | 'completed' | 'unknown';
+  mediaStatus: string;
+  is4k: boolean;
+  seasons: number[];
+  requestedBy: string;
+  modifiedBy?: string;
+  createdAt: string;
+}
+
+export interface SeerrOverview {
+  counts: {
+    total: number;
+    movie: number;
+    tv: number;
+    pending: number;
+    approved: number;
+    declined: number;
+    processing: number;
+    available: number;
+  };
+  recent: SeerrRequest[];
+  pending: SeerrRequest[];
+}
+
+export type DriveHealth = 'healthy' | 'warning' | 'critical' | 'offline' | 'unknown';
+export interface Drive {
+  id: string;
+  name: string;
+  mount?: string;
+  filesystem?: string;
+  total: number;
+  used: number;
+  free: number;
+  usage: number;
+  health: DriveHealth;
+  healthDetail?: string;
+  temperature?: number;
+  readOnly?: boolean;
+  source: 'remote' | 'local';
+}
+
+export interface InfinidiskOverview {
+  drives: Drive[];
+  totals: { total: number; used: number; free: number; usage: number };
+  counts: { total: number; healthy: number; warning: number; critical: number; offline: number };
+  version?: string;
+  sources: { remote: boolean; local: number };
+}

@@ -1,0 +1,13 @@
+services:
+  streamforge:
+    build: .
+    container_name: streamforge
+    env_file: .env
+    ports:
+      - "4000:4000"
+    volumes:
+      # Mount storage read-only if you use INFINIDISK_MOUNTS for local stats.
+      - /mnt/media:/mnt/media:ro
+    # For host-level network stats, use host networking instead of ports:
+    # network_mode: host
+    restart: unless-stopped
