@@ -15,6 +15,7 @@ const Prowlarr = lazy(() => import('@/pages/Prowlarr'));
 const Seerr = lazy(() => import('@/pages/Seerr'));
 const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
 const System = lazy(() => import('@/pages/System'));
+const Settings = lazy(() => import('@/pages/Settings'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
 function Splash() {
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: '/', element: <Dashboard /> },
       { path: '/now-playing', element: page(<NowPlaying />) },
       { path: '/system', element: page(<System />) },
+      { path: '/settings', element: page(<Settings />) },
       { path: '/jellyfin', element: page(<Jellyfin />) },
       { path: '/sonarr', element: page(<Sonarr />) },
       { path: '/radarr', element: page(<Radarr />) },

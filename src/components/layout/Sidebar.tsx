@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle } from 'lucide-react';
+import { Activity, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useHealth, useNowPlaying } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
@@ -121,6 +121,7 @@ export function Sidebar({
           }
         />
         <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />
+        {user?.isAdmin && <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} onNavigate={onNavigate} />}
 
         <div className={cn('mt-5 mb-1.5 px-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-4 uppercase', collapsed && 'sr-only')}>
           Services

@@ -1,0 +1,222 @@
+import type { NextFunction, Request, Response } from 'express';
+import { Router } from 'express';
+import { z } from 'zod';
+import { createClient, UpstreamError } from './lib/http.js';
+import { sessions } from './lib/sessions.js';
+import * as jellyfin from './services/jellyfin.js';
+import { arrProbe } from './services/arr.js';
+import { seerrClient, seerrProbe } from './services/seerr.js';
+import { infinidiskProbe, infinidiskTarget } from './services/infinidisk.js';
+import type { HealthProbe, ServiceId } from './services/types.js';
+import {
+  describe,
+  infinidiskSettings,
+  isComplete,
+  resetSettings,
+  resolve,
+  saveSettings,
+  SERVICE_IDS,
+  SERVICE_NAMES,
+  type ServiceSettings,
+} from './settings.js';
+
+/* ------------------------------ validation ----------------------------- */
+
+function isHttpUrl(v: string) {
+  try {
+    const u = new URL(v);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
+export const urlField = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine((v) => v === '' || isHttpUrl(v), 'Enter a full http:// or https:// address')
+  .transform((v) => v.replace(/\/+$/, ''));
+
+const pathField = z
+  .string()
+  .trim()
+  .max(512)
+  .refine((v) => v === '' || /^\/\S*$/.test(v), 'Must start with / and contain no spaces');
+
+const body = z
+  .object({
+    url: urlField.optional(),
+    /** Omitted = keep the saved key; empty string = remove it. */
+    apiKey: z.string().trim().max(1024).optional(),
+    authHeader: z
+      .string()
+      .trim()
+      .max(128)
+      .regex(/^[A-Za-z0-9-]*$/, 'Header names may only contain letters, digits and dashes')
+      .optional(),
+    statusPath: pathField.optional(),
+    healthPath: pathField.optional(),
+    mounts: z.array(z.string().trim().max(1024)).max(32).optional(),
+  })
+  .strict();
+type Body = z.infer<typeof body>;
+
+const origin = (url?: string) => (url ? new URL(url).origin : undefined);
+
+/** Applies the submitted fields on top of the current settings. */
+function merge(id: ServiceId, b: Body): ServiceSettings {
+  const current = resolve(id).settings;
+  const next: ServiceSettings = { url: current.url, apiKey: current.apiKey };
+  if (b.url !== undefined) next.url = b.url;
+  if (b.apiKey !== undefined) next.apiKey = b.apiKey;
+  if (id === 'infinidisk') {
+    next.authHeader = b.authHeader ?? current.authHeader;
+    next.statusPath = b.statusPath ?? current.statusPath;
+    next.healthPath = b.healthPath ?? current.healthPath;
+    next.mounts = b.mounts ?? current.mounts;
+  }
+  // Never send a saved key to a different server unless it was re-entered.
+  if (b.apiKey === undefined && current.apiKey && origin(next.url) !== origin(current.url)) {
+    throw new SettingsError('Re-enter the API key when changing the server address.');
+  }
+  return next;
+}
+
+class SettingsError extends Error {}
+
+function missing(id: ServiceId, s: ServiceSettings) {
+  if (isComplete(id, s)) return undefined;
+  if (id === 'jellyfin') return 'Enter the Jellyfin server address.';
+  if (id === 'infinidisk') return 'Enter a server address or at least one local mount path.';
+  return s.url ? 'Enter the API key.' : 'Enter the server address and API key.';
+}
+
+/* -------------------------------- testing ------------------------------ */
+
+/** Runs the service's health probe against candidate settings without saving. */
+export async function testSettings(id: ServiceId, s: ServiceSettings): Promise<HealthProbe> {
+  const { url = '', apiKey = '' } = s;
+  switch (id) {
+    case 'jellyfin':
+      return jellyfin.probe({ url, apiKey: apiKey || undefined });
+    case 'sonarr':
+    case 'radarr':
+    case 'prowlarr':
+      return arrProbe(createClient(id, url, { 'X-Api-Key': apiKey }), id === 'prowlarr' ? 'v1' : 'v3');
+    case 'seerr':
+      return seerrProbe(seerrClient(url, apiKey));
+    case 'infinidisk':
+      return infinidiskProbe(infinidiskTarget(infinidiskSettings(s)));
+  }
+}
+
+async function runTest(id: ServiceId, s: ServiceSettings) {
+  const started = performance.now();
+  try {
+    const r = await testSettings(id, s);
+    return {
+      ok: true as const,
+      version: r.version,
+      latencyMs: Math.round(performance.now() - started),
+      issues: r.issues,
+    };
+  } catch (err) {
+    const message = err instanceof UpstreamError ? err.message : 'Unexpected error while testing';
+    if (!(err instanceof UpstreamError)) console.error(`[settings] test ${id}`, err);
+    return { ok: false as const, message };
+  }
+}
+
+/* -------------------------------- routes ------------------------------- */
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdmin) {
+    res.status(403).json({ error: 'forbidden', message: 'Only Jellyfin administrators can change settings.' });
+    return;
+  }
+  next();
+}
+
+function serviceParam(req: Request, res: Response): ServiceId | undefined {
+  const id = String(req.params.id) as ServiceId;
+  if (!SERVICE_IDS.includes(id)) {
+    res.status(404).json({ error: 'not_found', message: 'Unknown service' });
+    return undefined;
+  }
+  return id;
+}
+
+function parseBody(id: ServiceId, req: Request, res: Response): ServiceSettings | undefined {
+  const parsed = body.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    res.status(400).json({ error: 'bad_request', field: issue?.path.join('.'), message: issue?.message ?? 'Invalid settings' });
+    return undefined;
+  }
+  try {
+    return merge(id, parsed.data);
+  } catch (err) {
+    if (err instanceof SettingsError) {
+      res.status(400).json({ error: 'bad_request', field: 'apiKey', message: err.message });
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+export const settingsRouter = Router();
+settingsRouter.use(requireAdmin);
+
+settingsRouter.get('/services', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ services: SERVICE_IDS.map(describe) });
+});
+
+settingsRouter.post('/services/:id/test', async (req, res) => {
+  const id = serviceParam(req, res);
+  if (!id) return;
+  const s = parseBody(id, req, res);
+  if (!s) return;
+  const gap = missing(id, s);
+  if (gap) {
+    res.json({ ok: false, message: gap });
+    return;
+  }
+  res.json(await runTest(id, s));
+});
+
+settingsRouter.put('/services/:id', (req, res) => {
+  const id = serviceParam(req, res);
+  if (!id) return;
+  const s = parseBody(id, req, res);
+  if (!s) return;
+  if (id === 'jellyfin' && !s.url) {
+    res.status(400).json({ error: 'bad_request', field: 'url', message: 'Jellyfin is required for signing in.' });
+    return;
+  }
+  const previous = resolve(id).settings;
+  saveSettings(id, s, req.session!.userName);
+  // Sessions belong to the old Jellyfin server; they mean nothing on a new one.
+  const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(s.url);
+  if (signedOut) sessions.clear();
+  console.log(`[settings] ${SERVICE_NAMES[id]} updated by ${req.session!.userName}`);
+  res.json({ service: describe(id), signedOut });
+});
+
+settingsRouter.delete('/services/:id', (req, res) => {
+  const id = serviceParam(req, res);
+  if (!id) return;
+  if (id === 'jellyfin' && !describe('jellyfin').envAvailable) {
+    res.status(400).json({
+      error: 'bad_request',
+      message: 'There is no Jellyfin address in the environment to fall back to.',
+    });
+    return;
+  }
+  const previous = resolve(id).settings;
+  resetSettings(id);
+  const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(resolve(id).settings.url);
+  if (signedOut) sessions.clear();
+  console.log(`[settings] ${SERVICE_NAMES[id]} reset to environment by ${req.session!.userName}`);
+  res.json({ service: describe(id), signedOut });
+});

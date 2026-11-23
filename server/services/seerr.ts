@@ -1,11 +1,10 @@
-import { config } from '../config.js';
-import { createClient } from '../lib/http.js';
+import { derived } from '../settings.js';
+import { createClient, type ServiceClient } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import type { HealthProbe } from './types.js';
 
-export const seerr = config.seerr
-  ? createClient('seerr', config.seerr.baseUrl, { 'X-Api-Key': config.seerr.apiKey })
-  : undefined;
+export const seerrClient = (url: string, apiKey: string) => createClient('seerr', url, { 'X-Api-Key': apiKey });
+export const seerr = derived('seerr', (s) => (s.url && s.apiKey ? seerrClient(s.url, s.apiKey) : undefined));
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 
@@ -17,10 +16,10 @@ interface SeerrStatus {
   restartRequired?: boolean;
 }
 
-export async function seerrProbe(): Promise<HealthProbe> {
-  const s = await seerr!.get<SeerrStatus>('/api/v1/status');
+export async function seerrProbe(client: ServiceClient = seerr()!): Promise<HealthProbe> {
+  const s = await client.get<SeerrStatus>('/api/v1/status');
   // /status is public, so also hit an authenticated endpoint to validate the key.
-  await seerr!.get('/api/v1/request/count');
+  await client.get('/api/v1/request/count');
   const issues: HealthProbe['issues'] = [];
   if (s.restartRequired) issues.push({ level: 'warning', message: 'Restart required to apply settings' });
   if (s.updateAvailable)
@@ -85,13 +84,13 @@ const MEDIA_STATUS: Record<number, string> = {
 
 function details(type: 'movie' | 'tv', tmdbId: number) {
   return cache.get(`seerr:tmdb:${type}:${tmdbId}`, 6 * 3600_000, () =>
-    seerr!.get<TmdbDetails>(`/api/v1/${type}/${tmdbId}`).catch(() => ({}) as TmdbDetails),
+    seerr()!.get<TmdbDetails>(`/api/v1/${type}/${tmdbId}`).catch(() => ({}) as TmdbDetails),
   );
 }
 
 async function requests(filter: 'all' | 'pending' | 'approved' | 'processing' | 'available', take: number) {
   return cache.get(`seerr:requests:${filter}:${take}`, 15_000, async () => {
-    const res = await seerr!.get<{ pageInfo: { results: number }; results: SeerrRequest[] }>('/api/v1/request', {
+    const res = await seerr()!.get<{ pageInfo: { results: number }; results: SeerrRequest[] }>('/api/v1/request', {
       take,
       skip: 0,
       sort: 'added',
@@ -123,7 +122,7 @@ async function requests(filter: 'all' | 'pending' | 'approved' | 'processing' | 
 
 export async function seerrOverview() {
   const [counts, recent, pending] = await Promise.all([
-    cache.get('seerr:count', 15_000, () => seerr!.get<RequestCount>('/api/v1/request/count')),
+    cache.get('seerr:count', 15_000, () => seerr()!.get<RequestCount>('/api/v1/request/count')),
     requests('all', 16),
     requests('pending', 12),
   ]);

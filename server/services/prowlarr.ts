@@ -1,8 +1,8 @@
-import { config } from '../config.js';
+import { derived } from '../settings.js';
 import { cache } from '../lib/cache.js';
 import { arrClient } from './arr.js';
 
-export const prowlarr = arrClient('prowlarr', config.prowlarr);
+export const prowlarr = derived('prowlarr', (s) => arrClient('prowlarr', s.url, s.apiKey));
 
 interface Indexer {
   id: number;
@@ -43,7 +43,7 @@ interface Application {
 }
 
 export async function prowlarrOverview() {
-  const c = prowlarr!;
+  const c = prowlarr()!;
   const [indexers, statuses, stats, apps] = await Promise.all([
     cache.get('prowlarr:indexers', 30_000, () => c.get<Indexer[]>('/api/v1/indexer')),
     cache.get('prowlarr:status', 30_000, () => c.get<IndexerStatus[]>('/api/v1/indexerstatus')),

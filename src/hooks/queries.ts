@@ -13,7 +13,10 @@ import type {
   ProwlarrOverview,
   RadarrOverview,
   SeerrOverview,
+  ConnectionTest,
   ServiceId,
+  ServiceSettingsInput,
+  ServiceSettingsView,
   SonarrOverview,
 } from '@/lib/types';
 
@@ -91,3 +94,47 @@ export function useRecheck() {
 }
 
 export const isNotConfigured = (e: unknown) => e instanceof ApiError && e.notConfigured;
+
+/* ------------------------------- settings ------------------------------- */
+
+export const useServiceSettings = () =>
+  useQuery({
+    queryKey: ['settings', 'services'],
+    queryFn: ({ signal }) => api<{ services: ServiceSettingsView[] }>('/settings/services', { signal }),
+  });
+
+export const useTestService = (id: ServiceId) =>
+  useMutation({
+    mutationFn: (input: ServiceSettingsInput) =>
+      api<ConnectionTest>(`/settings/services/${id}/test`, { method: 'POST', body: input }),
+  });
+
+/** After a change, refresh everything that depends on which services exist. */
+function useSettingsChanged() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ['settings'] });
+    void qc.invalidateQueries({ queryKey: ['config'] });
+    // Give the server's immediate re-check a moment before refreshing health.
+    setTimeout(() => void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'settings' }), 1500);
+  };
+}
+
+type SaveResult = { service: ServiceSettingsView; signedOut: boolean };
+
+export function useSaveService(id: ServiceId) {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (input: ServiceSettingsInput) =>
+      api<SaveResult>(`/settings/services/${id}`, { method: 'PUT', body: input }),
+    onSuccess: changed,
+  });
+}
+
+export function useResetService(id: ServiceId) {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: () => api<SaveResult>(`/settings/services/${id}`, { method: 'DELETE' }),
+    onSuccess: changed,
+  });
+}

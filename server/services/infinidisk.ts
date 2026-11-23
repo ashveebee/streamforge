@@ -1,6 +1,6 @@
 import { statfs, access, constants } from 'node:fs/promises';
-import { config } from '../config.js';
 import { createClient } from '../lib/http.js';
+import { derived, infinidiskSettings, type InfinidiskSettings } from '../settings.js';
 import { cache } from '../lib/cache.js';
 import type { HealthIssue, HealthProbe } from './types.js';
 
@@ -8,20 +8,33 @@ import type { HealthIssue, HealthProbe } from './types.js';
  * Infinidisk storage integration.
  *
  * Two sources are supported and can be combined:
- *  1. Remote — `INFINIDISK_URL` + `INFINIDISK_STATUS_PATH` returning JSON.
+ *  1. Remote — the service URL + status path, returning JSON.
  *     The response is normalised defensively (see `normaliseRemote`) so it works
  *     with the common shapes storage daemons expose: an array of drives/disks/
  *     mounts/volumes/pools, each with size/used/free (bytes) and a health field.
- *  2. Local — `INFINIDISK_MOUNTS` lists paths visible to the StreamForge backend
+ *  2. Local — mount paths visible to the StreamForge backend
  *     (e.g. the Infinidisk mount points). These are measured with statfs().
  */
 
-const cfg = config.infinidisk;
-export const infinidiskConfigured = !!cfg.baseUrl || cfg.mounts.length > 0;
+function clientFor(cfg: InfinidiskSettings) {
+  return cfg.baseUrl
+    ? createClient('infinidisk', cfg.baseUrl, cfg.apiKey ? { [cfg.authHeader]: cfg.apiKey } : {})
+    : undefined;
+}
 
-const client = cfg.baseUrl
-  ? createClient('infinidisk', cfg.baseUrl, cfg.apiKey ? { [cfg.authHeader]: cfg.apiKey } : {})
-  : undefined;
+/** Live settings and client; undefined when Infinidisk isn't configured. */
+const current = derived('infinidisk', (s) => {
+  const cfg = infinidiskSettings(s);
+  return { cfg, client: clientFor(cfg) };
+});
+type Target = { cfg: InfinidiskSettings; client: ReturnType<typeof clientFor> };
+
+const NOT_CONFIGURED: Target = { cfg: infinidiskSettings({}), client: undefined };
+
+/** Builds a one-off target from candidate settings (used by "Test connection"). */
+export function infinidiskTarget(cfg: InfinidiskSettings): Target {
+  return { cfg, client: clientFor(cfg) };
+}
 
 export type DriveHealth = 'healthy' | 'warning' | 'critical' | 'offline' | 'unknown';
 
@@ -113,7 +126,7 @@ export function normaliseRemote(payload: unknown): Drive[] {
   });
 }
 
-async function localDrives(): Promise<Drive[]> {
+async function localDrives({ cfg }: Target): Promise<Drive[]> {
   return Promise.all(
     cfg.mounts.map(async (mount): Promise<Drive> => {
       try {
@@ -155,45 +168,49 @@ async function localDrives(): Promise<Drive[]> {
   );
 }
 
-async function remoteDrives() {
+async function remoteDrives({ cfg, client }: Target) {
   if (!client) return { drives: [] as Drive[], raw: undefined as unknown };
   const raw = await client.get<unknown>(cfg.statusPath);
   return { drives: normaliseRemote(raw), raw };
 }
 
 export async function infinidiskOverview() {
-  return cache.get('infinidisk:overview', 10_000, async () => {
-    const [remote, local] = await Promise.all([remoteDrives(), localDrives()]);
-    const drives = [...remote.drives, ...local];
-    const totals = drives.reduce(
-      (a, d) => {
-        a.total += d.total;
-        a.used += d.used;
-        a.free += d.free;
-        return a;
-      },
-      { total: 0, used: 0, free: 0 },
-    );
-    const rawObj = remote.raw && typeof remote.raw === 'object' && !Array.isArray(remote.raw) ? (remote.raw as Json) : {};
-    return {
-      drives,
-      totals: { ...totals, usage: totals.total > 0 ? totals.used / totals.total : 0 },
-      counts: {
-        total: drives.length,
-        healthy: drives.filter((d) => d.health === 'healthy').length,
-        warning: drives.filter((d) => d.health === 'warning').length,
-        critical: drives.filter((d) => d.health === 'critical').length,
-        offline: drives.filter((d) => d.health === 'offline').length,
-      },
-      version: pick<string>(rawObj, ['version']),
-      sources: { remote: !!client, local: cfg.mounts.length },
-    };
-  });
+  return cache.get('infinidisk:overview', 10_000, () => buildOverview(current() ?? NOT_CONFIGURED));
 }
 
-export async function infinidiskProbe(): Promise<HealthProbe> {
-  if (client && cfg.healthPath) await client.get(cfg.healthPath);
-  const o = await infinidiskOverview();
+async function buildOverview(t: Target) {
+  const { cfg, client } = t;
+  const [remote, local] = await Promise.all([remoteDrives(t), localDrives(t)]);
+  const drives = [...remote.drives, ...local];
+  const totals = drives.reduce(
+    (a, d) => {
+      a.total += d.total;
+      a.used += d.used;
+      a.free += d.free;
+      return a;
+    },
+    { total: 0, used: 0, free: 0 },
+  );
+  const rawObj = remote.raw && typeof remote.raw === 'object' && !Array.isArray(remote.raw) ? (remote.raw as Json) : {};
+  return {
+    drives,
+    totals: { ...totals, usage: totals.total > 0 ? totals.used / totals.total : 0 },
+    counts: {
+      total: drives.length,
+      healthy: drives.filter((d) => d.health === 'healthy').length,
+      warning: drives.filter((d) => d.health === 'warning').length,
+      critical: drives.filter((d) => d.health === 'critical').length,
+      offline: drives.filter((d) => d.health === 'offline').length,
+    },
+    version: pick<string>(rawObj, ['version']),
+    sources: { remote: !!client, local: cfg.mounts.length },
+  };
+}
+
+export async function infinidiskProbe(target?: Target): Promise<HealthProbe> {
+  const t = target ?? current() ?? NOT_CONFIGURED;
+  if (t.client && t.cfg.healthPath) await t.client.get(t.cfg.healthPath);
+  const o = target ? await buildOverview(target) : await infinidiskOverview();
   const issues: HealthIssue[] = o.drives
     .filter((d) => d.health !== 'healthy')
     .map((d) => ({

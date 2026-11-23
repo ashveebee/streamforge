@@ -1,4 +1,4 @@
-import { config } from '../config.js';
+import { derived } from '../settings.js';
 import { createClient, type ServiceClient } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import type { DiskInfo, HealthIssue, HealthProbe, QueueItem, UpcomingItem } from './types.js';
@@ -26,8 +26,8 @@ interface ArrImage {
   remoteUrl?: string;
 }
 
-export function arrClient(name: string, svc: { baseUrl: string; apiKey: string } | undefined) {
-  return svc ? createClient(name, svc.baseUrl, { 'X-Api-Key': svc.apiKey }) : undefined;
+export function arrClient(name: string, url?: string, apiKey?: string) {
+  return url && apiKey ? createClient(name, url, { 'X-Api-Key': apiKey }) : undefined;
 }
 
 export async function arrProbe(client: ServiceClient, apiVersion: 'v1' | 'v3'): Promise<HealthProbe> {
@@ -160,7 +160,7 @@ export async function arrQueue(
 /* Sonarr                                                              */
 /* ------------------------------------------------------------------ */
 
-export const sonarr = arrClient('sonarr', config.sonarr);
+export const sonarr = derived('sonarr', (s) => arrClient('sonarr', s.url, s.apiKey));
 
 interface SonarrSeries {
   id: number;
@@ -193,7 +193,7 @@ interface SonarrEpisode {
 }
 
 export async function sonarrOverview() {
-  const c = sonarr!;
+  const c = sonarr()!;
   const now = new Date();
   const end = new Date(now.getTime() + 14 * 86_400_000);
   const [series, missing, queue, calendar, disks] = await Promise.all([
@@ -272,7 +272,7 @@ export async function sonarrOverview() {
 /* Radarr                                                              */
 /* ------------------------------------------------------------------ */
 
-export const radarr = arrClient('radarr', config.radarr);
+export const radarr = derived('radarr', (s) => arrClient('radarr', s.url, s.apiKey));
 
 interface RadarrMovie {
   id: number;
@@ -293,7 +293,7 @@ interface RadarrMovie {
 }
 
 export async function radarrOverview() {
-  const c = radarr!;
+  const c = radarr()!;
   const now = Date.now();
   const start = new Date(now - 86_400_000);
   const end = new Date(now + 30 * 86_400_000);

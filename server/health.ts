@@ -3,7 +3,8 @@ import * as jellyfin from './services/jellyfin.js';
 import { arrProbe, arrQueue, radarr, sonarr } from './services/arr.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
-import { infinidiskConfigured, infinidiskProbe } from './services/infinidisk.js';
+import { infinidiskProbe } from './services/infinidisk.js';
+import { isConfigured, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
 
@@ -35,31 +36,47 @@ const HISTORY = 60;
 
 const arr = (c: ServiceClient | undefined, v: 'v1' | 'v3') => (c ? () => arrProbe(c, v) : undefined);
 
-const probes: Record<ServiceId, { name: string; probe?: () => Promise<HealthProbe> }> = {
-  jellyfin: { name: 'Jellyfin', probe: jellyfin.probe },
-  sonarr: { name: 'Sonarr', probe: arr(sonarr, 'v3') },
-  radarr: { name: 'Radarr', probe: arr(radarr, 'v3') },
-  prowlarr: { name: 'Prowlarr', probe: arr(prowlarr, 'v1') },
-  seerr: { name: 'Seerr', probe: seerr && seerrProbe },
-  infinidisk: { name: 'Infinidisk', probe: infinidiskConfigured ? infinidiskProbe : undefined },
-};
+/** The probe for a service's current settings, or undefined if it isn't configured. */
+function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
+  if (!isConfigured(id)) return undefined;
+  switch (id) {
+    case 'jellyfin':
+      return () => jellyfin.probe();
+    case 'sonarr':
+      return arr(sonarr(), 'v3');
+    case 'radarr':
+      return arr(radarr(), 'v3');
+    case 'prowlarr':
+      return arr(prowlarr(), 'v1');
+    case 'seerr':
+      return seerr() && (() => seerrProbe());
+    case 'infinidisk':
+      return () => infinidiskProbe();
+  }
+}
 
-const state = new Map<ServiceId, ServiceHealth>(
-  (Object.keys(probes) as ServiceId[]).map((id) => [
+function freshState(id: ServiceId): ServiceHealth {
+  const configured = isConfigured(id);
+  return {
     id,
-    {
-      id,
-      name: probes[id].name,
-      configured: !!probes[id].probe,
-      status: probes[id].probe ? 'offline' : 'unconfigured',
-      issues: [],
-      history: [],
-    },
-  ]),
-);
+    name: SERVICE_NAMES[id],
+    configured,
+    status: configured ? 'offline' : 'unconfigured',
+    issues: [],
+    history: [],
+  };
+}
+
+const state = new Map<ServiceId, ServiceHealth>(SERVICE_IDS.map((id) => [id, freshState(id)]));
+
+// New settings mean a different server (or none): start its history afresh.
+onSettingsChange((id) => {
+  state.set(id, freshState(id));
+  void check(id);
+});
 
 async function check(id: ServiceId) {
-  const { probe } = probes[id];
+  const probe = probeFor(id);
   const s = state.get(id)!;
   if (!probe) return;
   const started = performance.now();
@@ -96,6 +113,8 @@ async function check(id: ServiceId) {
     } satisfies Partial<ServiceHealth>);
     s.history.push({ t: Date.now(), ms: null });
   }
+  // Settings changed while this check was in flight: drop the stale result.
+  if (state.get(id) !== s) return;
   if (s.history.length > HISTORY) s.history.splice(0, s.history.length - HISTORY);
   const ok = s.history.filter((h) => h.ms !== null).length;
   s.uptime = s.history.length ? ok / s.history.length : undefined;
@@ -104,7 +123,7 @@ async function check(id: ServiceId) {
 let lastRun = 0;
 async function runAll() {
   lastRun = Date.now();
-  await Promise.allSettled((Object.keys(probes) as ServiceId[]).map(check));
+  await Promise.allSettled(SERVICE_IDS.map(check));
 }
 
 export function healthSnapshot() {
@@ -120,10 +139,6 @@ export function healthSnapshot() {
       unconfigured: services.filter((s) => s.status === 'unconfigured').length,
     },
   };
-}
-
-export function isConfigured(id: ServiceId) {
-  return state.get(id)?.configured ?? false;
 }
 
 export async function recheck() {
@@ -159,8 +174,8 @@ async function sampleDownloads() {
   const seen = new Set<string>();
 
   const sources = [
-    ['sonarr', sonarr],
-    ['radarr', radarr],
+    ['sonarr', sonarr()],
+    ['radarr', radarr()],
   ] as const;
   await Promise.all(
     sources.map(async ([name, client]) => {
@@ -198,7 +213,7 @@ async function sampleDownloads() {
 export function downloadSnapshot() {
   const last = speedHistory.at(-1);
   return {
-    available: !!(sonarr || radarr),
+    available: !!(sonarr() || radarr()),
     current: last ? last.sonarr + last.radarr : 0,
     peak: speedHistory.reduce((m, s) => Math.max(m, s.sonarr + s.radarr), 0),
     history: speedHistory,
@@ -210,8 +225,7 @@ export function downloadSnapshot() {
 export function startMonitors() {
   void runAll();
   setInterval(runAll, config.healthIntervalMs).unref();
-  if (sonarr || radarr) {
-    void sampleDownloads();
-    setInterval(() => void sampleDownloads(), DL_INTERVAL).unref();
-  }
+  // Always scheduled: Sonarr/Radarr can be added from Settings at any time.
+  void sampleDownloads();
+  setInterval(() => void sampleDownloads(), DL_INTERVAL).unref();
 }

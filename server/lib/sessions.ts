@@ -58,6 +58,11 @@ class SessionStore {
     this.sessions.delete(id);
   }
 
+  /** Signs everyone out (e.g. after switching to a different Jellyfin server). */
+  clear() {
+    this.sessions.clear();
+  }
+
   private sweep() {
     const now = Date.now();
     for (const [id, s] of this.sessions) if (s.expiresAt < now) this.sessions.delete(id);

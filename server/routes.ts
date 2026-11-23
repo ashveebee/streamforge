@@ -3,7 +3,9 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { ctxOf, requireAuth } from './auth.js';
 import { UpstreamError, type ServiceClient } from './lib/http.js';
-import { downloadSnapshot, healthSnapshot, isConfigured, recheck } from './health.js';
+import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
+import { isConfigured, SERVICE_IDS } from './settings.js';
+import { settingsRouter } from './settingsRoutes.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { COVER_FILE_RE, radarr, radarrOverview, sonarr, sonarrOverview } from './services/arr.js';
@@ -60,7 +62,7 @@ async function pipeImage(res: Response, upstream: Promise<globalThis.Response>) 
 api.get('/config', (_req, res) => {
   res.json({
     services: Object.fromEntries(
-      (['jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] as ServiceId[]).map((id) => [
+      SERVICE_IDS.map((id) => [
         id,
         isConfigured(id),
       ]),
@@ -107,8 +109,9 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
 
 /* ---------------------------------- arr --------------------------------- */
 
-function coverRoute(client: ServiceClient | undefined) {
+function coverRoute(getClient: () => ServiceClient | undefined) {
   return (req: Request, res: Response) => {
+    const client = getClient();
     const id = String(req.params.id);
     const file = String(req.params.file);
     if (!client || !/^\d{1,9}$/.test(id) || !COVER_FILE_RE.test(file)) {
@@ -128,3 +131,7 @@ api.get('/radarr/cover/:id/:file', coverRoute(radarr));
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
 api.get('/seerr/overview', handle('seerr', () => seerrOverview()));
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));
+
+/* -------------------------------- settings ------------------------------ */
+
+api.use('/settings', settingsRouter);

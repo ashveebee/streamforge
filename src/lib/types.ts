@@ -348,3 +348,40 @@ export interface InfinidiskOverview {
   version?: string;
   sources: { remote: boolean; local: number };
 }
+
+/* ------------------------------- settings ------------------------------- */
+
+export type SettingsSource = 'database' | 'environment' | 'none';
+
+export interface ServiceSettingsView {
+  id: ServiceId;
+  name: string;
+  source: SettingsSource;
+  configured: boolean;
+  /** Whether environment variables exist to fall back to. */
+  envAvailable: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  url: string;
+  apiKeySet: boolean;
+  apiKeyHint?: string;
+  /** Infinidisk only. */
+  authHeader?: string;
+  statusPath?: string;
+  healthPath?: string;
+  mounts?: string[];
+}
+
+export interface ServiceSettingsInput {
+  url?: string;
+  /** Omit to keep the saved key; empty string removes it. */
+  apiKey?: string;
+  authHeader?: string;
+  statusPath?: string;
+  healthPath?: string;
+  mounts?: string[];
+}
+
+export type ConnectionTest =
+  | { ok: true; version?: string; latencyMs: number; issues: HealthIssue[] }
+  | { ok: false; message: string };

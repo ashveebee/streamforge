@@ -6,6 +6,8 @@ import { config } from './config.js';
 import { newDeviceId, sessions, SESSION_COOKIE, type Session } from './lib/sessions.js';
 import { UpstreamError } from './lib/http.js';
 import * as jellyfin from './services/jellyfin.js';
+import { isConfigured, saveSettings } from './settings.js';
+import { urlField } from './settingsRoutes.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -110,11 +112,53 @@ const loginBody = z.object({
 export const authRouter = Router();
 
 authRouter.get('/server', async (_req, res) => {
+  if (!isConfigured('jellyfin')) {
+    res.json({ online: false, configured: false });
+    return;
+  }
   try {
     const info = await jellyfin.publicInfo();
-    res.json({ name: info.ServerName, version: info.Version, online: true });
+    res.json({ name: info.ServerName, version: info.Version, online: true, configured: true });
   } catch {
-    res.json({ online: false });
+    res.json({ online: false, configured: true });
+  }
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'rate_limited', message: 'Too many attempts. Try again in a few minutes.' },
+});
+
+/**
+ * First-run setup: points StreamForge at a Jellyfin server. Only available
+ * while no Jellyfin server is configured — afterwards, only a signed-in
+ * administrator can change it (from Settings).
+ */
+authRouter.post('/setup', setupLimiter, async (req, res) => {
+  if (isConfigured('jellyfin')) {
+    res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
+    return;
+  }
+  const parsed = z.object({ url: urlField.refine((v) => v !== '', 'Enter your Jellyfin server address') }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'bad_request', message: parsed.error.issues[0]?.message ?? 'Invalid address' });
+    return;
+  }
+  const { url } = parsed.data;
+  try {
+    const info = await jellyfin.probe({ url });
+    if (isConfigured('jellyfin')) {
+      res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
+      return;
+    }
+    saveSettings('jellyfin', { url }, 'setup');
+    console.log(`[settings] Jellyfin set to ${url} during first-run setup`);
+    res.json({ name: info.meta?.server, version: info.version, online: true, configured: true });
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach Jellyfin: ${(err as Error).message}` });
   }
 });
 
@@ -122,6 +166,10 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   const body = loginBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: 'bad_request', message: 'Username is required' });
+    return;
+  }
+  if (!isConfigured('jellyfin')) {
+    res.status(409).json({ error: 'not_configured', message: 'Set up your Jellyfin server first.' });
     return;
   }
   const deviceId = newDeviceId();

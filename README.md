@@ -39,40 +39,147 @@ server.
   throughput.
 - **Customisable dashboard.** Drag widgets to reorder them, resize them (⅓, ½, ⅔
   or full width), or hide them. The layout is saved per user on each device.
+- **Settings in the UI.** Connect services from a Settings page with a
+  connection test for each one. Changes apply instantly and are stored in a
+  local SQLite database. No config files to edit.
 - **Real-time updates.** Each endpoint is polled at a cadence that suits its
   data. Playback progress advances every second between polls. The backend
   de-duplicates upstream calls across clients.
 
-## Quick start
+## Installation
+
+StreamForge runs as a single Docker container (images for `amd64` and `arm64`).
+All you need is Docker and a Jellyfin server it can reach.
+
+### 1. Start the container
+
+**Docker Compose** (recommended). Save this as `docker-compose.yml`, or download
+[`docker-compose.example.yml`](docker-compose.example.yml):
+
+```yaml
+services:
+  streamforge:
+    image: ghcr.io/ashveebee/streamforge:latest
+    container_name: streamforge
+    ports:
+      - "4000:4000"
+    volumes:
+      - streamforge-data:/data
+    restart: unless-stopped
+
+volumes:
+  streamforge-data:
+```
 
 ```bash
-cp .env.example .env      # fill in URLs and API keys
+docker compose up -d
+```
+
+**Or with `docker run`:**
+
+```bash
+docker run -d --name streamforge \
+  -p 4000:4000 \
+  -v streamforge-data:/data \
+  --restart unless-stopped \
+  ghcr.io/ashveebee/streamforge:latest
+```
+
+The `/data` volume holds the settings database. Keep it, or you'll need to set
+everything up again after an upgrade.
+
+### 2. Connect Jellyfin
+
+Open **http://your-server:4000**. On first launch StreamForge asks for your
+Jellyfin server address (for example `https://jellyfin.example.com` or
+`http://192.168.1.10:8096`). It checks that the server is reachable, then you
+sign in with a **Jellyfin administrator** account.
+
+### 3. Connect your other services
+
+Go to **Settings** in the sidebar. For each service you use, enter its address
+and API key, click **Test connection**, then **Save**. Changes apply
+immediately; no restart is needed. Skip any service you don't run.
+
+| Service | Where to find the API key |
+| --- | --- |
+| Jellyfin | Dashboard → API Keys (optional; enables server-wide stats and update warnings) |
+| Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
+| Seerr | Settings → General → API Key |
+| Infinidisk | Your Infinidisk settings (optional if its status endpoint is public) |
+
+> **Addresses are resolved from inside the container.** `localhost` means the
+> StreamForge container itself, not your host. Use your server's LAN IP or
+> domain name, `http://host.docker.internal:<port>` for services on the same
+> host (Docker Desktop; on Linux add `--add-host=host.docker.internal:host-gateway`),
+> or the container name (e.g. `http://sonarr:8989`) if the services share a
+> Docker network with StreamForge.
+
+### Updating
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Your settings are kept in the `streamforge-data` volume. See
+[Releases and image tags](#releases-and-image-tags) to pin a version instead of
+following `latest`.
+
+### Backing up
+
+Everything StreamForge stores is in `/data/streamforge.db`. To back it up:
+
+```bash
+docker run --rm -v streamforge-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/streamforge-data.tgz -C /data .
+```
+
+The file contains your service API keys, so keep backups private.
+
+### Optional: configure with environment variables
+
+Everything can also be set with environment variables, which is handy for
+infrastructure-as-code. Copy [`.env.example`](.env.example) to `.env`, fill in
+what you need and pass it with `--env-file .env` (Compose picks up `.env`
+automatically if you use the example file). Settings saved in the UI take
+precedence. **Use environment** on a service in Settings removes the saved
+copy and falls back to the variables.
+
+Server options such as `PORT`, `TRUST_PROXY` (set when behind a reverse proxy),
+`SESSION_TTL_HOURS` and `ALLOW_NON_ADMIN` are environment-only. See
+`.env.example` for the full list.
+
+### Troubleshooting
+
+- **"Jellyfin server unreachable" or a failed connection test:** check the
+  address from inside the container:
+  `docker exec streamforge wget -qO- <url>/System/Info/Public`.
+- **"Unauthorised — check API key":** the key is wrong or was regenerated.
+  Paste it again in Settings.
+- **"Re-enter the API key when changing the server address":** a saved key is
+  never sent to a new address. Paste the key again along with the new address.
+- **Locked out after changing the Jellyfin server:** this is expected, because
+  everyone is signed out. Sign in again with an administrator account on the
+  new server.
+- **Logs:** `docker logs streamforge`. The startup banner lists every service
+  and where its settings come from.
+
+## Development
+
+Requires Node.js 22.13 or newer.
+
+```bash
 npm install
 npm run dev               # API on :4000, UI on :5173 (proxied)
 ```
 
-Production:
+Settings are stored in `./data` (git-ignored). For a production build without
+Docker:
 
 ```bash
 npm run build
 npm start                 # serves UI + API on :4000
 ```
-
-Docker (multi-arch images for `amd64` and `arm64`):
-
-```bash
-cp .env.example .env
-docker compose -f docker-compose.example.yml up -d
-```
-
-Or run the image directly:
-
-```bash
-docker run -d --name streamforge --env-file .env -p 4000:4000 ghcr.io/ashveebee/streamforge:1
-```
-
-Only `JELLYFIN_URL` is required. Any service without a URL and API key is shown
-as *Not configured*, and its widgets are hidden.
 
 ## Releases and image tags
 
@@ -85,7 +192,7 @@ automated from [Conventional Commits](https://www.conventionalcommits.org/)
 | --- | --- | --- |
 | `1.2.3` | never (immutable) | exact, reproducible deployments |
 | `1.2` | every patch release of 1.2 | bug fixes only |
-| `1` | every 1.x release | **recommended**: features and fixes, no breaking changes |
+| `1` | every 1.x release (from 1.0.0) | **recommended** once 1.0 is out: features and fixes, no breaking changes |
 | `latest` | every release | always the newest stable release |
 | `edge` | every commit to `main` | testing unreleased changes |
 | `sha-abc1234` | that commit only | debugging a specific build |
@@ -110,12 +217,14 @@ browser ──(session cookie)──▶ StreamForge server ──(API keys / Jel
 server/
   index.ts            Express app, security headers, static hosting
   config.ts           zod-validated environment configuration
-  auth.ts             Jellyfin login/logout, session middleware, CSRF guard
+  settings.ts         runtime service settings (SQLite, falling back to env)
+  settingsRoutes.ts   admin Settings API: view, test, save, reset
+  auth.ts             Jellyfin login/logout, first-run setup, session middleware, CSRF guard
   routes.ts           /api routes and image proxies
   health.ts           health monitor and download-throughput sampler
   host.ts             host CPU / RAM / network / filesystem metrics
   services/           one module per integration (normalises upstream data)
-  lib/                http client, TTL cache, session store
+  lib/                http client, TTL cache, session store, SQLite database
 src/
   pages/              one page per route
   components/widgets  dashboard widgets and widget registry
@@ -127,7 +236,8 @@ src/
 
 To add an integration:
 
-1. Add a module in `server/services/`.
+1. Add a module in `server/services/` that reads its client via `derived()` from
+   `server/settings.ts`, and add the service to `SERVICE_IDS` and the Settings page.
 2. Register its probe in `server/health.ts`.
 3. Expose a route in `server/routes.ts`.
 4. Add a hook in `src/hooks/queries.ts`.
@@ -135,7 +245,14 @@ To add an integration:
 
 ## Security
 
-- API keys and service URLs live only in the server environment.
+- API keys stay on the server, in the environment or the settings database
+  (`chmod 600`, in an owner-only directory). The Settings page shows only the
+  last four characters of a saved key, and only administrators can open it.
+- A saved API key is never sent to a new server address: changing a service's
+  address requires entering its key again.
+- First-run setup (choosing the Jellyfin server) is only available while no
+  Jellyfin server is configured. Changing the Jellyfin server later signs
+  everyone out.
 - Artwork is streamed through validated proxy routes, so the browser never
   contacts internal services. Item IDs, image types and cover filenames are
   checked against allow-lists to prevent SSRF.

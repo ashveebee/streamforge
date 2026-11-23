@@ -9,6 +9,8 @@ import { api } from './routes.js';
 import { startMonitors } from './health.js';
 import { startHostMetrics } from './host.js';
 import { VERSION } from './version.js';
+import { dbPath } from './lib/db.js';
+import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -54,14 +56,15 @@ if (existsSync(webDist)) {
 
 app.listen(config.port, config.host, () => {
   console.log(`\n  ▲ StreamForge v${VERSION} listening on http://${config.host}:${config.port}`);
-  console.log(`    Jellyfin → ${config.jellyfin.baseUrl}`);
-  for (const k of ['sonarr', 'radarr', 'prowlarr', 'seerr'] as const) {
-    console.log(`    ${k.padEnd(9)}→ ${config[k]?.baseUrl ?? '(not configured)'}`);
+  for (const id of SERVICE_IDS) {
+    const r = resolve(id);
+    const s = r.settings;
+    const target = [s.url, ...(s.mounts ?? [])].filter(Boolean).join(' + ');
+    const where = r.source === 'none' ? '(not configured)' : `${target}  [${r.source}]`;
+    console.log(`    ${SERVICE_NAMES[id].padEnd(11)}→ ${where}`);
   }
-  const inf = config.infinidisk;
-  console.log(
-    `    infinidisk→ ${inf.baseUrl ?? ''}${inf.baseUrl && inf.mounts.length ? ' + ' : ''}${inf.mounts.join(', ') || (inf.baseUrl ? '' : '(not configured)')}\n`,
-  );
+  console.log(`    Settings DB → ${dbPath}\n`);
+  if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
   startMonitors();
   void startHostMetrics();
 });

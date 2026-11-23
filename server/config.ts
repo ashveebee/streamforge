@@ -29,7 +29,11 @@ const schema = z.object({
   SESSION_TTL_HOURS: int(12, 1),
   ALLOW_NON_ADMIN: bool(false),
 
-  JELLYFIN_URL: url,
+  DATA_DIR: z.string().default('./data'),
+
+  // Service settings below are optional fallbacks: anything saved from the
+  // Settings page (stored in SQLite under DATA_DIR) takes precedence.
+  JELLYFIN_URL: optionalUrl,
   JELLYFIN_API_KEY: optionalString,
 
   SONARR_URL: optionalUrl,
@@ -61,15 +65,11 @@ if (!parsed.success) {
   for (const issue of parsed.error.issues) {
     console.error(`  • ${issue.path.join('.')}: ${issue.message}`);
   }
-  console.error('\nCopy .env.example to .env and fill in your values.\n');
+  console.error('\nCheck your environment variables (see .env.example).\n');
   process.exit(1);
 }
 
 const env = parsed.data;
-
-function pair(baseUrl?: string, apiKey?: string) {
-  return baseUrl && apiKey ? { baseUrl, apiKey } : undefined;
-}
 
 export const config = {
   env: env.NODE_ENV,
@@ -86,21 +86,26 @@ export const config = {
   hostMetrics: env.HOST_METRICS,
   hostMetricsIntervalMs: env.HOST_METRICS_INTERVAL_SECONDS * 1000,
 
-  jellyfin: { baseUrl: env.JELLYFIN_URL, apiKey: env.JELLYFIN_API_KEY },
-  sonarr: pair(env.SONARR_URL, env.SONARR_API_KEY),
-  radarr: pair(env.RADARR_URL, env.RADARR_API_KEY),
-  prowlarr: pair(env.PROWLARR_URL, env.PROWLARR_API_KEY),
-  seerr: pair(env.SEERR_URL, env.SEERR_API_KEY),
-  infinidisk: {
-    baseUrl: env.INFINIDISK_URL,
-    apiKey: env.INFINIDISK_API_KEY,
-    authHeader: env.INFINIDISK_AUTH_HEADER,
-    statusPath: env.INFINIDISK_STATUS_PATH,
-    healthPath: env.INFINIDISK_HEALTH_PATH,
-    mounts: (env.INFINIDISK_MOUNTS ?? '')
-      .split(',')
-      .map((m) => m.trim())
-      .filter(Boolean),
+  dataDir: env.DATA_DIR,
+
+  /** Service settings from the environment — fallbacks for server/settings.ts. */
+  envServices: {
+    jellyfin: { url: env.JELLYFIN_URL, apiKey: env.JELLYFIN_API_KEY },
+    sonarr: { url: env.SONARR_URL, apiKey: env.SONARR_API_KEY },
+    radarr: { url: env.RADARR_URL, apiKey: env.RADARR_API_KEY },
+    prowlarr: { url: env.PROWLARR_URL, apiKey: env.PROWLARR_API_KEY },
+    seerr: { url: env.SEERR_URL, apiKey: env.SEERR_API_KEY },
+    infinidisk: {
+      url: env.INFINIDISK_URL,
+      apiKey: env.INFINIDISK_API_KEY,
+      authHeader: env.INFINIDISK_AUTH_HEADER,
+      statusPath: env.INFINIDISK_STATUS_PATH,
+      healthPath: env.INFINIDISK_HEALTH_PATH,
+      mounts: (env.INFINIDISK_MOUNTS ?? '')
+        .split(',')
+        .map((m) => m.trim())
+        .filter(Boolean),
+    },
   },
 } as const;
 

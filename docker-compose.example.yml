@@ -1,15 +1,24 @@
 services:
   streamforge:
-    # Pin a major version (":1") for automatic minor/patch updates without
-    # breaking changes, or an exact version (":1.2.3") for full control.
-    image: ghcr.io/ashveebee/streamforge:1
+    # "latest" follows every stable release. Pin an exact version (":0.3.1")
+    # for full control, or a major version (":1") once 1.0 is out.
+    image: ghcr.io/ashveebee/streamforge:latest
     container_name: streamforge
-    env_file: .env
+    # Optional: services are normally configured from the Settings page.
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "4000:4000"
     volumes:
-      # Mount storage read-only if you use INFINIDISK_MOUNTS for local stats.
-      - /mnt/media:/mnt/media:ro
+      # Settings saved from the UI (SQLite). Keep this so they survive upgrades.
+      - streamforge-data:/data
+      # Optional: mount storage read-only to measure it under Settings →
+      # Infinidisk → Advanced → Local mount paths.
+      # - /mnt/media:/mnt/media:ro
     # For host-level network stats, use host networking instead of ports:
     # network_mode: host
     restart: unless-stopped
+
+volumes:
+  streamforge-data:

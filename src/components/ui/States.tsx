@@ -1,7 +1,8 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { PlugZap, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Link } from 'react-router';
+import { PlugZap, RefreshCw, Settings, TriangleAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -65,7 +66,15 @@ export function ErrorState({ error, onRetry, className }: { error: unknown; onRe
         className={className}
         icon={PlugZap}
         title="Not connected"
-        description="Add this service's URL and API key to the StreamForge server environment to enable it."
+        description="Add this service's address and API key in Settings to enable it."
+        action={
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-white/5 hover:text-ink"
+          >
+            <Settings className="size-3" /> Open Settings
+          </Link>
+        }
       />
     );
   }

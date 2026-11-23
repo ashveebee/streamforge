@@ -1,10 +1,16 @@
-import { config } from '../config.js';
+import { resolve } from '../settings.js';
 import { buildUrl, requestJson, requestRaw, UpstreamError } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import { VERSION as APP_VERSION } from '../version.js';
 import type { HealthProbe } from './types.js';
 
-const BASE = config.jellyfin.baseUrl;
+/** The configured Jellyfin URL; throws when Jellyfin hasn't been set up yet. */
+function base() {
+  const url = resolve('jellyfin').settings.url;
+  if (!url) throw new UpstreamError('Jellyfin is not configured', undefined, 'jellyfin');
+  return url;
+}
+const serverApiKey = () => resolve('jellyfin').settings.apiKey;
 const CLIENT = 'StreamForge';
 const VERSION = APP_VERSION;
 const TICKS_PER_MS = 10_000;
@@ -29,14 +35,14 @@ export interface JfCtx {
 
 /**
  * Server-wide data (sessions, activity log, users) uses the optional
- * JELLYFIN_API_KEY when present, otherwise the signed-in user's token.
+ * Jellyfin API key when present, otherwise the signed-in user's token.
  */
 function serverToken(ctx: JfCtx) {
-  return config.jellyfin.apiKey ?? ctx.token;
+  return serverApiKey() ?? ctx.token;
 }
 
 function jf<T>(path: string, token: string, deviceId: string, query?: Record<string, string | number | boolean | undefined>) {
-  return requestJson<T>(buildUrl(BASE, path, query), {
+  return requestJson<T>(buildUrl(base(), path, query), {
     headers: authHeader(token, deviceId),
     service: 'jellyfin',
   });
@@ -64,7 +70,7 @@ interface JfAuthResult {
 
 export async function authenticate(username: string, password: string, deviceId: string) {
   try {
-    return await requestJson<JfAuthResult>(buildUrl(BASE, '/Users/AuthenticateByName'), {
+    return await requestJson<JfAuthResult>(buildUrl(base(), '/Users/AuthenticateByName'), {
       method: 'POST',
       headers: authHeader(undefined, deviceId),
       body: { Username: username, Pw: password },
@@ -83,7 +89,7 @@ export async function currentUser(token: string, deviceId: string) {
 }
 
 export async function logout(token: string, deviceId: string) {
-  await requestJson(buildUrl(BASE, '/Sessions/Logout'), {
+  await requestJson(buildUrl(base(), '/Sessions/Logout'), {
     method: 'POST',
     headers: authHeader(token, deviceId),
     service: 'jellyfin',
@@ -100,7 +106,7 @@ interface JfPublicInfo {
 
 export function publicInfo() {
   return cache.get('jf:public', 60_000, () =>
-    requestJson<JfPublicInfo>(buildUrl(BASE, '/System/Info/Public'), { service: 'jellyfin' }),
+    requestJson<JfPublicInfo>(buildUrl(base(), '/System/Info/Public'), { service: 'jellyfin' }),
   );
 }
 
@@ -119,13 +125,22 @@ interface JfSystemInfo extends JfPublicInfo {
   CanSelfRestart?: boolean;
 }
 
-export async function probe(): Promise<HealthProbe> {
-  const info = await requestJson<JfPublicInfo>(buildUrl(BASE, '/System/Info/Public'), {
+/** Checks Jellyfin. Pass `target` to test candidate settings instead of the saved ones. */
+export async function probe(target?: { url: string; apiKey?: string }): Promise<HealthProbe> {
+  const url = target?.url ?? base();
+  const apiKey = target ? target.apiKey : serverApiKey();
+  const info = await requestJson<JfPublicInfo>(buildUrl(url, '/System/Info/Public'), {
     service: 'jellyfin',
   });
+  if (!info?.Version || !info.ServerName) {
+    throw new UpstreamError('This does not look like a Jellyfin server', undefined, 'jellyfin');
+  }
   const result: HealthProbe = { version: info.Version, issues: [], meta: { server: info.ServerName } };
-  if (config.jellyfin.apiKey) {
-    const sys = await jf<JfSystemInfo>('/System/Info', config.jellyfin.apiKey, 'streamforge-server');
+  if (apiKey) {
+    const sys = await requestJson<JfSystemInfo>(buildUrl(url, '/System/Info'), {
+      headers: authHeader(apiKey, 'streamforge-server'),
+      service: 'jellyfin',
+    });
     if (sys.HasPendingRestart)
       result.issues.push({ level: 'warning', message: 'Server restart pending', source: 'System' });
     if (sys.HasUpdateAvailable)
@@ -586,7 +601,7 @@ export async function image(
   opts: { tag?: string; maxWidth?: number; quality?: number },
 ) {
   return requestRaw(
-    buildUrl(BASE, `/${kind}/${id}/Images/${type}`, {
+    buildUrl(base(), `/${kind}/${id}/Images/${type}`, {
       tag: opts.tag,
       maxWidth: opts.maxWidth,
       quality: opts.quality ?? 90,
