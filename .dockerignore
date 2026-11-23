@@ -8,7 +8,6 @@ dist-server
 .github
 *.md
 !README.md
-!LICENSE.md
 docker-compose*.yml
 data
 docs

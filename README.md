@@ -332,18 +332,23 @@ To add an integration:
 
 ## License
 
-StreamForge is **free for personal and non-commercial use**, and you're welcome
-to modify it. It's licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md).
+StreamForge is free and open source software, licensed under the
+[GNU General Public License v2.0](LICENSE), the same license as Jellyfin.
 
-- ✅ Run it at home, in a homelab, or for friends and family
-- ✅ Change it, fork it and share your changes (keep the license and its
-  `Required Notice` line with any copy)
-- ✅ Use by charities, schools, public research and government organisations
-- ❌ Commercial use, such as selling it, bundling it in a paid product or
-  service, or running it for a business, needs separate permission. Open an
-  issue to ask.
+- ✅ Use it for anything, at home or at work, commercially or not
+- ✅ Study it, change it and share your changes
+- 📄 If you distribute StreamForge or a modified version, you must make the
+  source code available under the same license
 
-This summary is for convenience; the [license text](LICENSE.md) is what applies.
-StreamForge is source-available rather than "open source" in the OSI sense,
-because the license doesn't allow commercial use.
+```
+StreamForge
+Copyright (C) 2026 ashveebee and contributors
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+```

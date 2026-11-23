@@ -112,7 +112,7 @@ jobs:
             type=sha,prefix=sha-,format=short
           labels: |
             org.opencontainers.image.title=StreamForge
-            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+            org.opencontainers.image.licenses=GPL-2.0-only
             org.opencontainers.image.version=${{ steps.vars.outputs.version }}
 
       - name: Build and push
