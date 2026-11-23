@@ -30,7 +30,31 @@ const migrations = [
      updated_at TEXT NOT NULL,
      updated_by TEXT
    )`,
+  // App-wide preferences (enabled services, auto-import options, …) as JSON.
+  `CREATE TABLE app_settings (
+     key        TEXT PRIMARY KEY,
+     data       TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   )`,
 ];
+
+/** Reads a JSON preference, or `fallback` when missing or unreadable. */
+export function readPref<T>(key: string, fallback: T): T {
+  const row = db.prepare('SELECT data FROM app_settings WHERE key = ?').get(key) as { data: string } | undefined;
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.data) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function writePref(key: string, value: unknown) {
+  db.prepare(
+    `INSERT INTO app_settings (key, data, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(key, JSON.stringify(value), new Date().toISOString());
+}
 
 const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
 for (let i = current; i < migrations.length; i++) {

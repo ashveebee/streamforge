@@ -17,7 +17,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useHealth, useResetService, useSaveService, useServiceSettings, useTestService } from '@/hooks/queries';
+import { useHealth, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { relative } from '@/lib/format';
@@ -26,7 +26,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
-import { StatusBadge } from '@/components/ui/Status';
+import { Pill, StatusBadge } from '@/components/ui/Status';
+import { Switch } from '@/components/ui/Switch';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 
 /** Where each service keeps its API key, and an example address. */
@@ -162,6 +163,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
   const test = useTestService(s.id);
   const save = useSaveService(s.id);
   const reset = useResetService(s.id);
+  const toggle = useSetServiceEnabled(s.id);
 
   // Pick up server-side changes (after save/reset) without clobbering edits in progress.
   const baseline = useMemo(() => initial(s), [s]);
@@ -212,9 +214,26 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <SourceBadge s={s} />
-              {status && <StatusBadge status={status} />}
+              {!s.enabled ? <Pill>Disabled</Pill> : status && <StatusBadge status={status} />}
             </div>
+            {s.canDisable && (
+              <Switch
+                checked={s.enabled}
+                disabled={toggle.isPending}
+                onChange={(v) => toggle.mutate(v)}
+                label={s.enabled ? `Disable ${meta.name}` : `Enable ${meta.name}`}
+                className="ml-1"
+              />
+            )}
           </header>
+          {!s.enabled && (
+            <p className="border-b border-line bg-white/[0.02] px-5 py-2.5 text-xs text-ink-3">
+              Switched off — hidden from navigation and the dashboard, and StreamForge won’t contact it. Settings are kept.
+            </p>
+          )}
+          {toggle.error && (
+            <p className="border-b border-line px-5 py-2.5 text-xs text-bad" role="alert">{(toggle.error as Error).message}</p>
+          )}
 
           <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
             <Field
@@ -394,7 +413,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Configuration"
         title="Settings"
-        description="Connect your services. Changes apply immediately — no restart needed."
+        description="Connect your services, or switch off the ones you don’t use. Changes apply immediately — no restart needed."
       />
       {q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>

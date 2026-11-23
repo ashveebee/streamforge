@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import type {
   ActivityEntry,
+  AutoImportEntry,
+  AutoImportStatus,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -39,13 +41,19 @@ function poll<T>(key: string[], path: string, intervalMs: number, enabled = true
 export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
-    queryFn: () => api<{ services: Record<ServiceId, boolean> }>('/config'),
+    queryFn: () => api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean> }>('/config'),
     staleTime: Infinity,
   });
 
 export function useConfigured(id: ServiceId) {
   const { data } = useServiceConfig();
   return data?.services[id] ?? true;
+}
+
+/** False only once the server says the service has been switched off. */
+export function useEnabled(id: ServiceId) {
+  const { data } = useServiceConfig();
+  return data?.enabled?.[id] ?? true;
 }
 
 export const useHealth = () => useQuery(poll<HealthSnapshot>(['health'], '/health', 10 * SECOND));
@@ -136,5 +144,42 @@ export function useResetService(id: ServiceId) {
   return useMutation({
     mutationFn: () => api<SaveResult>(`/settings/services/${id}`, { method: 'DELETE' }),
     onSuccess: changed,
+  });
+}
+
+export function useSetServiceEnabled(id: ServiceId) {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      api<SaveResult>(`/settings/services/${id}/enabled`, { method: 'PUT', body: { enabled } }),
+    onSuccess: changed,
+  });
+}
+
+/* ------------------------------ auto-import ------------------------------ */
+
+export const useAutoImport = () => {
+  const on = useConfigured('sonarr');
+  return useQuery(poll<AutoImportStatus>(['sonarr', 'auto-import'], '/sonarr/auto-import', 15 * SECOND, on));
+};
+
+export function useUpdateAutoImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<AutoImportStatus['settings']>) =>
+      api<AutoImportStatus>('/sonarr/auto-import', { method: 'PUT', body: patch }),
+    onSuccess: (data) => qc.setQueryData(['sonarr', 'auto-import'], data),
+  });
+}
+
+export function useRunAutoImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (opts: { dryRun?: boolean; queueId?: number }) =>
+      api<{ results: AutoImportEntry[]; status: AutoImportStatus }>('/sonarr/auto-import/run', { method: 'POST', body: opts }),
+    onSuccess: (data) => {
+      qc.setQueryData(['sonarr', 'auto-import'], data.status);
+      void qc.invalidateQueries({ queryKey: ['sonarr'] });
+    },
   });
 }

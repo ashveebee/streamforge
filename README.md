@@ -45,7 +45,8 @@ server.
 - **Service integrations**
   - *Jellyfin:* server info, sessions, users, library statistics, recently added
     items, daily plays and the activity log.
-  - *Sonarr:* series stats, missing episodes, queue, airing calendar and disk space.
+  - *Sonarr:* series stats, missing episodes, queue, airing calendar and disk
+    space, plus **auto-import** for downloads Sonarr couldn't match (see below).
   - *Radarr:* movie stats, missing movies, queue, cinema/digital/physical release
     dates, quality breakdown and disk space.
   - *Prowlarr:* health, query/grab/failure stats and response time for each
@@ -67,7 +68,22 @@ server.
   or full width), or hide them. The layout is saved per user on each device.
 - **Settings in the UI.** Connect services from a Settings page with a
   connection test for each one. Changes apply instantly and are stored in a
-  local SQLite database. No config files to edit.
+  local SQLite database. No config files to edit. Services you don't use can
+  be switched off; they're hidden from the sidebar and dashboard and never
+  contacted, and their settings are kept for later.
+- **Sonarr auto-import.** Finds finished downloads that Sonarr couldn't import
+  (for example "Unknown Series", "Unable to parse" or "matched to series by
+  ID") and imports them. For each file it uses the first answer it can get:
+  - **Series:** Sonarr's own match, then the series the release was grabbed
+    for, then Sonarr's release-name parser, then a strict title match against
+    your library (including alternate titles).
+  - **Episodes:** season and episode, absolute or air-date numbering.
+
+  It skips a file when the signals conflict, when the file is a sample, or when
+  Sonarr would still reject it (for example "not an upgrade"). It runs on a
+  schedule, shortly after a download gets stuck, or when you press **Run now**.
+  **Preview** shows what it would do without changing anything. It is off by
+  default; turn it on from the Sonarr page.
 - **Real-time updates.** Each endpoint is polled at a cadence that suits its
   data. Playback progress advances every second between polls. The backend
   de-duplicates upstream calls across clients.

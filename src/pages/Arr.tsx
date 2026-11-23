@@ -10,6 +10,7 @@ import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { AutoImportCard } from '@/components/widgets/AutoImportCard';
 import { QueueRow } from '@/components/widgets/DownloadsWidget';
 import { VolumeRow } from '@/components/widgets/StorageWidget';
 import { UpcomingList } from '@/components/widgets/UpcomingWidget';
@@ -94,6 +95,7 @@ export function SonarrPage() {
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
+            <AutoImportCard queue={d.queue.items} />
             <Card>
               <CardHeader icon={Layers} title="Recently added series" />
               <PosterStrip items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />

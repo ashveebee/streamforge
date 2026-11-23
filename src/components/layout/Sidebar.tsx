@@ -2,7 +2,7 @@ import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Activity, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useHealth, useNowPlaying } from '@/hooks/queries';
+import { useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { ServiceId } from '@/lib/types';
@@ -81,7 +81,10 @@ export function Sidebar({
   const { user, logout } = useAuth();
   const health = useHealth();
   const playing = useNowPlaying();
+  const config = useServiceConfig();
   const byId = new Map(health.data?.services.map((s) => [s.id, s]));
+  // Services switched off in Settings are hidden from navigation.
+  const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
   const streams = playing.data?.length ?? 0;
 
   return (
@@ -127,7 +130,7 @@ export function Sidebar({
           Services
         </div>
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
-        {SERVICE_ORDER.map((id) => {
+        {shown.map((id) => {
           const s = byId.get(id);
           const meta = SERVICES[id];
           return (

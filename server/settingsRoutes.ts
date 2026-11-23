@@ -17,6 +17,8 @@ import {
   saveSettings,
   SERVICE_IDS,
   SERVICE_NAMES,
+  canDisable,
+  setEnabled,
   type ServiceSettings,
 } from './settings.js';
 
@@ -130,7 +132,7 @@ async function runTest(id: ServiceId, s: ServiceSettings) {
 
 /* -------------------------------- routes ------------------------------- */
 
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.isAdmin) {
     res.status(403).json({ error: 'forbidden', message: 'Only Jellyfin administrators can change settings.' });
     return;
@@ -219,4 +221,21 @@ settingsRouter.delete('/services/:id', (req, res) => {
   if (signedOut) sessions.clear();
   console.log(`[settings] ${SERVICE_NAMES[id]} reset to environment by ${req.session!.userName}`);
   res.json({ service: describe(id), signedOut });
+});
+
+settingsRouter.put('/services/:id/enabled', (req, res) => {
+  const id = serviceParam(req, res);
+  if (!id) return;
+  const parsed = z.object({ enabled: z.boolean() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'bad_request', message: 'Expected { enabled: boolean }' });
+    return;
+  }
+  if (!canDisable(id)) {
+    res.status(400).json({ error: 'bad_request', message: `${SERVICE_NAMES[id]} is required and can't be disabled.` });
+    return;
+  }
+  setEnabled(id, parsed.data.enabled);
+  console.log(`[settings] ${SERVICE_NAMES[id]} ${parsed.data.enabled ? 'enabled' : 'disabled'} by ${req.session!.userName}`);
+  res.json({ service: describe(id), signedOut: false });
 });

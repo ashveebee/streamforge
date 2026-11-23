@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { db } from './lib/db.js';
+import { db, readPref, writePref } from './lib/db.js';
 import { cache } from './lib/cache.js';
 import type { ServiceId } from './services/types.js';
 
@@ -120,8 +120,35 @@ export function serviceSettings(id: ServiceId): ServiceSettings | undefined {
   return isComplete(id, settings) ? settings : undefined;
 }
 
+/* ---------------------------- enable/disable --------------------------- */
+
+/**
+ * Services can be switched off without losing their settings. A disabled
+ * service is treated as not configured everywhere: no polling, no health
+ * checks, and it disappears from the navigation and dashboard. Jellyfin is
+ * always on because it handles sign-in.
+ */
+const disabled = new Set<ServiceId>(
+  readPref<string[]>('disabledServices', []).filter((id): id is ServiceId => SERVICE_IDS.includes(id as ServiceId)),
+);
+
+export const canDisable = (id: ServiceId) => id !== 'jellyfin';
+
+export function isEnabled(id: ServiceId) {
+  return !disabled.has(id);
+}
+
+export function setEnabled(id: ServiceId, enabled: boolean) {
+  if (!canDisable(id) || enabled === isEnabled(id)) return;
+  if (enabled) disabled.delete(id);
+  else disabled.add(id);
+  writePref('disabledServices', [...disabled]);
+  changed(id);
+}
+
+/** Configured *and* enabled — i.e. StreamForge should talk to it. */
 export function isConfigured(id: ServiceId) {
-  return !!serviceSettings(id);
+  return isEnabled(id) && !!serviceSettings(id);
 }
 
 /* --------------------------- change tracking --------------------------- */
@@ -150,7 +177,7 @@ export function derived<T>(id: ServiceId, build: (s: ServiceSettings) => T | und
   return () => {
     if (seen !== version) {
       seen = version;
-      const s = serviceSettings(id);
+      const s = isEnabled(id) ? serviceSettings(id) : undefined;
       value = s ? build(s) : undefined;
     }
     return value;
@@ -205,6 +232,8 @@ export function describe(id: ServiceId) {
     name: SERVICE_NAMES[id],
     source: r.source,
     configured: isComplete(id, s),
+    enabled: isEnabled(id),
+    canDisable: canDisable(id),
     envAvailable: hasEnvSettings(id),
     updatedAt: r.updatedAt,
     updatedBy: r.updatedBy,

@@ -89,6 +89,8 @@ export function createClient(service: string, baseUrl: string, headers: Record<s
     baseUrl,
     get: <T>(path: string, query?: RequestOptions['query']) =>
       requestJson<T>(buildUrl(baseUrl, path, query), { headers, service }),
+    post: <T>(path: string, body: unknown, query?: RequestOptions['query']) =>
+      requestJson<T>(buildUrl(baseUrl, path, query), { method: 'POST', body, headers, service }),
     raw: (path: string, query?: RequestOptions['query'], extraHeaders?: Record<string, string>) =>
       requestRaw(buildUrl(baseUrl, path, query), {
         headers: { ...headers, Accept: '*/*', ...extraHeaders },

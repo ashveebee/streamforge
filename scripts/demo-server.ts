@@ -11,6 +11,8 @@
 import express from 'express';
 import type {
   ActivityEntry,
+  AutoImportEntry,
+  AutoImportStatus,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -465,7 +467,30 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
           { title: 'Iron Bloom', subtitle: '2026', size: 18.4 * GB, pct: 0.57, rate: 22e6, quality: 'Bluray-2160p' },
           { title: 'Lanterns Over Kessa', subtitle: '2024', size: 8.7 * GB, pct: 0.23, rate: 11e6, quality: 'Remux-1080p' },
         ];
-  return items.map((it, i) => {
+  const stuck: QueueItem[] =
+    source === 'sonarr'
+      ? [
+          {
+            id: 9,
+            source,
+            title: 'Low Tide',
+            subtitle: 'S3E3 · Riptide',
+            releaseTitle: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
+            status: 'completed',
+            trackedState: 'importPending',
+            trackedStatus: 'warning',
+            protocol: 'torrent',
+            client: 'qBittorrent',
+            quality: 'WEBDL-1080p',
+            size: 1.9 * GB,
+            sizeLeft: 0,
+            progress: 1,
+            warnings: ['Found matching series via grab history, but release was matched to series by ID. Automatic import is not possible.'],
+            poster: poster('Low Tide'),
+          },
+        ]
+      : [];
+  return [...items.map((it, i) => {
     const left = Math.max(0.05 * it.size, it.size * (1 - it.pct) - it.rate * elapsed);
     const progress = 1 - left / it.size;
     return {
@@ -488,7 +513,7 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
       warnings: [],
       poster: poster(it.title),
     };
-  });
+  }), ...stuck];
 }
 
 function downloads(): DownloadSnapshot {
@@ -705,6 +730,51 @@ function infinidisk(): InfinidiskOverview {
   };
 }
 
+const disabledServices = new Set<ServiceId>();
+const autoImport: AutoImportStatus = {
+  settings: { enabled: true, intervalMinutes: 15 },
+  intervals: [5, 15, 30, 60, 180, 360],
+  running: false,
+  lastRun: iso(6 * 60_000),
+  nextRun: ahead(9 * 60_000),
+  stuck: 1,
+  log: [
+    {
+      id: 'demo-1',
+      at: iso(2 * HOUR),
+      trigger: 'queue',
+      title: 'Signal Fire',
+      release: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO',
+      outcome: 'imported',
+      message: 'Imported 1 of 1 file',
+      files: [{ name: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO.mkv', series: 'Signal Fire', episodes: 'S02E05', seriesMethod: 'title-match', episodeMethod: 'numbering', ok: true }],
+    },
+    {
+      id: 'demo-2',
+      at: iso(9 * HOUR),
+      trigger: 'schedule',
+      title: 'Starfall Academy',
+      release: 'Starfall.Academy.Season.1.Complete.1080p.WEB-DEMO',
+      outcome: 'imported',
+      message: 'Imported 8 of 9 files',
+      files: [
+        { name: 'Starfall.Academy.S01E01.mkv', series: 'Starfall Academy', episodes: 'S01E01', seriesMethod: 'grab-history', episodeMethod: 'parser', ok: true },
+        { name: 'Starfall.Academy.Extras.Featurette.mkv', series: 'Starfall Academy', seriesMethod: 'grab-history', ok: false, reason: 'Could not work out which episode(s) this is' },
+      ],
+    },
+    {
+      id: 'demo-3',
+      at: iso(26 * HOUR),
+      trigger: 'schedule',
+      title: 'The Cartographers',
+      release: 'The.Cartographers.S01E02.720p.HDTV-DEMO',
+      outcome: 'skipped',
+      message: 'Not an upgrade for existing episode file(s)',
+      files: [{ name: 'The.Cartographers.S01E02.720p.HDTV-DEMO.mkv', ok: false, reason: 'Not an upgrade for existing episode file(s)' }],
+    },
+  ],
+};
+
 function settings(): ServiceSettingsView[] {
   const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined };
   return (Object.keys(VERSIONS) as ServiceId[]).map((id) => ({
@@ -712,6 +782,8 @@ function settings(): ServiceSettingsView[] {
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
     source: id === 'infinidisk' ? 'environment' : 'database',
     configured: true,
+    enabled: !disabledServices.has(id),
+    canDisable: id !== 'jellyfin',
     envAvailable: id === 'infinidisk',
     updatedAt: id === 'infinidisk' ? undefined : iso((id.length * 5 + 3) * HOUR),
     updatedBy: id === 'infinidisk' ? undefined : 'Alex',
@@ -737,9 +809,16 @@ app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));
 app.get('/api/auth/server', json(() => ({ name: 'Homelab', version: '10.11.2', online: true, configured: true })));
 
-app.get('/api/config', json(() => ({ services: Object.fromEntries(Object.keys(VERSIONS).map((k) => [k, true])) })));
-app.get('/api/health', json(health));
-app.post('/api/health/recheck', json(health));
+app.get('/api/config', json(() => ({
+  services: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
+  enabled: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
+})));
+const enabledHealth = () => {
+  const h = health();
+  return { ...h, services: h.services.filter((s) => !disabledServices.has(s.id)) };
+};
+app.get('/api/health', json(enabledHealth));
+app.post('/api/health/recheck', json(enabledHealth));
 app.get('/api/system/host', json(host));
 app.get('/api/downloads', json(downloads));
 
@@ -749,6 +828,29 @@ app.get('/api/jellyfin/latest', json(latest));
 app.get('/api/jellyfin/activity', json(activity));
 app.get('/api/jellyfin/plays', json(plays));
 app.get('/api/sonarr/overview', json(sonarr));
+app.get('/api/sonarr/auto-import', json(() => autoImport));
+app.put('/api/sonarr/auto-import', (req, res) => {
+  Object.assign(autoImport.settings, req.body);
+  autoImport.nextRun = autoImport.settings.enabled ? ahead(autoImport.settings.intervalMinutes * 60_000) : undefined;
+  res.json(autoImport);
+});
+app.post('/api/sonarr/auto-import/run', (req, res) => {
+  const entry: AutoImportEntry = {
+    id: `demo-${Date.now()}`,
+    at: new Date().toISOString(),
+    trigger: 'manual',
+    title: 'Low Tide',
+    release: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
+    outcome: req.body?.dryRun ? 'preview' : 'imported',
+    message: req.body?.dryRun ? 'Would import 1 of 1 file' : 'Imported 1 of 1 file',
+    files: [{ name: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO.mkv', series: 'Low Tide', episodes: 'S03E03', seriesMethod: 'grab-history', episodeMethod: 'parser', ok: true }],
+  };
+  if (!req.body?.dryRun) {
+    autoImport.log.unshift(entry);
+    autoImport.lastRun = entry.at;
+  }
+  res.json({ results: [entry], status: autoImport });
+});
 app.get('/api/radarr/overview', json(radarr));
 app.get('/api/prowlarr/overview', json(prowlarr));
 app.get('/api/seerr/overview', json(seerr));
@@ -762,6 +864,12 @@ app.post('/api/settings/services/:id/test', (req, res) => {
 app.put('/api/settings/services/:id', (req, res) => {
   const s = settings().find((x) => x.id === req.params.id);
   res.json({ service: s, signedOut: false });
+});
+app.put('/api/settings/services/:id/enabled', (req, res) => {
+  const id = req.params.id as ServiceId;
+  if (req.body?.enabled) disabledServices.delete(id);
+  else if (id !== 'jellyfin') disabledServices.add(id);
+  res.json({ service: settings().find((x) => x.id === id), signedOut: false });
 });
 app.delete('/api/settings/services/:id', (req, res) => {
   const s = settings().find((x) => x.id === req.params.id);

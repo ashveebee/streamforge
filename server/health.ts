@@ -4,7 +4,8 @@ import { arrProbe, arrQueue, radarr, sonarr } from './services/arr.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
-import { isConfigured, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
+import { onSonarrQueue } from './services/autoImport.js';
+import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
 
@@ -127,7 +128,8 @@ async function runAll() {
 }
 
 export function healthSnapshot() {
-  const services = [...state.values()];
+  // Disabled services are hidden entirely, not reported as "unconfigured".
+  const services = [...state.values()].filter((s) => isEnabled(s.id));
   return {
     services,
     checkedAt: lastRun ? new Date(lastRun).toISOString() : undefined,
@@ -182,6 +184,7 @@ async function sampleDownloads() {
       if (!client) return;
       const q = await arrQueue(client, name).catch(() => undefined);
       if (!q) return;
+      if (name === 'sonarr') onSonarrQueue(q.items);
       for (const item of q.items) {
         const key = `${name}:${item.id}`;
         seen.add(key);

@@ -358,6 +358,9 @@ export interface ServiceSettingsView {
   name: string;
   source: SettingsSource;
   configured: boolean;
+  /** Disabled services keep their settings but are hidden and not polled. */
+  enabled: boolean;
+  canDisable: boolean;
   /** Whether environment variables exist to fall back to. */
   envAvailable: boolean;
   updatedAt?: string;
@@ -385,3 +388,40 @@ export interface ServiceSettingsInput {
 export type ConnectionTest =
   | { ok: true; version?: string; latencyMs: number; issues: HealthIssue[] }
   | { ok: false; message: string };
+
+/* ------------------------------ auto-import ------------------------------ */
+
+export type AutoImportMethod = 'sonarr' | 'grab-history' | 'parser' | 'title-match' | 'numbering';
+export type AutoImportOutcome = 'imported' | 'queued' | 'skipped' | 'failed' | 'preview';
+
+export interface AutoImportFile {
+  name: string;
+  series?: string;
+  episodes?: string;
+  seriesMethod?: AutoImportMethod;
+  episodeMethod?: AutoImportMethod;
+  ok: boolean;
+  reason?: string;
+}
+
+export interface AutoImportEntry {
+  id: string;
+  at: string;
+  trigger: 'schedule' | 'queue' | 'manual';
+  title: string;
+  release: string;
+  outcome: AutoImportOutcome;
+  message: string;
+  files: AutoImportFile[];
+}
+
+export interface AutoImportStatus {
+  settings: { enabled: boolean; intervalMinutes: number };
+  intervals: number[];
+  running: boolean;
+  lastRun?: string;
+  lastError?: string;
+  nextRun?: string;
+  stuck: number;
+  log: AutoImportEntry[];
+}

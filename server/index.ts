@@ -8,6 +8,7 @@ import { authRouter, requireCsrfHeader } from './auth.js';
 import { api } from './routes.js';
 import { startMonitors } from './health.js';
 import { startHostMetrics } from './host.js';
+import { startAutoImport } from './services/autoImport.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -67,4 +68,5 @@ app.listen(config.port, config.host, () => {
   if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
   startMonitors();
   void startHostMetrics();
+  startAutoImport();
 });

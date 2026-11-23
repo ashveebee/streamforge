@@ -4,8 +4,10 @@ import { Router } from 'express';
 import { ctxOf, requireAuth } from './auth.js';
 import { UpstreamError, type ServiceClient } from './lib/http.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
-import { isConfigured, SERVICE_IDS } from './settings.js';
-import { settingsRouter } from './settingsRoutes.js';
+import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
+import { requireAdmin, settingsRouter } from './settingsRoutes.js';
+import { z } from 'zod';
+import { autoImportStatus, INTERVALS, runAutoImport, updateAutoImport } from './services/autoImport.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { COVER_FILE_RE, radarr, radarrOverview, sonarr, sonarrOverview } from './services/arr.js';
@@ -61,12 +63,8 @@ async function pipeImage(res: Response, upstream: Promise<globalThis.Response>) 
 
 api.get('/config', (_req, res) => {
   res.json({
-    services: Object.fromEntries(
-      SERVICE_IDS.map((id) => [
-        id,
-        isConfigured(id),
-      ]),
-    ),
+    services: Object.fromEntries(SERVICE_IDS.map((id) => [id, isConfigured(id)])),
+    enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id)])),
   });
 });
 api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot()));
@@ -126,6 +124,35 @@ function coverRoute(getClient: () => ServiceClient | undefined) {
 
 api.get('/sonarr/overview', handle('sonarr', () => sonarrOverview()));
 api.get('/sonarr/cover/:id/:file', coverRoute(sonarr));
+
+/* Intelligent import for downloads Sonarr couldn't match on its own. */
+const autoImportPatch = z
+  .object({
+    enabled: z.boolean().optional(),
+    intervalMinutes: z.number().int().refine((n) => (INTERVALS as readonly number[]).includes(n), 'Unsupported interval').optional(),
+  })
+  .strict();
+const autoImportRun = z.object({ dryRun: z.boolean().optional(), queueId: z.number().int().positive().optional() }).strict();
+
+api.get('/sonarr/auto-import', handle('sonarr', async () => autoImportStatus()));
+api.put('/sonarr/auto-import', requireAdmin, (req, res) => {
+  const parsed = autoImportPatch.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'bad_request', message: parsed.error.issues[0]?.message ?? 'Invalid settings' });
+    return;
+  }
+  console.log(`[auto-import] settings changed by ${req.session!.userName}: ${JSON.stringify(parsed.data)}`);
+  res.json(updateAutoImport(parsed.data));
+});
+api.post(
+  '/sonarr/auto-import/run',
+  requireAdmin,
+  handle('sonarr', async (req) => {
+    const opts = autoImportRun.safeParse(req.body ?? {}).data ?? {};
+    const results = await runAutoImport({ trigger: 'manual', ...opts });
+    return { results, status: autoImportStatus() };
+  }),
+);
 api.get('/radarr/overview', handle('radarr', () => radarrOverview()));
 api.get('/radarr/cover/:id/:file', coverRoute(radarr));
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
