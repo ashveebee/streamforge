@@ -415,3 +415,77 @@ export async function queueAction(inst: ArrInstance, id: number, action: QueueAc
   }
   cache.delete(`${inst.id}:queue`);
 }
+
+/* ------------------------------------------------------------------ */
+/* Missing & search                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface MissingItem {
+  /** Episode id (Sonarr) or movie id (Radarr) — what a search takes. */
+  id: number;
+  title: string;
+  subtitle?: string;
+  date?: string;
+  poster?: string;
+}
+
+const PAGE = 25;
+
+/** Monitored, released and not downloaded — newest first. */
+export async function arrMissing(inst: ArrInstance, page = 1): Promise<{ total: number; page: number; pageSize: number; items: MissingItem[] }> {
+  if (inst.kind === 'sonarr') {
+    const res = await cache.get(`${inst.id}:missing:${page}`, 30_000, () =>
+      inst.client.get<{ totalRecords: number; records: SonarrEpisode[] }>('/api/v3/wanted/missing', {
+        page,
+        pageSize: PAGE,
+        sortKey: 'airDateUtc',
+        sortDirection: 'descending',
+        includeSeries: true,
+        monitored: true,
+      }),
+    );
+    return {
+      total: res.totalRecords,
+      page,
+      pageSize: PAGE,
+      items: res.records.map((e) => ({
+        id: e.id,
+        title: e.series?.title ?? 'Unknown series',
+        subtitle: `S${String(e.seasonNumber).padStart(2, '0')}E${String(e.episodeNumber).padStart(2, '0')} · ${e.title}`,
+        date: e.airDateUtc,
+        poster: coverUrl(inst, e.series?.images),
+      })),
+    };
+  }
+  // Radarr's wanted/missing endpoint only exists in newer versions; the movie
+  // list works everywhere and is cached anyway.
+  const movies = await cache.get(`${inst.id}:movies`, 60_000, () => inst.client.get<RadarrMovie[]>('/api/v3/movie'));
+  const released = (m: RadarrMovie) => m.digitalRelease ?? m.physicalRelease ?? m.inCinemas ?? m.added ?? '';
+  const missing = movies.filter((m) => m.monitored && !m.hasFile && m.isAvailable).sort((a, b) => released(b).localeCompare(released(a)));
+  return {
+    total: missing.length,
+    page,
+    pageSize: PAGE,
+    items: missing.slice((page - 1) * PAGE, page * PAGE).map((m) => ({
+      id: m.id,
+      title: m.title,
+      subtitle: m.year ? String(m.year) : undefined,
+      date: released(m) || undefined,
+      poster: coverUrl(inst, m.images),
+    })),
+  };
+}
+
+/** Searches for specific items, or for everything missing when `ids` is empty. */
+export async function arrSearch(inst: ArrInstance, ids: number[]) {
+  const body =
+    inst.kind === 'sonarr'
+      ? ids.length
+        ? { name: 'EpisodeSearch', episodeIds: ids }
+        : { name: 'MissingEpisodeSearch', monitored: true }
+      : ids.length
+        ? { name: 'MoviesSearch', movieIds: ids }
+        : { name: 'MissingMoviesSearch', filterKey: 'monitored', filterValue: 'true' };
+  const cmd = await inst.client.post<{ id: number }>('/api/v3/command', body);
+  return { ok: true, commandId: cmd?.id };
+}

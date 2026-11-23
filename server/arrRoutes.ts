@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import { handle, HttpError, pipeImage } from './lib/handle.js';
-import { COVER_FILE_RE, QUEUE_ACTIONS, queueAction, radarrOverview, sonarrOverview } from './services/arr.js';
+import { arrMissing, arrSearch, COVER_FILE_RE, QUEUE_ACTIONS, queueAction, radarrOverview, sonarrOverview } from './services/arr.js';
 import { autoImport, INTERVALS } from './services/autoImport.js';
 import { arrInstance, ARR_KINDS, type ArrInstance, type ArrKind } from './services/instances.js';
 
@@ -51,6 +51,8 @@ const autoImportRun = z
     instance: z.string().max(64).optional(),
   })
   .strict();
+
+const searchBody = z.object({ ids: z.array(z.number().int().positive()).max(100).default([]), instance: z.string().max(64).optional() }).strict();
 
 const queueActionBody = z.object({ action: z.enum(QUEUE_ACTIONS), instance: z.string().max(64).optional() }).strict();
 
@@ -108,6 +110,23 @@ for (const kind of ARR_KINDS) {
       await queueAction(inst, id, action);
       console.log(`[queue] ${inst.id} #${id}: ${action} by ${req.session!.userName}`);
       return { ok: true };
+    }),
+  );
+
+  arrRouter.get(
+    `/${kind}/missing`,
+    withInstance(kind, (inst, req) => {
+      const page = Math.max(1, Math.min(10_000, Number(req.query.page) || 1));
+      return arrMissing(inst, page);
+    }),
+  );
+  arrRouter.post(
+    `/${kind}/search`,
+    requireAdmin,
+    withInstance(kind, async (inst, req) => {
+      const { ids } = parseBody(searchBody, req);
+      console.log(`[search] ${inst.id}: ${ids.length ? `${ids.length} item(s)` : 'all missing'} by ${req.session!.userName}`);
+      return arrSearch(inst, ids);
     }),
   );
 }

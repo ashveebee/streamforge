@@ -12,6 +12,7 @@ import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
 import { AutoImportCard } from '@/components/widgets/AutoImportCard';
+import { MissingCard } from '@/components/widgets/MissingCard';
 import { QueueRow } from '@/components/widgets/DownloadsWidget';
 import { VolumeRow } from '@/components/widgets/StorageWidget';
 import { UpcomingList } from '@/components/widgets/UpcomingWidget';
@@ -100,7 +101,10 @@ export function SonarrPage() {
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
-            <AutoImportCard kind="sonarr" queue={d.queue.items} />
+            <div className="grid items-start gap-5 xl:grid-cols-2">
+              <AutoImportCard kind="sonarr" queue={d.queue.items} />
+              <MissingCard kind="sonarr" instance={instance} />
+            </div>
             <Card>
               <CardHeader icon={Layers} title="Recently added series" />
               <PosterStrip items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />
@@ -164,7 +168,10 @@ export function RadarrPage() {
                 </CardBody>
               </Card>
             </div>
-            <AutoImportCard kind="radarr" queue={d.queue.items} />
+            <div className="grid items-start gap-5 xl:grid-cols-2">
+              <AutoImportCard kind="radarr" queue={d.queue.items} />
+              <MissingCard kind="radarr" instance={instance} />
+            </div>
             <DisksCard disks={d.disks} />
           </div>
         )}

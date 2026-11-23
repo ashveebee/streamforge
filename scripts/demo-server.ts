@@ -892,6 +892,19 @@ app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));
 
 app.post('/api/:kind/queue/:id/action', (_req, res) => res.json({ ok: true }));
+app.get('/api/:kind/missing', (req, res) => {
+  const sonarr = req.params.kind === 'sonarr';
+  const titles = sonarr ? ['Low Tide', 'Atlas Station', 'Signal Fire', 'Kitchen Brigade'] : ['Small Hours', 'The Last Lighthouse', 'Velvet Static'];
+  const items = titles.map((t, i) => ({
+    id: i + 1,
+    title: t,
+    subtitle: sonarr ? `S0${i + 1}E0${i + 2} · Episode ${i + 2}` : String(2023 + i),
+    date: iso((i + 1) * 3 * DAY),
+    poster: poster(t),
+  }));
+  res.json({ total: sonarr ? 41 : 17, page: 1, pageSize: 25, items });
+});
+app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
 const cleanup: CleanupStatus = {
   settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },
   actions: ['blocklist-search', 'blocklist', 'remove'],

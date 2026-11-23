@@ -525,3 +525,17 @@ export interface NotificationsStatus {
   push: { publicKey: string; devices: number };
   publicUrl: string;
 }
+
+export interface MissingItem {
+  id: number;
+  title: string;
+  subtitle?: string;
+  date?: string;
+  poster?: string;
+}
+export interface MissingPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: MissingItem[];
+}

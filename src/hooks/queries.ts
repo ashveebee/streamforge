@@ -6,6 +6,7 @@ import type {
   ArrInstanceView,
   ArrKind,
   ChannelInput,
+  MissingPage,
   NotificationsStatus,
   AutoImportEntry,
   CleanupEntry,
@@ -307,3 +308,22 @@ export const useTestChannel = () =>
   useNotifyMutation((id: string) => api<{ ok: boolean; message?: string }>(`/settings/notifications/channels/${id}/test`, { method: 'POST' }));
 export const useSavePublicUrl = () =>
   useNotifyMutation((url: string) => api('/settings/notifications/public-url', { method: 'PUT', body: { url } }));
+
+/* --------------------------------- missing -------------------------------- */
+
+export function useMissing(kind: ArrKind, instance: string | undefined, page: number) {
+  return useQuery({
+    queryKey: [kind, instance ?? 'none', 'missing', page],
+    queryFn: ({ signal }) => api<MissingPage>(`/${kind}/missing?instance=${encodeURIComponent(instance ?? kind)}&page=${page}`, { signal }),
+    enabled: !!instance,
+    placeholderData: (prev) => prev,
+    refetchInterval: 60 * SECOND,
+  });
+}
+
+export function useSearch(kind: ArrKind) {
+  return useMutation({
+    mutationFn: ({ instance, ids }: { instance?: string; ids: number[] }) =>
+      api<{ ok: boolean }>(`/${kind}/search`, { method: 'POST', body: { instance, ids } }),
+  });
+}
