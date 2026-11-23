@@ -661,3 +661,24 @@ export async function playbackEntries(ctx: JfCtx, since: Date) {
     }));
   });
 }
+
+/** Every series and movie with its external ids, for cross-checking with Sonarr/Radarr. */
+export async function libraryItems(ctx: JfCtx) {
+  return cache.get(`jf:libitems:${ctx.userId}`, 10 * 60_000, async () => {
+    const res = await jf<{ Items: { Id: string; Name: string; Type: string; ProductionYear?: number; ProviderIds?: Record<string, string> }[] }>(
+      '/Items',
+      ctx.token,
+      ctx.deviceId,
+      { IncludeItemTypes: 'Series,Movie', Recursive: true, Fields: 'ProviderIds', UserId: ctx.userId, EnableImages: false },
+    );
+    return res.Items.map((i) => ({
+      id: i.Id,
+      name: i.Name,
+      type: i.Type as 'Series' | 'Movie',
+      year: i.ProductionYear,
+      tvdb: i.ProviderIds?.Tvdb,
+      tmdb: i.ProviderIds?.Tmdb,
+      imdb: i.ProviderIds?.Imdb,
+    }));
+  });
+}

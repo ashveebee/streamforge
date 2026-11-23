@@ -942,6 +942,25 @@ const cleanup: CleanupStatus = {
   ],
 };
 app.get('/api/downloads/cleanup', json(() => cleanup));
+app.get('/api/library/health', json(() => ({
+  checkedAt: iso(2 * MIN),
+  hasSonarr: true,
+  hasRadarr: true,
+  hasJellyfin: true,
+  incomplete: { total: 3, items: [
+    { title: 'Low Tide', year: 2021, detail: '4 of 30 episodes missing', instance: 'sonarr', poster: poster('Low Tide') },
+    { title: 'The Cartographers', year: 2025, detail: '2 of 3 episodes missing', instance: 'sonarr', poster: poster('The Cartographers') },
+    { title: 'Kitchen Brigade', year: 2023, detail: '1 of 14 episodes missing · ended', instance: 'sonarr', poster: poster('Kitchen Brigade') },
+  ] },
+  upgrades: [
+    { instance: 'sonarr', kind: 'sonarr', name: 'Sonarr', count: 37 },
+    { instance: 'radarr', kind: 'radarr', name: 'Radarr', count: 12 },
+    { instance: 'radarr-4k', instanceName: '4K', kind: 'radarr', name: '4K', count: 0 },
+  ],
+  notInJellyfin: { total: 1, items: [{ title: 'Small Hours', year: 2025, detail: 'Downloaded in Radarr', instance: 'radarr', poster: poster('Small Hours') }] },
+  unmanaged: { total: 2, items: [{ title: 'Family Holiday 2019', detail: 'No metadata ids — identify it in Jellyfin' }, { title: 'Old Favourite', year: 1998, detail: 'Series not in Sonarr' }] },
+})));
+app.post('/api/:kind/search-upgrades', (_req, res) => res.json({ ok: true }));
 app.get('/api/storage/forecast', json(() => {
   const vol = (key: string, label: string, totalTb: number, usedTb: number, growGb: number) => {
     const total = totalTb * TB;

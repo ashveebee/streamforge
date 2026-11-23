@@ -5,6 +5,7 @@ import { requireAdmin } from './auth.js';
 import { handle, HttpError, pipeImage } from './lib/handle.js';
 import { arrMissing, arrSearch, COVER_FILE_RE, QUEUE_ACTIONS, queueAction, radarrOverview, sonarrOverview } from './services/arr.js';
 import { autoImport, INTERVALS } from './services/autoImport.js';
+import { searchUpgrades } from './services/libraryHealth.js';
 import { arrInstance, ARR_KINDS, type ArrInstance, type ArrKind } from './services/instances.js';
 
 /*
@@ -127,6 +128,14 @@ for (const kind of ARR_KINDS) {
       const { ids } = parseBody(searchBody, req);
       console.log(`[search] ${inst.id}: ${ids.length ? `${ids.length} item(s)` : 'all missing'} by ${req.session!.userName}`);
       return arrSearch(inst, ids);
+    }),
+  );
+  arrRouter.post(
+    `/${kind}/search-upgrades`,
+    requireAdmin,
+    withInstance(kind, async (inst, req) => {
+      console.log(`[search] ${inst.id}: cutoff-unmet search by ${req.session!.userName}`);
+      return searchUpgrades(inst);
     }),
   );
 }

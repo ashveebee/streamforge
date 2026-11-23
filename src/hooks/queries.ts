@@ -8,6 +8,7 @@ import type {
   ChannelInput,
   MissingPage,
   PlaybackStats,
+  LibraryHealth,
   StorageForecast,
   NotificationsStatus,
   AutoImportEntry,
@@ -364,5 +365,16 @@ export function useSetDiskAlert() {
   return useMutation({
     mutationFn: (percent: number) => api<StorageForecast>('/storage/alert', { method: 'PUT', body: { percent } }),
     onSuccess: (d) => qc.setQueryData(['storage', 'forecast'], d),
+  });
+}
+
+/* ------------------------------ library health ----------------------------- */
+
+export const useLibraryHealth = () => useQuery(poll<LibraryHealth>(['library', 'health'], '/library/health', 5 * 60 * SECOND));
+
+export function useSearchUpgrades() {
+  return useMutation({
+    mutationFn: ({ kind, instance }: { kind: ArrKind; instance: string }) =>
+      api<{ ok: boolean }>(`/${kind}/search-upgrades`, { method: 'POST', body: { instance } }),
   });
 }

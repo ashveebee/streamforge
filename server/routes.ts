@@ -12,6 +12,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { libraryHealth } from './services/libraryHealth.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
@@ -36,6 +37,7 @@ api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(heal
 api.post('/health/recheck', handle(null, () => recheck()));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));
 api.get('/storage/forecast', (_req, res) => res.set('Cache-Control', 'no-store').json(storageForecast()));
 api.put(
   '/storage/alert',

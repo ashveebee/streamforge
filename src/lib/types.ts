@@ -570,3 +570,23 @@ export interface StorageForecast {
     history: { t: number; used: number }[];
   }[];
 }
+
+export interface LibraryHealthItem {
+  title: string;
+  year?: number;
+  detail: string;
+  instance?: string;
+  instanceName?: string;
+  poster?: string;
+}
+type Section = { total: number; items: LibraryHealthItem[] };
+export interface LibraryHealth {
+  checkedAt: string;
+  hasSonarr: boolean;
+  hasRadarr: boolean;
+  hasJellyfin: boolean;
+  incomplete?: Section;
+  upgrades: { instance: string; instanceName?: string; kind: ArrKind; name: string; count: number }[];
+  notInJellyfin?: Section;
+  unmanaged?: Section;
+}
