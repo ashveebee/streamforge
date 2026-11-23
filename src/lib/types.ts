@@ -553,3 +553,20 @@ export interface PlaybackStats {
   topTitles: { name: string; plays: number; hours: number }[];
   topClients: { name: string; plays: number; hours: number }[];
 }
+
+export interface StorageForecast {
+  alertPercent: number;
+  volumes: {
+    key: string;
+    label: string;
+    used: number;
+    total: number;
+    usage: number;
+    since: string;
+    /** Bytes per day; undefined until there's a day of history. */
+    growthPerDay?: number;
+    daysLeft?: number;
+    fullOn?: string;
+    history: { t: number; used: number }[];
+  }[];
+}

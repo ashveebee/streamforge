@@ -10,21 +10,25 @@ export function Sparkline({
   height = 32,
   color = '#a78bfa',
   className,
+  domain,
 }: {
   data: (number | null)[];
   width?: number;
   height?: number;
   color?: string;
   className?: string;
+  /** Fixed [min, max] for the y axis; defaults to 0…max. */
+  domain?: [number, number];
 }) {
   const id = useId();
   const values = data.filter((v): v is number => v !== null);
   if (data.length < 2 || !values.length) {
     return <svg width={width} height={height} className={className} aria-hidden />;
   }
-  const max = Math.max(...values) * 1.15 || 1;
+  const lo = domain?.[0] ?? 0;
+  const max = (domain?.[1] ?? Math.max(...values) * 1.15) - lo || 1;
   const step = width / (data.length - 1);
-  const y = (v: number) => height - 2 - (v / max) * (height - 4);
+  const y = (v: number) => height - 2 - ((v - lo) / max) * (height - 4);
 
   const segments: string[] = [];
   let current = '';

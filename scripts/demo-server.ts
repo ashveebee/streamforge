@@ -942,6 +942,22 @@ const cleanup: CleanupStatus = {
   ],
 };
 app.get('/api/downloads/cleanup', json(() => cleanup));
+app.get('/api/storage/forecast', json(() => {
+  const vol = (key: string, label: string, totalTb: number, usedTb: number, growGb: number) => {
+    const total = totalTb * TB;
+    const used = usedTb * TB;
+    const g = growGb * GB;
+    const free = total - used;
+    const daysLeft = g > 0 ? Math.round(free / g) : undefined;
+    return {
+      key, label, used, total, usage: used / total, since: iso(30 * DAY), growthPerDay: g, daysLeft,
+      fullOn: daysLeft ? ahead(daysLeft * DAY) : undefined,
+      history: Array.from({ length: 30 }, (_, i) => ({ t: Date.now() - (29 - i) * DAY, used: used - (29 - i) * g + (i % 4) * GB * 5 })),
+    };
+  };
+  return { alertPercent: 90, volumes: [vol('inf:pool', 'Media pool', 48, 33.6, 61), vol('host:/mnt/downloads', '/mnt/downloads', 4, 1.1, 0), vol('host:/', '/', 1, 0.31, 2)] };
+}));
+app.put('/api/storage/alert', (_req, res) => res.json({ ok: true }));
 const notifications: NotificationsStatus = {
   channels: [
     { id: 'n1', type: 'discord', name: 'Discord #homelab', enabled: true, events: ['service_down', 'service_up', 'disk_low', 'import_failed', 'request_pending'], config: {}, secrets: { webhookUrl: 'webhook …8812' } },

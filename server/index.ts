@@ -12,6 +12,7 @@ import { startAutoImport } from './services/autoImport.js';
 import { startCleanup } from './services/cleanup.js';
 import { startSeerrWatch } from './services/seerr.js';
 import { startPlaybackRecorder } from './services/playStats.js';
+import { startStorageSampler } from './services/storage.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -75,4 +76,5 @@ app.listen(config.port, config.host, () => {
   startCleanup();
   startSeerrWatch();
   startPlaybackRecorder();
+  startStorageSampler();
 });

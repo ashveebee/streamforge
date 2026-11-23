@@ -8,6 +8,7 @@ import type {
   ChannelInput,
   MissingPage,
   PlaybackStats,
+  StorageForecast,
   NotificationsStatus,
   AutoImportEntry,
   CleanupEntry,
@@ -353,3 +354,15 @@ export function useSessionControl() {
 
 export const usePlaybackStats = (days: number) =>
   useQuery({ ...poll<PlaybackStats>(['jellyfin', 'stats', String(days)], `/jellyfin/stats?days=${days}`, 5 * 60 * SECOND), placeholderData: (p) => p });
+
+/* ---------------------------- storage forecast ---------------------------- */
+
+export const useStorageForecast = () => useQuery(poll<StorageForecast>(['storage', 'forecast'], '/storage/forecast', 10 * 60 * SECOND));
+
+export function useSetDiskAlert() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (percent: number) => api<StorageForecast>('/storage/alert', { method: 'PUT', body: { percent } }),
+    onSuccess: (d) => qc.setQueryData(['storage', 'forecast'], d),
+  });
+}

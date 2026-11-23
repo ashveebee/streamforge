@@ -12,6 +12,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
@@ -35,6 +36,16 @@ api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(heal
 api.post('/health/recheck', handle(null, () => recheck()));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+api.get('/storage/forecast', (_req, res) => res.set('Cache-Control', 'no-store').json(storageForecast()));
+api.put(
+  '/storage/alert',
+  requireAdmin,
+  handle(null, async (req) => {
+    const p = Number((req.body as { percent?: unknown } | undefined)?.percent);
+    if (!Number.isInteger(p) || p < 50 || p > 99) throw new HttpError(400, 'Pick a value between 50 and 99%');
+    return setAlertPercent(p);
+  }),
+);
 
 /* Stalled/failed download cleanup across every Sonarr/Radarr instance. */
 const cleanupPatch = z

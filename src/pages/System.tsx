@@ -15,6 +15,7 @@ import { StatTile } from '@/components/ui/Stat';
 import { STATUS_META, StatusBadge } from '@/components/ui/Status';
 import { EmptyState, Skeleton } from '@/components/ui/States';
 import { CleanupCard } from '@/components/widgets/CleanupCard';
+import { StorageForecastCard } from '@/components/widgets/StorageForecastCard';
 import { DownloadsWidget } from '@/components/widgets/DownloadsWidget';
 import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
@@ -179,7 +180,10 @@ export default function SystemPage() {
         </div>
       </div>
 
-      <div className="mt-5"><CleanupCard /></div>
+      <div className="mt-5 grid items-start gap-5 xl:grid-cols-2">
+        <StorageForecastCard />
+        <CleanupCard />
+      </div>
 
       {host.data?.filesystems && host.data.filesystems.length > 0 && (
         <Card className="mt-5">
