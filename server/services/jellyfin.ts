@@ -632,3 +632,32 @@ export async function controlSession(ctx: JfCtx, sessionId: string, command: Ses
   });
   cache.delete('jf:sessions:');
 }
+
+/* ------------------------------------------------------------------ */
+/* Background access (no signed-in user)                               */
+/* ------------------------------------------------------------------ */
+
+/** Active streams via the server API key; undefined when no key is set. */
+export async function serverNowPlaying() {
+  const key = serverApiKey();
+  if (!key || !resolve('jellyfin').settings.url) return undefined;
+  const list = await jf<JfSession[]>('/Sessions', key, 'streamforge-server', { ActiveWithinSeconds: 960 });
+  return list.filter((s) => s.NowPlayingItem).map(normaliseSession);
+}
+
+export const hasServerKey = () => !!serverApiKey();
+
+/** Raw playback entries from the activity log, for stats without a recorder. */
+export async function playbackEntries(ctx: JfCtx, since: Date) {
+  return cache.get(`jf:playentries:${since.toISOString().slice(0, 13)}`, 5 * 60_000, async () => {
+    const res = await jf<{ Items: JfActivity[] }>('/System/ActivityLog/Entries', serverToken(ctx), ctx.deviceId, {
+      minDate: since.toISOString(),
+      limit: 5000,
+    });
+    return res.Items.filter((a) => a.Type === 'VideoPlayback' || a.Type === 'AudioPlayback').map((a) => ({
+      name: a.Name,
+      date: a.Date,
+      userId: a.UserId,
+    }));
+  });
+}

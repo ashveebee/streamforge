@@ -36,6 +36,33 @@ const migrations = [
      data       TEXT NOT NULL,
      updated_at TEXT NOT NULL
    )`,
+  // Playback history recorded from Jellyfin sessions (see services/playStats.ts).
+  `CREATE TABLE plays (
+     id          TEXT PRIMARY KEY,
+     user_id     TEXT,
+     user_name   TEXT,
+     item_id     TEXT,
+     title       TEXT NOT NULL,
+     series      TEXT,
+     type        TEXT,
+     client      TEXT,
+     device      TEXT,
+     method      TEXT NOT NULL,
+     started_at  INTEGER NOT NULL,
+     last_seen   INTEGER NOT NULL,
+     watched_ms  INTEGER NOT NULL DEFAULT 0
+   );
+   CREATE INDEX plays_started ON plays(started_at);`,
+  // Disk usage samples for the storage forecast (see services/storage.ts).
+  `CREATE TABLE disk_samples (
+     key    TEXT NOT NULL,
+     label  TEXT NOT NULL,
+     t      INTEGER NOT NULL,
+     used   INTEGER NOT NULL,
+     total  INTEGER NOT NULL,
+     PRIMARY KEY (key, t)
+   );
+   CREATE INDEX disk_samples_t ON disk_samples(t);`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */

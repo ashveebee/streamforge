@@ -11,6 +11,7 @@ import { settingsRouter } from './settingsRoutes.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
+import { playbackStats } from './services/playStats.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
@@ -72,6 +73,13 @@ api.get('/jellyfin/overview', handle('jellyfin', (req) => jellyfin.overview(ctxO
 api.get('/jellyfin/latest', handle('jellyfin', (req) => jellyfin.latest(ctxOf(req.session!))));
 api.get('/jellyfin/activity', handle('jellyfin', (req) => jellyfin.activity(ctxOf(req.session!))));
 api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/stats',
+  handle('jellyfin', (req) => {
+    const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    return playbackStats(ctxOf(req.session!), days);
+  }),
+);
 
 const sessionBody = z
   .object({ command: z.enum(['pause', 'unpause', 'stop', 'message']), text: z.string().trim().max(500).optional() })

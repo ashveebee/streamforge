@@ -7,6 +7,7 @@ import type {
   ArrKind,
   ChannelInput,
   MissingPage,
+  PlaybackStats,
   NotificationsStatus,
   AutoImportEntry,
   CleanupEntry,
@@ -349,3 +350,6 @@ export function useSessionControl() {
     onSuccess: () => setTimeout(() => void qc.invalidateQueries({ queryKey: ['jellyfin', 'now-playing'] }), 800),
   });
 }
+
+export const usePlaybackStats = (days: number) =>
+  useQuery({ ...poll<PlaybackStats>(['jellyfin', 'stats', String(days)], `/jellyfin/stats?days=${days}`, 5 * 60 * SECOND), placeholderData: (p) => p });

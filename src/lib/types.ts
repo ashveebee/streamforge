@@ -539,3 +539,17 @@ export interface MissingPage {
   pageSize: number;
   items: MissingItem[];
 }
+
+export interface PlaybackStats {
+  days: number;
+  source: 'recorder' | 'activity' | 'mixed';
+  recording: boolean;
+  recordingSince?: string;
+  totals: { plays: number; hours?: number; users: number; transcodeShare?: number };
+  daily: { date: string; plays: number; direct: number; transcode: number; hours: number }[];
+  /** [weekday Mon..Sun][hour 0..23] → plays started. */
+  heatmap: number[][];
+  topUsers: { name: string; plays: number; hours: number }[];
+  topTitles: { name: string; plays: number; hours: number }[];
+  topClients: { name: string; plays: number; hours: number }[];
+}

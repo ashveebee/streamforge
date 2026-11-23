@@ -907,6 +907,26 @@ app.get('/api/:kind/missing', (req, res) => {
 app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
 app.post('/api/seerr/requests/:id/:decision', (_req, res) => res.json({ ok: true }));
 app.post('/api/jellyfin/sessions/:id/control', (_req, res) => res.json({ ok: true }));
+app.get('/api/jellyfin/stats', (req, res) => {
+  const days = Number(req.query.days) || 30;
+  const r = rng(`stats${days}`);
+  const daily = Array.from({ length: days }, (_, i) => {
+    const d = new Date(Date.now() - (days - 1 - i) * DAY);
+    const weekend = d.getDay() === 0 || d.getDay() === 6;
+    const direct = Math.round(r() * 6 + (weekend ? 5 : 2));
+    const transcode = Math.round(r() * 3);
+    return { date: d.toISOString().slice(0, 10), plays: direct + transcode, direct, transcode, hours: Math.round((direct + transcode) * 0.8 * 10) / 10 };
+  });
+  const heatmap = Array.from({ length: 7 }, (_, w) =>
+    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r())),
+  );
+  const plays = daily.reduce((a, d) => a + d.plays, 0);
+  const tc = daily.reduce((a, d) => a + d.transcode, 0);
+  const users = ['Alex', 'Maya', 'Leo', 'Priya', 'Sam'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
+  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
+  const clients = ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Infuse'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
+  res.json({ days, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays, hours: Math.round(plays * 0.8), users: 5, transcodeShare: tc / plays }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
+});
 const cleanup: CleanupStatus = {
   settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },
   actions: ['blocklist-search', 'blocklist', 'remove'],
