@@ -1,7 +1,7 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatePresence, motion } from 'motion/react';
 import { CircleAlert, Download, Pause } from 'lucide-react';
-import { useDownloads, useRadarr, useSonarr } from '@/hooks/queries';
+import { useDownloads, useArrAll } from '@/hooks/queries';
 import { bytes, speed } from '@/lib/format';
 import type { QueueItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
@@ -31,7 +31,7 @@ export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: numbe
           <span className="truncate text-[13px] font-medium">{item.title}</span>
         </div>
         <div className="truncate text-[11px] text-ink-3" title={item.releaseTitle}>
-          {[item.subtitle, item.quality, item.client].filter(Boolean).join(' · ')}
+          {[item.instanceName, item.subtitle, item.quality, item.client].filter(Boolean).join(' · ')}
         </div>
         <ProgressBar
           value={item.progress}
@@ -61,13 +61,12 @@ export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: numbe
 
 export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
   const dl = useDownloads();
-  const sonarr = useSonarr();
-  const radarr = useRadarr();
-  const items = [...(sonarr.data?.queue.items ?? []), ...(radarr.data?.queue.items ?? [])].sort(
+  const all = [...useArrAll('sonarr'), ...useArrAll('radarr')];
+  const items = all.flatMap((r) => r.data?.queue.items ?? []).sort(
     (a, b) => Number(b.status === 'downloading') - Number(a.status === 'downloading') || b.progress - a.progress,
   );
-  const total = (sonarr.data?.queue.total ?? 0) + (radarr.data?.queue.total ?? 0);
-  const loading = (sonarr.isPending && sonarr.fetchStatus !== 'idle') || (radarr.isPending && radarr.fetchStatus !== 'idle');
+  const total = all.reduce((n, r) => n + (r.data?.queue.total ?? 0), 0);
+  const loading = all.some((r) => r.isPending && r.fetchStatus !== 'idle');
   const remaining = items.reduce((a, i) => a + i.sizeLeft, 0);
   const latest = dl.data?.history.at(-1);
 
@@ -119,7 +118,7 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
                 <ul className="divide-y divide-line">
                   <AnimatePresence initial={false}>
                     {items.slice(0, limit).map((i) => (
-                      <QueueRow key={`${i.source}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.source}:${i.id}`]} />
+                      <QueueRow key={`${i.instance}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} />
                     ))}
                   </AnimatePresence>
                 </ul>

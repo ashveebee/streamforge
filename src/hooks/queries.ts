@@ -1,7 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import type {
   ActivityEntry,
+  ArrInstanceRef,
+  ArrInstanceView,
+  ArrKind,
   AutoImportEntry,
   AutoImportStatus,
   DownloadSnapshot,
@@ -41,7 +44,8 @@ function poll<T>(key: string[], path: string, intervalMs: number, enabled = true
 export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
-    queryFn: () => api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean> }>('/config'),
+    queryFn: () =>
+      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[] }>('/config'),
     staleTime: Infinity,
   });
 
@@ -69,14 +73,32 @@ export const useActivity = () =>
   useQuery(poll<ActivityEntry[]>(['jellyfin', 'activity'], '/jellyfin/activity', 20 * SECOND));
 export const usePlays = () => useQuery(poll<PlayDay[]>(['jellyfin', 'plays'], '/jellyfin/plays', 300 * SECOND));
 
-export const useSonarr = () => {
-  const on = useConfigured('sonarr');
-  return useQuery(poll<SonarrOverview>(['sonarr'], '/sonarr/overview', 10 * SECOND, on));
-};
-export const useRadarr = () => {
-  const on = useConfigured('radarr');
-  return useQuery(poll<RadarrOverview>(['radarr'], '/radarr/overview', 10 * SECOND, on));
-};
+/** Sonarr/Radarr instances, primary first. Empty until /config has loaded. */
+export function useInstances(kind: ArrKind): ArrInstanceRef[] {
+  const { data } = useServiceConfig();
+  return data?.instances?.filter((i) => i.kind === kind) ?? [];
+}
+
+const q = (instance: string) => `?instance=${encodeURIComponent(instance)}`;
+
+type Overview<K extends ArrKind> = K extends 'sonarr' ? SonarrOverview : RadarrOverview;
+
+/** One instance's overview; `instance` defaults to the first (primary) one. */
+function useArr<K extends ArrKind>(kind: K, instance?: string) {
+  const list = useInstances(kind);
+  const id = instance && list.some((i) => i.id === instance) ? instance : list[0]?.id;
+  return useQuery(poll<Overview<K>>([kind, id ?? 'none', 'overview'], `/${kind}/overview${q(id ?? kind)}`, 10 * SECOND, !!id));
+}
+export const useSonarr = (instance?: string) => useArr('sonarr', instance);
+export const useRadarr = (instance?: string) => useArr('radarr', instance);
+
+/** Overviews of every instance of a kind (for dashboard widgets). */
+export function useArrAll<K extends ArrKind>(kind: K) {
+  const list = useInstances(kind);
+  return useQueries({
+    queries: list.map((i) => poll<Overview<K>>([kind, i.id, 'overview'], `/${kind}/overview${q(i.id)}`, 10 * SECOND)),
+  });
+}
 export const useProwlarr = () => {
   const on = useConfigured('prowlarr');
   return useQuery(poll<ProwlarrOverview>(['prowlarr'], '/prowlarr/overview', 30 * SECOND, on));
@@ -158,28 +180,63 @@ export function useSetServiceEnabled(id: ServiceId) {
 
 /* ------------------------------ auto-import ------------------------------ */
 
-export const useAutoImport = () => {
-  const on = useConfigured('sonarr');
-  return useQuery(poll<AutoImportStatus>(['sonarr', 'auto-import'], '/sonarr/auto-import', 15 * SECOND, on));
+export const useAutoImport = (kind: ArrKind) => {
+  const on = useConfigured(kind);
+  return useQuery(poll<AutoImportStatus>([kind, 'auto-import'], `/${kind}/auto-import`, 15 * SECOND, on));
 };
 
-export function useUpdateAutoImport() {
+export function useUpdateAutoImport(kind: ArrKind) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (patch: Partial<AutoImportStatus['settings']>) =>
-      api<AutoImportStatus>('/sonarr/auto-import', { method: 'PUT', body: patch }),
-    onSuccess: (data) => qc.setQueryData(['sonarr', 'auto-import'], data),
+      api<AutoImportStatus>(`/${kind}/auto-import`, { method: 'PUT', body: patch }),
+    onSuccess: (data) => qc.setQueryData([kind, 'auto-import'], data),
   });
 }
 
-export function useRunAutoImport() {
+export function useRunAutoImport(kind: ArrKind) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (opts: { dryRun?: boolean; queueId?: number }) =>
-      api<{ results: AutoImportEntry[]; status: AutoImportStatus }>('/sonarr/auto-import/run', { method: 'POST', body: opts }),
+    mutationFn: (opts: { dryRun?: boolean; queueId?: number; instance?: string }) =>
+      api<{ results: AutoImportEntry[]; status: AutoImportStatus }>(`/${kind}/auto-import/run`, { method: 'POST', body: opts }),
     onSuccess: (data) => {
-      qc.setQueryData(['sonarr', 'auto-import'], data.status);
-      void qc.invalidateQueries({ queryKey: ['sonarr'] });
+      qc.setQueryData([kind, 'auto-import'], data.status);
+      void qc.invalidateQueries({ queryKey: [kind] });
     },
+  });
+}
+
+/* ---------------------------- extra instances ---------------------------- */
+
+export const useInstanceSettings = () =>
+  useQuery({
+    queryKey: ['settings', 'instances'],
+    queryFn: ({ signal }) => api<{ instances: ArrInstanceView[] }>('/settings/instances', { signal }),
+  });
+
+export type InstanceInput = { kind?: ArrKind; name?: string; url?: string; apiKey?: string; enabled?: boolean };
+
+export const useTestInstance = () =>
+  useMutation({
+    mutationFn: (input: InstanceInput & { id?: string }) =>
+      api<ConnectionTest>('/settings/instances/test', { method: 'POST', body: input }),
+  });
+
+export function useSaveInstance() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: ({ id, ...input }: InstanceInput & { id?: string }) =>
+      id
+        ? api<{ instance: ArrInstanceView }>(`/settings/instances/${id}`, { method: 'PUT', body: input })
+        : api<{ instance: ArrInstanceView }>('/settings/instances', { method: 'POST', body: input }),
+    onSuccess: changed,
+  });
+}
+
+export function useRemoveInstance() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (id: string) => api<{ ok: true }>(`/settings/instances/${id}`, { method: 'DELETE' }),
+    onSuccess: changed,
   });
 }

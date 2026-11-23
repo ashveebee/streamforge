@@ -395,6 +395,7 @@ function health(): HealthSnapshot {
           : [];
     return {
       id,
+      kind: id,
       name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
       configured: true,
       status: id === 'prowlarr' ? 'degraded' : 'healthy',
@@ -473,6 +474,7 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
           {
             id: 9,
             source,
+            instance: source,
             title: 'Low Tide',
             subtitle: 'S3E3 · Riptide',
             releaseTitle: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
@@ -496,6 +498,7 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
     return {
       id: i + 1,
       source,
+      instance: source,
       title: it.title,
       subtitle: it.subtitle,
       releaseTitle: `${it.title.replace(/\s+/g, '.')}.${it.quality}.DEMO-GROUP`,
@@ -743,29 +746,32 @@ const autoImport: AutoImportStatus = {
       id: 'demo-1',
       at: iso(2 * HOUR),
       trigger: 'queue',
+      instance: 'sonarr',
       title: 'Signal Fire',
       release: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO',
       outcome: 'imported',
       message: 'Imported 1 of 1 file',
-      files: [{ name: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO.mkv', series: 'Signal Fire', episodes: 'S02E05', seriesMethod: 'title-match', episodeMethod: 'numbering', ok: true }],
+      files: [{ name: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO.mkv', title: 'Signal Fire', detail: 'S02E05', titleMethod: 'title-match', detailMethod: 'numbering', ok: true }],
     },
     {
       id: 'demo-2',
       at: iso(9 * HOUR),
       trigger: 'schedule',
+      instance: 'sonarr',
       title: 'Starfall Academy',
       release: 'Starfall.Academy.Season.1.Complete.1080p.WEB-DEMO',
       outcome: 'imported',
       message: 'Imported 8 of 9 files',
       files: [
-        { name: 'Starfall.Academy.S01E01.mkv', series: 'Starfall Academy', episodes: 'S01E01', seriesMethod: 'grab-history', episodeMethod: 'parser', ok: true },
-        { name: 'Starfall.Academy.Extras.Featurette.mkv', series: 'Starfall Academy', seriesMethod: 'grab-history', ok: false, reason: 'Could not work out which episode(s) this is' },
+        { name: 'Starfall.Academy.S01E01.mkv', title: 'Starfall Academy', detail: 'S01E01', titleMethod: 'grab-history', detailMethod: 'parser', ok: true },
+        { name: 'Starfall.Academy.Extras.Featurette.mkv', title: 'Starfall Academy', titleMethod: 'grab-history', ok: false, reason: 'Could not work out which episode(s) this is' },
       ],
     },
     {
       id: 'demo-3',
       at: iso(26 * HOUR),
       trigger: 'schedule',
+      instance: 'sonarr',
       title: 'The Cartographers',
       release: 'The.Cartographers.S01E02.720p.HDTV-DEMO',
       outcome: 'skipped',
@@ -812,10 +818,17 @@ app.get('/api/auth/server', json(() => ({ name: 'Homelab', version: '10.11.2', o
 app.get('/api/config', json(() => ({
   services: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
   enabled: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
+  instances: [
+    { id: 'sonarr', kind: 'sonarr', name: 'Sonarr', primary: true },
+    { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
+    { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
+  ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
 })));
 const enabledHealth = () => {
   const h = health();
-  return { ...h, services: h.services.filter((s) => !disabledServices.has(s.id)) };
+  const radarr = h.services.find((s) => s.id === 'radarr')!;
+  const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83 };
+  return { ...h, services: [...h.services, extra].filter((s) => !disabledServices.has(s.kind)) };
 };
 app.get('/api/health', json(enabledHealth));
 app.post('/api/health/recheck', json(enabledHealth));
@@ -828,6 +841,17 @@ app.get('/api/jellyfin/latest', json(latest));
 app.get('/api/jellyfin/activity', json(activity));
 app.get('/api/jellyfin/plays', json(plays));
 app.get('/api/sonarr/overview', json(sonarr));
+const radarrAutoImport: AutoImportStatus = { ...autoImport, settings: { enabled: false, intervalMinutes: 30 }, nextRun: undefined, stuck: 0, log: [] };
+app.get('/api/radarr/auto-import', json(() => radarrAutoImport));
+app.put('/api/radarr/auto-import', (req, res) => {
+  Object.assign(radarrAutoImport.settings, req.body);
+  res.json(radarrAutoImport);
+});
+app.post('/api/radarr/auto-import/run', (_req, res) => res.json({ results: [], status: radarrAutoImport }));
+app.get('/api/settings/instances', json(() => ({
+  instances: [{ id: 'radarr-4k', kind: 'radarr', name: '4K', url: 'https://radarr-4k.example.com', enabled: true, apiKeySet: true, apiKeyHint: '••••77ab', createdAt: iso(20 * DAY) }],
+})));
+app.post('/api/settings/instances/test', (_req, res) => res.json({ ok: true, version: VERSIONS.radarr, latencyMs: 80, issues: [] }));
 app.get('/api/sonarr/auto-import', json(() => autoImport));
 app.put('/api/sonarr/auto-import', (req, res) => {
   Object.assign(autoImport.settings, req.body);
@@ -839,11 +863,12 @@ app.post('/api/sonarr/auto-import/run', (req, res) => {
     id: `demo-${Date.now()}`,
     at: new Date().toISOString(),
     trigger: 'manual',
+    instance: 'sonarr',
     title: 'Low Tide',
     release: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
     outcome: req.body?.dryRun ? 'preview' : 'imported',
     message: req.body?.dryRun ? 'Would import 1 of 1 file' : 'Imported 1 of 1 file',
-    files: [{ name: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO.mkv', series: 'Low Tide', episodes: 'S03E03', seriesMethod: 'grab-history', episodeMethod: 'parser', ok: true }],
+    files: [{ name: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO.mkv', title: 'Low Tide', detail: 'S03E03', titleMethod: 'grab-history', detailMethod: 'parser', ok: true }],
   };
   if (!req.body?.dryRun) {
     autoImport.log.unshift(entry);
@@ -851,7 +876,14 @@ app.post('/api/sonarr/auto-import/run', (req, res) => {
   }
   res.json({ results: [entry], status: autoImport });
 });
-app.get('/api/radarr/overview', json(radarr));
+app.get('/api/radarr/overview', (req, res) => {
+  const d = radarr();
+  const inst = req.query.instance === 'radarr-4k' ? 'radarr-4k' : 'radarr';
+  if (inst === 'radarr') return res.set('Cache-Control', 'no-store').json(d);
+  // The 4K instance: same library, a smaller queue.
+  const items = d.queue.items.slice(0, 1).map((i) => ({ ...i, instance: inst, instanceName: '4K', quality: 'Remux-2160p' }));
+  res.set('Cache-Control', 'no-store').json({ ...d, queue: { total: items.length, items } });
+});
 app.get('/api/prowlarr/overview', json(prowlarr));
 app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));

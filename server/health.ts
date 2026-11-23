@@ -1,10 +1,11 @@
 import { config } from './config.js';
 import * as jellyfin from './services/jellyfin.js';
-import { arrProbe, arrQueue, radarr, sonarr } from './services/arr.js';
+import { arrProbe, arrQueue } from './services/arr.js';
+import { arrInstances, onInstancesChange } from './services/instances.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
-import { onSonarrQueue } from './services/autoImport.js';
+import { onQueueSample } from './services/queueWatch.js';
 import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
@@ -17,7 +18,12 @@ interface Sample {
 }
 
 export interface ServiceHealth {
-  id: ServiceId;
+  /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
+  id: string;
+  /** Which kind of service this is (equal to id for the built-in ones). */
+  kind: ServiceId;
+  /** Set for extra Sonarr/Radarr instances. */
+  instance?: string;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -44,9 +50,8 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
     case 'jellyfin':
       return () => jellyfin.probe();
     case 'sonarr':
-      return arr(sonarr(), 'v3');
     case 'radarr':
-      return arr(radarr(), 'v3');
+      return arr(arrInstances(id).find((i) => i.primary)?.client, 'v3');
     case 'prowlarr':
       return arr(prowlarr(), 'v1');
     case 'seerr':
@@ -56,10 +61,17 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
   }
 }
 
+/** Extra Sonarr/Radarr instances, probed like any other service. */
+function extraProbe(id: string) {
+  const inst = arrInstances().find((i) => i.id === id && !i.primary);
+  return inst ? () => arrProbe(inst.client, 'v3') : undefined;
+}
+
 function freshState(id: ServiceId): ServiceHealth {
   const configured = isConfigured(id);
   return {
     id,
+    kind: id,
     name: SERVICE_NAMES[id],
     configured,
     status: configured ? 'offline' : 'unconfigured',
@@ -68,18 +80,37 @@ function freshState(id: ServiceId): ServiceHealth {
   };
 }
 
-const state = new Map<ServiceId, ServiceHealth>(SERVICE_IDS.map((id) => [id, freshState(id)]));
+const state = new Map<string, ServiceHealth>(SERVICE_IDS.map((id) => [id, freshState(id)]));
+
+/** Adds/removes extra instances so the monitor matches the current set. */
+function syncInstances() {
+  const extras = arrInstances().filter((i) => !i.primary);
+  const live = new Set(extras.map((i) => i.id));
+  for (const [id, s] of state) if (s.instance && !live.has(id)) state.delete(id);
+  for (const i of extras) {
+    const name = `${SERVICE_NAMES[i.kind]} · ${i.name}`;
+    const cur = state.get(i.id);
+    if (cur && cur.name === name) continue;
+    state.set(i.id, { id: i.id, kind: i.kind, instance: i.id, name, configured: true, status: 'offline', issues: [], history: [] });
+    void check(i.id);
+  }
+}
 
 // New settings mean a different server (or none): start its history afresh.
 onSettingsChange((id) => {
   state.set(id, freshState(id));
   void check(id);
 });
+onInstancesChange(() => {
+  // Connection details may have changed: restart history for extra instances.
+  for (const [id, s] of state) if (s.instance) state.delete(id);
+  syncInstances();
+});
 
-async function check(id: ServiceId) {
-  const probe = probeFor(id);
-  const s = state.get(id)!;
-  if (!probe) return;
+async function check(id: string) {
+  const probe = (SERVICE_IDS as string[]).includes(id) ? probeFor(id as ServiceId) : extraProbe(id);
+  const s = state.get(id);
+  if (!probe || !s) return;
   const started = performance.now();
   const now = new Date().toISOString();
   try {
@@ -124,12 +155,13 @@ async function check(id: ServiceId) {
 let lastRun = 0;
 async function runAll() {
   lastRun = Date.now();
-  await Promise.allSettled(SERVICE_IDS.map(check));
+  syncInstances();
+  await Promise.allSettled([...state.keys()].map(check));
 }
 
 export function healthSnapshot() {
   // Disabled services are hidden entirely, not reported as "unconfigured".
-  const services = [...state.values()].filter((s) => isEnabled(s.id));
+  const services = [...state.values()].filter((s) => isEnabled(s.kind));
   return {
     services,
     checkedAt: lastRun ? new Date(lastRun).toISOString() : undefined,
@@ -175,18 +207,14 @@ async function sampleDownloads() {
   const totals = { sonarr: 0, radarr: 0 };
   const seen = new Set<string>();
 
-  const sources = [
-    ['sonarr', sonarr()],
-    ['radarr', radarr()],
-  ] as const;
   await Promise.all(
-    sources.map(async ([name, client]) => {
-      if (!client) return;
-      const q = await arrQueue(client, name).catch(() => undefined);
+    arrInstances().map(async (inst) => {
+      const name = inst.kind;
+      const q = await arrQueue(inst).catch(() => undefined);
       if (!q) return;
-      if (name === 'sonarr') onSonarrQueue(q.items);
+      onQueueSample(inst, q.items);
       for (const item of q.items) {
-        const key = `${name}:${item.id}`;
+        const key = `${inst.id}:${item.id}`;
         seen.add(key);
         const prev = lastLeft.get(key);
         lastLeft.set(key, item.sizeLeft);
@@ -216,7 +244,7 @@ async function sampleDownloads() {
 export function downloadSnapshot() {
   const last = speedHistory.at(-1);
   return {
-    available: !!(sonarr() || radarr()),
+    available: arrInstances().length > 0,
     current: last ? last.sonarr + last.radarr : 0,
     peak: speedHistory.reduce((m, s) => Math.max(m, s.sonarr + s.radarr), 0),
     history: speedHistory,

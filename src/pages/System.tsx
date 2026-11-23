@@ -19,7 +19,7 @@ import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
 
 function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
-  const meta = SERVICES[s.id];
+  const meta = SERVICES[s.kind];
   const data = s.history.map((h) => ({ t: h.t, ms: h.ms }));
   const errors = s.issues.filter((i) => i.level === 'error').length;
   const warnings = s.issues.filter((i) => i.level === 'warning').length;
@@ -30,10 +30,10 @@ function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
       transition={{ delay: index * 0.04 }}
       className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-3 px-5 py-4 md:grid-cols-[minmax(200px,1.2fr)_minmax(110px,0.8fr)_repeat(3,minmax(80px,0.6fr))_minmax(160px,1.2fr)]"
     >
-      <Link to={meta.path} className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
-        <ServiceIcon id={s.id} size={36} />
+      <Link to={s.instance ? `${meta.path}?instance=${encodeURIComponent(s.instance)}` : meta.path} className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
+        <ServiceIcon id={s.kind} size={36} />
         <div className="min-w-0">
-          <div className="truncate font-medium">{meta.name}</div>
+          <div className="truncate font-medium">{s.name}</div>
           <div className="truncate text-[11px] text-ink-4">{s.version ? `v${s.version}` : meta.tagline}</div>
         </div>
       </Link>

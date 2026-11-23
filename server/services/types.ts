@@ -17,6 +17,11 @@ export interface HealthProbe {
 export interface QueueItem {
   id: number;
   source: 'sonarr' | 'radarr';
+  /** Instance id (`sonarr`, `radarr`, or an extra instance like `radarr-4k`). */
+  instance: string;
+  instanceName?: string;
+  downloadId?: string;
+  added?: string;
   title: string;
   subtitle?: string;
   releaseTitle: string;

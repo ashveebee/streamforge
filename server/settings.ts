@@ -161,6 +161,11 @@ export function onSettingsChange(fn: (id: ServiceId) => void) {
   return () => listeners.delete(fn);
 }
 
+/** Signals that something a service depends on changed (e.g. its extra instances). */
+export function notifyChanged(id: ServiceId) {
+  changed(id);
+}
+
 function changed(id: ServiceId) {
   version++;
   cache.delete(CACHE_PREFIX[id]);

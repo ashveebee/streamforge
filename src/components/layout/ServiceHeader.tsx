@@ -6,9 +6,9 @@ import { SERVICES, ServiceIcon } from '../ui/ServiceIcon';
 import { StatusBadge } from '../ui/Status';
 import { PageHeader } from './PageHeader';
 
-export function ServiceHeader({ id, description, actions }: { id: ServiceId; description?: string; actions?: React.ReactNode }) {
+export function ServiceHeader({ id, instance, description, actions }: { id: ServiceId; instance?: string; description?: string; actions?: React.ReactNode }) {
   const health = useHealth();
-  const s = health.data?.services.find((x) => x.id === id);
+  const s = health.data?.services.find((x) => x.id === (instance ?? id)) ?? health.data?.services.find((x) => x.id === id);
   const meta = SERVICES[id];
   return (
     <>

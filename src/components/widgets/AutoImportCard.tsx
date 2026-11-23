@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAutoImport, useRunAutoImport, useUpdateAutoImport } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import { relative } from '@/lib/format';
-import type { AutoImportEntry, AutoImportMethod, AutoImportOutcome, QueueItem } from '@/lib/types';
+import type { ArrKind, AutoImportEntry, AutoImportMethod, AutoImportOutcome, QueueItem } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
@@ -28,6 +28,7 @@ const OUTCOME: Record<AutoImportOutcome, { label: string; tone: 'ok' | 'warn' | 
 
 const METHOD: Record<AutoImportMethod, string> = {
   sonarr: 'Sonarr',
+  radarr: 'Radarr',
   'grab-history': 'grab history',
   parser: 'release name',
   'title-match': 'title match',
@@ -36,7 +37,7 @@ const METHOD: Record<AutoImportMethod, string> = {
 
 const interval = (m: number) => (m < 60 ? `${m} min` : `${m / 60} h`);
 
-function Entry({ e }: { e: AutoImportEntry }) {
+function Entry({ e, kind }: { e: AutoImportEntry; kind: ArrKind }) {
   const [open, setOpen] = useState(false);
   const o = OUTCOME[e.outcome];
   return (
@@ -45,7 +46,7 @@ function Entry({ e }: { e: AutoImportEntry }) {
         <Pill tone={o.tone} className="mt-0.5 shrink-0">{o.label}</Pill>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium">{e.title}</div>
-          <div className="truncate text-[11px] text-ink-3">{e.message}</div>
+          <div className="truncate text-[11px] text-ink-3">{e.instanceName ? `${e.instanceName} · ` : ''}{e.message}</div>
         </div>
         <span className="shrink-0 text-[11px] text-ink-4" title={e.at}>{e.outcome === 'preview' ? 'preview' : relative(e.at)}</span>
         <ChevronDown className={cn('mt-0.5 size-3.5 shrink-0 text-ink-4 transition-transform', open && 'rotate-180')} />
@@ -62,13 +63,14 @@ function Entry({ e }: { e: AutoImportEntry }) {
                     <div className="break-all text-ink-2">{f.name}</div>
                     {f.ok ? (
                       <div className="text-ink-3">
-                        → {f.series} {f.episodes}
+                        → {f.title} {kind === 'radarr' && f.detail ? `(${f.detail})` : f.detail}
                         <span className="text-ink-4">
-                          {' '}· series via {METHOD[f.seriesMethod!]}, episodes via {METHOD[f.episodeMethod!]}
+                          {' '}· {kind === 'sonarr' ? 'series' : 'movie'} via {f.titleMethod ? METHOD[f.titleMethod] : '—'}
+                          {kind === 'sonarr' && f.detailMethod ? `, episodes via ${METHOD[f.detailMethod]}` : ''}
                         </span>
                       </div>
                     ) : (
-                      <div className="text-warn">{f.series ? `${f.series} · ` : ''}{f.reason}</div>
+                      <div className="text-warn">{f.title ? `${f.title} · ` : ''}{f.reason}</div>
                     )}
                   </div>
                 </div>
@@ -82,12 +84,13 @@ function Entry({ e }: { e: AutoImportEntry }) {
   );
 }
 
-export function AutoImportCard({ queue }: { queue: QueueItem[] }) {
+export function AutoImportCard({ kind, queue }: { kind: ArrKind; queue: QueueItem[] }) {
   const { user } = useAuth();
   const admin = !!user?.isAdmin;
-  const q = useAutoImport();
-  const update = useUpdateAutoImport();
-  const run = useRunAutoImport();
+  const q = useAutoImport(kind);
+  const update = useUpdateAutoImport(kind);
+  const run = useRunAutoImport(kind);
+  const app = kind === 'sonarr' ? 'Sonarr' : 'Radarr';
   const [preview, setPreview] = useState<AutoImportEntry[]>();
 
   const stuck = queue.filter(isStuck);
@@ -95,22 +98,22 @@ export function AutoImportCard({ queue }: { queue: QueueItem[] }) {
   const enabled = !!s?.settings.enabled;
   const busy = run.isPending || !!s?.running;
 
-  const go = async (opts: { dryRun?: boolean; queueId?: number }) => {
+  const go = async (opts: { dryRun?: boolean; queueId?: number; instance?: string }) => {
     const r = await run.mutateAsync(opts).catch(() => undefined);
     if (r) setPreview(opts.dryRun ? r.results : undefined);
   };
 
   const subtitle = !s
-    ? 'Imports downloads Sonarr couldn’t match'
+    ? `Imports downloads ${app} couldn’t match`
     : enabled
       ? `On · every ${interval(s.settings.intervalMinutes)}${s.nextRun ? ` · next ${relative(s.nextRun)}` : ''}`
-      : 'Off · imports downloads Sonarr couldn’t match';
+      : `Off · imports downloads ${app} couldn’t match`;
 
   return (
     <Card className="h-full">
       <CardHeader
         icon={Wand2}
-        accent="var(--color-sonarr)"
+        accent={`var(--color-${kind})`}
         title="Auto-import"
         subtitle={subtitle}
         action={
@@ -162,7 +165,7 @@ export function AutoImportCard({ queue }: { queue: QueueItem[] }) {
                     <div className="truncate text-[11px] text-warn" title={i.warnings.join('\n')}>{i.warnings[0] ?? i.errorMessage ?? 'Import needs attention'}</div>
                   </div>
                   {admin && (
-                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void go({ queueId: i.id })}>
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void go({ queueId: i.id, instance: i.instance })}>
                       Try import
                     </Button>
                   )}
@@ -179,7 +182,7 @@ export function AutoImportCard({ queue }: { queue: QueueItem[] }) {
               <button type="button" className="ml-auto font-normal normal-case tracking-normal hover:text-ink-2" onClick={() => setPreview(undefined)}>Dismiss</button>
             </h3>
             {preview.length ? (
-              <ul className="divide-y divide-line">{preview.map((e) => <Entry key={e.id} e={e} />)}</ul>
+              <ul className="divide-y divide-line">{preview.map((e) => <Entry key={e.id} e={e} kind={kind} />)}</ul>
             ) : (
               <p className="text-xs text-ink-3">Nothing is waiting to be imported.</p>
             )}
@@ -191,9 +194,9 @@ export function AutoImportCard({ queue }: { queue: QueueItem[] }) {
             Recent activity{s?.lastRun ? ` · last checked ${relative(s.lastRun)}` : ''}
           </h3>
           {s?.log.length ? (
-            <ul className="max-h-[360px] divide-y divide-line overflow-y-auto">{s.log.map((e) => <Entry key={e.id} e={e} />)}</ul>
+            <ul className="max-h-[360px] divide-y divide-line overflow-y-auto">{s.log.map((e) => <Entry key={e.id} e={e} kind={kind} />)}</ul>
           ) : (
-            <EmptyState icon={Wand2} title="Nothing imported yet" description="Downloads Sonarr can’t match on its own will show up here." />
+            <EmptyState icon={Wand2} title="Nothing imported yet" description={`Downloads ${app} can’t match on its own will show up here.`} />
           )}
         </div>
       </CardBody>

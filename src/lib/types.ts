@@ -21,7 +21,11 @@ export interface HealthIssue {
 }
 
 export interface ServiceHealth {
-  id: ServiceId;
+  /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
+  id: string;
+  kind: ServiceId;
+  /** Set for extra Sonarr/Radarr instances. */
+  instance?: string;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -186,6 +190,11 @@ export interface PlayDay {
 export interface QueueItem {
   id: number;
   source: 'sonarr' | 'radarr';
+  /** Instance id (`sonarr`, `radarr`, or an extra instance like `radarr-4k`). */
+  instance: string;
+  instanceName?: string;
+  downloadId?: string;
+  added?: string;
   title: string;
   subtitle?: string;
   releaseTitle: string;
@@ -375,6 +384,28 @@ export interface ServiceSettingsView {
   mounts?: string[];
 }
 
+export type ArrKind = 'sonarr' | 'radarr';
+
+/** A Sonarr/Radarr instance as listed in /api/config. */
+export interface ArrInstanceRef {
+  id: string;
+  kind: ArrKind;
+  name: string;
+  primary: boolean;
+}
+
+/** An extra instance as shown on the Settings page. */
+export interface ArrInstanceView {
+  id: string;
+  kind: ArrKind;
+  name: string;
+  url: string;
+  enabled: boolean;
+  apiKeySet: boolean;
+  apiKeyHint?: string;
+  createdAt: string;
+}
+
 export interface ServiceSettingsInput {
   url?: string;
   /** Omit to keep the saved key; empty string removes it. */
@@ -391,15 +422,17 @@ export type ConnectionTest =
 
 /* ------------------------------ auto-import ------------------------------ */
 
-export type AutoImportMethod = 'sonarr' | 'grab-history' | 'parser' | 'title-match' | 'numbering';
+export type AutoImportMethod = 'sonarr' | 'radarr' | 'grab-history' | 'parser' | 'title-match' | 'numbering';
 export type AutoImportOutcome = 'imported' | 'queued' | 'skipped' | 'failed' | 'preview';
 
 export interface AutoImportFile {
   name: string;
-  series?: string;
-  episodes?: string;
-  seriesMethod?: AutoImportMethod;
-  episodeMethod?: AutoImportMethod;
+  /** Series or movie title. */
+  title?: string;
+  /** Episode range or movie year. */
+  detail?: string;
+  titleMethod?: AutoImportMethod;
+  detailMethod?: AutoImportMethod;
   ok: boolean;
   reason?: string;
 }
@@ -408,6 +441,8 @@ export interface AutoImportEntry {
   id: string;
   at: string;
   trigger: 'schedule' | 'queue' | 'manual';
+  instance: string;
+  instanceName?: string;
   title: string;
   release: string;
   outcome: AutoImportOutcome;

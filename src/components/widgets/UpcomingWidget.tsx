@@ -1,5 +1,5 @@
 import { CalendarDays, CheckCircle2 } from 'lucide-react';
-import { useRadarr, useSonarr } from '@/hooks/queries';
+import { useArrAll } from '@/hooks/queries';
 import { dayLabel, timeOfDay } from '@/lib/format';
 import type { UpcomingItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
@@ -62,11 +62,20 @@ export function UpcomingList({ items, limit }: { items: UpcomingItem[]; limit?: 
 }
 
 export function UpcomingWidget() {
-  const sonarr = useSonarr();
-  const radarr = useRadarr();
-  const items = [...(sonarr.data?.upcoming ?? []), ...(radarr.data?.upcoming ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-  const loading = (sonarr.isPending && sonarr.fetchStatus !== 'idle') || (radarr.isPending && radarr.fetchStatus !== 'idle');
-  const none = sonarr.fetchStatus === 'idle' && sonarr.isPending && radarr.fetchStatus === 'idle' && radarr.isPending;
+  const all = [...useArrAll('sonarr'), ...useArrAll('radarr')];
+  // The same release often appears in several instances (e.g. HD and 4K).
+  const seen = new Set<string>();
+  const items = all
+    .flatMap((r) => r.data?.upcoming ?? [])
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((i) => {
+      const k = `${i.source}|${i.title}|${i.subtitle}|${i.kind}|${i.date}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  const loading = all.some((r) => r.isPending && r.fetchStatus !== 'idle');
+  const none = all.length === 0;
   return (
     <Card className="flex h-full flex-col">
       <CardHeader icon={CalendarDays} title="Upcoming" subtitle="Episodes & releases from Sonarr and Radarr" />

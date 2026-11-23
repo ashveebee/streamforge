@@ -2,6 +2,7 @@ import { derived } from '../settings.js';
 import { createClient, type ServiceClient } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import type { DiskInfo, HealthIssue, HealthProbe, QueueItem, UpcomingItem } from './types.js';
+import type { ArrInstance } from './instances.js';
 
 /* Shared bits for the *arr family (Sonarr, Radarr, Prowlarr). */
 
@@ -58,11 +59,11 @@ export async function arrProbe(client: ServiceClient, apiVersion: 'v1' | 'v3'): 
  * Turns an *arr MediaCover URL into a URL on our own image proxy, so the
  * browser never needs to reach the service (or know its API key).
  */
-export function coverUrl(service: 'sonarr' | 'radarr', images: ArrImage[] | undefined, type = 'poster') {
+export function coverUrl(inst: ArrInstance, images: ArrImage[] | undefined, type = 'poster') {
   const img = images?.find((i) => i.coverType === type);
   if (!img) return undefined;
   const match = img.url?.match(/\/MediaCover\/(\d+)\/([a-z]+(?:-\d+)?\.(?:jpg|png|webp))/i);
-  if (match) return `/api/${service}/cover/${match[1]}/${match[2]}`;
+  if (match) return `/api/${inst.kind}/cover/${match[1]}/${match[2]}${inst.primary ? '' : `?instance=${encodeURIComponent(inst.id)}`}`;
   return img.remoteUrl;
 }
 
@@ -75,9 +76,9 @@ interface ArrDisk {
   totalSpace: number;
 }
 
-export async function arrDisks(client: ServiceClient, key: string): Promise<DiskInfo[]> {
-  return cache.get(`${key}:disks`, 60_000, async () => {
-    const disks = await client.get<ArrDisk[]>('/api/v3/diskspace');
+export async function arrDisks(inst: ArrInstance): Promise<DiskInfo[]> {
+  return cache.get(`${inst.id}:disks`, 60_000, async () => {
+    const disks = await inst.client.get<ArrDisk[]>('/api/v3/diskspace');
     return disks
       .filter((d) => d.totalSpace > 0)
       .map((d) => ({ path: d.path, label: d.label, free: d.freeSpace, total: d.totalSpace }));
@@ -107,13 +108,13 @@ interface ArrQueueRecord {
   episode?: { title: string; seasonNumber: number; episodeNumber: number };
   seasonNumber?: number;
   movie?: { title: string; year?: number; images?: ArrImage[] };
+  downloadId?: string;
+  added?: string;
 }
 
-export async function arrQueue(
-  client: ServiceClient,
-  source: 'sonarr' | 'radarr',
-): Promise<{ total: number; items: QueueItem[] }> {
-  return cache.get(`${source}:queue`, 4_000, async () => {
+export async function arrQueue(inst: ArrInstance): Promise<{ total: number; items: QueueItem[] }> {
+  const { client, kind: source } = inst;
+  return cache.get(`${inst.id}:queue`, 4_000, async () => {
     const query =
       source === 'sonarr'
         ? { pageSize: 100, includeSeries: true, includeEpisode: true }
@@ -133,6 +134,10 @@ export async function arrQueue(
         return {
           id: r.id,
           source,
+          instance: inst.id,
+          instanceName: inst.primary ? undefined : inst.name,
+          downloadId: r.downloadId,
+          added: r.added,
           title,
           subtitle,
           releaseTitle: r.title,
@@ -149,7 +154,7 @@ export async function arrQueue(
           estimatedCompletion: r.estimatedCompletionTime,
           errorMessage: r.errorMessage,
           warnings: (r.statusMessages ?? []).flatMap((m) => m.messages),
-          poster: coverUrl(source, source === 'sonarr' ? r.series?.images : r.movie?.images),
+          poster: coverUrl(inst, source === 'sonarr' ? r.series?.images : r.movie?.images),
         };
       }),
     };
@@ -192,17 +197,18 @@ interface SonarrEpisode {
   series?: SonarrSeries;
 }
 
-export async function sonarrOverview() {
-  const c = sonarr()!;
+export async function sonarrOverview(inst: ArrInstance) {
+  const c = inst.client;
+  const k = inst.id;
   const now = new Date();
   const end = new Date(now.getTime() + 14 * 86_400_000);
   const [series, missing, queue, calendar, disks] = await Promise.all([
-    cache.get('sonarr:series', 60_000, () => c.get<SonarrSeries[]>('/api/v3/series')),
-    cache.get('sonarr:missing', 60_000, () =>
+    cache.get(`${k}:series`, 60_000, () => c.get<SonarrSeries[]>('/api/v3/series')),
+    cache.get(`${k}:missing`, 60_000, () =>
       c.get<{ totalRecords: number }>('/api/v3/wanted/missing', { pageSize: 1, monitored: true }),
     ),
-    arrQueue(c, 'sonarr'),
-    cache.get('sonarr:calendar', 5 * 60_000, () =>
+    arrQueue(inst),
+    cache.get(`${k}:calendar`, 5 * 60_000, () =>
       c.get<SonarrEpisode[]>('/api/v3/calendar', {
         start: new Date(now.getTime() - 86_400_000).toISOString(),
         end: end.toISOString(),
@@ -210,7 +216,7 @@ export async function sonarrOverview() {
         unmonitored: false,
       }),
     ),
-    arrDisks(c, 'sonarr'),
+    arrDisks(inst),
   ]);
 
   const stats = series.reduce(
@@ -226,7 +232,7 @@ export async function sonarrOverview() {
   const upcoming: UpcomingItem[] = calendar
     .filter((e) => e.airDateUtc)
     .map((e) => ({
-      id: `sonarr-${e.id}`,
+      id: `${k}-${e.id}`,
       source: 'sonarr',
       title: e.series?.title ?? 'Unknown series',
       subtitle: `S${String(e.seasonNumber).padStart(2, '0')}E${String(e.episodeNumber).padStart(2, '0')} · ${e.title}`,
@@ -235,7 +241,7 @@ export async function sonarrOverview() {
       hasFile: e.hasFile,
       monitored: e.monitored,
       network: e.series?.network,
-      poster: coverUrl('sonarr', e.series?.images),
+      poster: coverUrl(inst, e.series?.images),
     }));
 
   const recent = [...series]
@@ -249,7 +255,7 @@ export async function sonarrOverview() {
       network: s.network,
       status: s.status,
       progress: (s.statistics?.percentOfEpisodes ?? 0) / 100,
-      poster: coverUrl('sonarr', s.images),
+      poster: coverUrl(inst, s.images),
     }));
 
   return {
@@ -292,22 +298,23 @@ interface RadarrMovie {
   movieFile?: { quality?: { quality?: { name?: string } } };
 }
 
-export async function radarrOverview() {
-  const c = radarr()!;
+export async function radarrOverview(inst: ArrInstance) {
+  const c = inst.client;
+  const k = inst.id;
   const now = Date.now();
   const start = new Date(now - 86_400_000);
   const end = new Date(now + 30 * 86_400_000);
   const [movies, queue, calendar, disks] = await Promise.all([
-    cache.get('radarr:movies', 60_000, () => c.get<RadarrMovie[]>('/api/v3/movie')),
-    arrQueue(c, 'radarr'),
-    cache.get('radarr:calendar', 5 * 60_000, () =>
+    cache.get(`${k}:movies`, 60_000, () => c.get<RadarrMovie[]>('/api/v3/movie')),
+    arrQueue(inst),
+    cache.get(`${k}:calendar`, 5 * 60_000, () =>
       c.get<RadarrMovie[]>('/api/v3/calendar', {
         start: start.toISOString(),
         end: end.toISOString(),
         unmonitored: false,
       }),
     ),
-    arrDisks(c, 'radarr'),
+    arrDisks(inst),
   ]);
 
   const upcoming: UpcomingItem[] = [];
@@ -322,7 +329,7 @@ export async function radarrOverview() {
       const t = Date.parse(date);
       if (t < start.getTime() || t > end.getTime()) continue;
       upcoming.push({
-        id: `radarr-${m.id}-${kind}`,
+        id: `${k}-${m.id}-${kind}`,
         source: 'radarr',
         title: m.title,
         subtitle: m.year ? String(m.year) : undefined,
@@ -331,7 +338,7 @@ export async function radarrOverview() {
         hasFile: m.hasFile,
         monitored: m.monitored,
         network: m.studio,
-        poster: coverUrl('radarr', m.images),
+        poster: coverUrl(inst, m.images),
       });
     }
   }
@@ -366,7 +373,7 @@ export async function radarrOverview() {
         title: m.title,
         year: m.year,
         hasFile: m.hasFile,
-        poster: coverUrl('radarr', m.images),
+        poster: coverUrl(inst, m.images),
       })),
     disks,
   };

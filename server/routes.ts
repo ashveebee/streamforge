@@ -1,70 +1,31 @@
-import { Readable } from 'node:stream';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { Router } from 'express';
+import { handle, pipeImage } from './lib/handle.js';
+import { arrRouter } from './arrRoutes.js';
 import { ctxOf, requireAuth } from './auth.js';
-import { UpstreamError, type ServiceClient } from './lib/http.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
-import { requireAdmin, settingsRouter } from './settingsRoutes.js';
-import { z } from 'zod';
-import { autoImportStatus, INTERVALS, runAutoImport, updateAutoImport } from './services/autoImport.js';
+import { settingsRouter } from './settingsRoutes.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
-import { COVER_FILE_RE, radarr, radarrOverview, sonarr, sonarrOverview } from './services/arr.js';
+import { anyInstance, arrInstances } from './services/instances.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
-import type { ServiceId } from './services/types.js';
 
 export const api = Router();
 api.use(requireAuth);
-
-/** Wraps a handler so upstream failures become clean JSON errors. */
-function handle(service: ServiceId | null, fn: (req: Request) => Promise<unknown>) {
-  return async (req: Request, res: Response) => {
-    if (service && !isConfigured(service)) {
-      res.status(404).json({ error: 'not_configured', service, message: `${service} is not configured` });
-      return;
-    }
-    try {
-      res.set('Cache-Control', 'no-store').json(await fn(req));
-    } catch (err) {
-      const e = err as UpstreamError;
-      const status = e instanceof UpstreamError ? 502 : 500;
-      if (status === 500) console.error(`[${service ?? 'api'}]`, err);
-      res.status(status).json({ error: 'upstream', service, message: e.message });
-    }
-  };
-}
-
-/** Streams an upstream image to the client with sensible cache headers. */
-async function pipeImage(res: Response, upstream: Promise<globalThis.Response>) {
-  try {
-    const r = await upstream;
-    const type = r.headers.get('content-type') ?? '';
-    if (!r.ok || !r.body || !type.startsWith('image/')) {
-      res.status(r.status === 200 ? 404 : r.status).end();
-      return;
-    }
-    res.set({
-      'Content-Type': type,
-      'Cache-Control': 'private, max-age=86400',
-      'X-Content-Type-Options': 'nosniff',
-    });
-    const len = r.headers.get('content-length');
-    if (len) res.set('Content-Length', len);
-    Readable.fromWeb(r.body as never).pipe(res);
-  } catch {
-    res.status(502).end();
-  }
-}
 
 /* --------------------------------- core --------------------------------- */
 
 api.get('/config', (_req, res) => {
   res.json({
-    services: Object.fromEntries(SERVICE_IDS.map((id) => [id, isConfigured(id)])),
+    // Sonarr/Radarr count as configured when any instance is set up.
+    services: Object.fromEntries(
+      SERVICE_IDS.map((id) => [id, id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id)]),
+    ),
     enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id)])),
+    instances: arrInstances().map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
   });
 });
 api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot()));
@@ -107,54 +68,7 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
 
 /* ---------------------------------- arr --------------------------------- */
 
-function coverRoute(getClient: () => ServiceClient | undefined) {
-  return (req: Request, res: Response) => {
-    const client = getClient();
-    const id = String(req.params.id);
-    const file = String(req.params.file);
-    if (!client || !/^\d{1,9}$/.test(id) || !COVER_FILE_RE.test(file)) {
-      res.status(400).end();
-      return;
-    }
-    // Ask for the small variant (e.g. poster-250.jpg) unless one was requested.
-    const sized = /-\d+\./.test(file) ? file : file.replace(/\.(\w+)$/, '-500.$1');
-    void pipeImage(res, client.raw(`/MediaCover/${id}/${sized}`, undefined, { Accept: 'image/*' }));
-  };
-}
-
-api.get('/sonarr/overview', handle('sonarr', () => sonarrOverview()));
-api.get('/sonarr/cover/:id/:file', coverRoute(sonarr));
-
-/* Intelligent import for downloads Sonarr couldn't match on its own. */
-const autoImportPatch = z
-  .object({
-    enabled: z.boolean().optional(),
-    intervalMinutes: z.number().int().refine((n) => (INTERVALS as readonly number[]).includes(n), 'Unsupported interval').optional(),
-  })
-  .strict();
-const autoImportRun = z.object({ dryRun: z.boolean().optional(), queueId: z.number().int().positive().optional() }).strict();
-
-api.get('/sonarr/auto-import', handle('sonarr', async () => autoImportStatus()));
-api.put('/sonarr/auto-import', requireAdmin, (req, res) => {
-  const parsed = autoImportPatch.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: 'bad_request', message: parsed.error.issues[0]?.message ?? 'Invalid settings' });
-    return;
-  }
-  console.log(`[auto-import] settings changed by ${req.session!.userName}: ${JSON.stringify(parsed.data)}`);
-  res.json(updateAutoImport(parsed.data));
-});
-api.post(
-  '/sonarr/auto-import/run',
-  requireAdmin,
-  handle('sonarr', async (req) => {
-    const opts = autoImportRun.safeParse(req.body ?? {}).data ?? {};
-    const results = await runAutoImport({ trigger: 'manual', ...opts });
-    return { results, status: autoImportStatus() };
-  }),
-);
-api.get('/radarr/overview', handle('radarr', () => radarrOverview()));
-api.get('/radarr/cover/:id/:file', coverRoute(radarr));
+api.use(arrRouter);
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
 api.get('/seerr/overview', handle('seerr', () => seerrOverview()));
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));

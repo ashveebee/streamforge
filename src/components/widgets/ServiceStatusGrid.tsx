@@ -10,12 +10,12 @@ import { STATUS_META, StatusBadge } from '../ui/Status';
 import { Skeleton } from '../ui/States';
 
 export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number }) {
-  const meta = SERVICES[s.id];
+  const meta = SERVICES[s.kind];
   const color = STATUS_META[s.status].color;
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
       <Link
-        to={meta.path}
+        to={s.instance ? `${meta.path}?instance=${encodeURIComponent(s.instance)}` : meta.path}
         className={cn(
           'group relative flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-white/[0.02] p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:bg-white/[0.04]',
           s.status === 'unconfigured' && 'opacity-60',
@@ -26,9 +26,9 @@ export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number
           style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
         />
         <div className="flex items-center gap-3">
-          <ServiceIcon id={s.id} size={34} />
+          <ServiceIcon id={s.kind} size={34} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{meta.name}</div>
+            <div className="truncate text-sm font-semibold">{s.name}</div>
             <div className="truncate text-[11px] text-ink-4">{s.version ? `v${s.version}` : meta.tagline}</div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ChevronDown,
@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/Card';
 import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { Pill, StatusBadge } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
+import { InstancesSection } from '@/components/settings/InstancesSection';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 
 /** Where each service keeps its API key, and an example address. */
@@ -425,7 +426,13 @@ export default function SettingsPage() {
         <ul className="space-y-4">
           {ORDER.map((id, i) => {
             const s = byId.get(id);
-            return s ? <ServiceCard key={id} s={s} index={i} /> : null;
+            if (!s) return null;
+            return (
+              <Fragment key={id}>
+                <ServiceCard s={s} index={i} />
+                {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
+              </Fragment>
+            );
           })}
         </ul>
       )}

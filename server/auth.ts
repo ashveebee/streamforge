@@ -43,6 +43,15 @@ export function publicUser(s: Session) {
   };
 }
 
+/** Restricts a route to Jellyfin administrators. Use after requireAuth. */
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdmin) {
+    res.status(403).json({ error: 'forbidden', message: 'Only Jellyfin administrators can do this.' });
+    return;
+  }
+  next();
+}
+
 export const ctxOf = (s: Session): jellyfin.JfCtx => ({
   token: s.token,
   deviceId: s.deviceId,
