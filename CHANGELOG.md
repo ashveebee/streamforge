@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.3](https://github.com/ashveebee/streamforge/compare/v1.0.2...v1.0.3) (2026-11-23)
+
+
+### Documentation
+
+* add GPL-2.0 license and project website ([33b45a6](https://github.com/ashveebee/streamforge/commit/33b45a66c815bf5455bcef6c0d9dbb8fff6521d8))
+* add PolyForm Noncommercial license and project website ([2feef4a](https://github.com/ashveebee/streamforge/commit/2feef4aae1d6de50e81155c03a67799584f0c3c4))
+* license under GPL-2.0-only instead of PolyForm Noncommercial ([72c2d05](https://github.com/ashveebee/streamforge/commit/72c2d05f6e82977a24e7b01a7725b63ad3a82c89))
+
 ## [1.0.2](https://github.com/ashveebee/streamforge/compare/v1.0.1...v1.0.2) (2026-11-23)
 
 
