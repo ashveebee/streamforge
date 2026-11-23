@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { useDownloads, useRadarr, useSonarr } from '@/hooks/queries';
 import { bytes, compact } from '@/lib/format';
 import type { DiskInfo, QueueItem } from '@/lib/types';
+import { InstanceTabs, useSelectedInstance } from '@/components/layout/InstanceTabs';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { axisProps, ChartTooltip, gridProps } from '@/components/ui/Chart';
@@ -10,6 +11,8 @@ import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { AutoImportCard } from '@/components/widgets/AutoImportCard';
+import { MissingCard } from '@/components/widgets/MissingCard';
 import { QueueRow } from '@/components/widgets/DownloadsWidget';
 import { VolumeRow } from '@/components/widgets/StorageWidget';
 import { UpcomingList } from '@/components/widgets/UpcomingWidget';
@@ -22,7 +25,9 @@ function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number
       <CardBody>
         {items.length ? (
           <ul className="divide-y divide-line">
-            {items.map((i) => <QueueRow key={i.id} item={i} speedBps={dl.data?.itemSpeeds[`${i.source}:${i.id}`]} />)}
+            {items.map((i) => (
+              <QueueRow key={i.id} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} stalledSince={dl.data?.stalled?.[`${i.instance}:${i.id}`]} />
+            ))}
           </ul>
         ) : (
           <EmptyState icon={Download} title="Queue is empty" description="Nothing downloading right now." />
@@ -74,10 +79,12 @@ const pageSkeleton = (
 );
 
 export function SonarrPage() {
-  const q = useSonarr();
+  const instance = useSelectedInstance('sonarr');
+  const q = useSonarr(instance);
   return (
     <>
-      <ServiceHeader id="sonarr" />
+      <ServiceHeader id="sonarr" instance={instance} />
+      <InstanceTabs kind="sonarr" />
       <QueryState query={q} skeleton={pageSkeleton}>
         {(d) => (
           <div className="space-y-5">
@@ -94,6 +101,10 @@ export function SonarrPage() {
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
+            <div className="grid items-start gap-5 xl:grid-cols-2">
+              <AutoImportCard kind="sonarr" queue={d.queue.items} />
+              <MissingCard kind="sonarr" instance={instance} />
+            </div>
             <Card>
               <CardHeader icon={Layers} title="Recently added series" />
               <PosterStrip items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />
@@ -107,10 +118,12 @@ export function SonarrPage() {
 }
 
 export function RadarrPage() {
-  const q = useRadarr();
+  const instance = useSelectedInstance('radarr');
+  const q = useRadarr(instance);
   return (
     <>
-      <ServiceHeader id="radarr" />
+      <ServiceHeader id="radarr" instance={instance} />
+      <InstanceTabs kind="radarr" />
       <QueryState query={q} skeleton={pageSkeleton}>
         {(d) => (
           <div className="space-y-5">
@@ -154,6 +167,10 @@ export function RadarrPage() {
                   )}
                 </CardBody>
               </Card>
+            </div>
+            <div className="grid items-start gap-5 xl:grid-cols-2">
+              <AutoImportCard kind="radarr" queue={d.queue.items} />
+              <MissingCard kind="radarr" instance={instance} />
             </div>
             <DisksCard disks={d.disks} />
           </div>

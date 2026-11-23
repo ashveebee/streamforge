@@ -2,6 +2,7 @@ import { derived } from '../settings.js';
 import { createClient, type ServiceClient } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import type { HealthProbe } from './types.js';
+import { emit } from './notify.js';
 
 export const seerrClient = (url: string, apiKey: string) => createClient('seerr', url, { 'X-Api-Key': apiKey });
 export const seerr = derived('seerr', (s) => (s.url && s.apiKey ? seerrClient(s.url, s.apiKey) : undefined));
@@ -140,4 +141,43 @@ export async function seerrOverview() {
     recent,
     pending,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Approvals                                                           */
+/* ------------------------------------------------------------------ */
+
+export async function decideRequest(id: number, decision: 'approve' | 'decline') {
+  await seerr()!.post(`/api/v1/request/${id}/${decision}`, {});
+  cache.delete('seerr:requests:');
+  cache.delete('seerr:count');
+}
+
+/*
+ * Watches for new pending requests so admins can be notified. The first look
+ * after start-up only records what is already waiting.
+ */
+let known: Set<number> | undefined;
+
+async function checkPending() {
+  if (!seerr()) {
+    known = undefined;
+    return;
+  }
+  const pending = await requests('pending', 20);
+  const fresh = known ? pending.filter((r) => !known!.has(r.id)) : [];
+  known = new Set(pending.map((r) => r.id));
+  for (const r of fresh) {
+    emit('request_pending', {
+      title: `New request: ${r.title}${r.year ? ` (${r.year})` : ''}`,
+      message: `${r.requestedBy} requested this ${r.type === 'tv' ? `series${r.seasons.length ? ` (season ${r.seasons.join(', ')})` : ''}` : 'movie'}${r.is4k ? ' in 4K' : ''}.`,
+      url: '/seerr',
+    });
+  }
+}
+
+export function startSeerrWatch() {
+  const tick = () => void checkPending().catch(() => undefined);
+  tick();
+  setInterval(tick, 2 * 60_000).unref();
 }

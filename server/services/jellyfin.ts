@@ -609,3 +609,76 @@ export async function image(
     { headers: { ...authHeader(ctx.token, ctx.deviceId), Accept: 'image/*' }, service: 'jellyfin' },
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Session controls                                                    */
+/* ------------------------------------------------------------------ */
+
+export const SESSION_ID_RE = /^[\w-]{1,64}$/;
+export type SessionCommand = 'pause' | 'unpause' | 'stop' | 'message';
+
+/** Controls a playback session. Needs an administrator token. */
+export async function controlSession(ctx: JfCtx, sessionId: string, command: SessionCommand, text?: string) {
+  const token = serverToken(ctx);
+  const path =
+    command === 'message'
+      ? `/Sessions/${sessionId}/Message`
+      : `/Sessions/${sessionId}/Playing/${command === 'pause' ? 'Pause' : command === 'unpause' ? 'Unpause' : 'Stop'}`;
+  await requestJson(buildUrl(base(), path), {
+    method: 'POST',
+    headers: authHeader(token, ctx.deviceId),
+    body: command === 'message' ? { Header: 'Message from the server admin', Text: text ?? '', TimeoutMs: 15_000 } : undefined,
+    service: 'jellyfin',
+  });
+  cache.delete('jf:sessions:');
+}
+
+/* ------------------------------------------------------------------ */
+/* Background access (no signed-in user)                               */
+/* ------------------------------------------------------------------ */
+
+/** Active streams via the server API key; undefined when no key is set. */
+export async function serverNowPlaying() {
+  const key = serverApiKey();
+  if (!key || !resolve('jellyfin').settings.url) return undefined;
+  const list = await jf<JfSession[]>('/Sessions', key, 'streamforge-server', { ActiveWithinSeconds: 960 });
+  return list.filter((s) => s.NowPlayingItem).map(normaliseSession);
+}
+
+export const hasServerKey = () => !!serverApiKey();
+
+/** Raw playback entries from the activity log, for stats without a recorder. */
+export async function playbackEntries(ctx: JfCtx, since: Date) {
+  return cache.get(`jf:playentries:${since.toISOString().slice(0, 13)}`, 5 * 60_000, async () => {
+    const res = await jf<{ Items: JfActivity[] }>('/System/ActivityLog/Entries', serverToken(ctx), ctx.deviceId, {
+      minDate: since.toISOString(),
+      limit: 5000,
+    });
+    return res.Items.filter((a) => a.Type === 'VideoPlayback' || a.Type === 'AudioPlayback').map((a) => ({
+      name: a.Name,
+      date: a.Date,
+      userId: a.UserId,
+    }));
+  });
+}
+
+/** Every series and movie with its external ids, for cross-checking with Sonarr/Radarr. */
+export async function libraryItems(ctx: JfCtx) {
+  return cache.get(`jf:libitems:${ctx.userId}`, 10 * 60_000, async () => {
+    const res = await jf<{ Items: { Id: string; Name: string; Type: string; ProductionYear?: number; ProviderIds?: Record<string, string> }[] }>(
+      '/Items',
+      ctx.token,
+      ctx.deviceId,
+      { IncludeItemTypes: 'Series,Movie', Recursive: true, Fields: 'ProviderIds', UserId: ctx.userId, EnableImages: false },
+    );
+    return res.Items.map((i) => ({
+      id: i.Id,
+      name: i.Name,
+      type: i.Type as 'Series' | 'Movie',
+      year: i.ProductionYear,
+      tvdb: i.ProviderIds?.Tvdb,
+      tmdb: i.ProviderIds?.Tmdb,
+      imdb: i.ProviderIds?.Imdb,
+    }));
+  });
+}

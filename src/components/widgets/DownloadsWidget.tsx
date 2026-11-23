@@ -1,8 +1,9 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatePresence, motion } from 'motion/react';
-import { CircleAlert, Download, Pause } from 'lucide-react';
-import { useDownloads, useRadarr, useSonarr } from '@/hooks/queries';
-import { bytes, speed } from '@/lib/format';
+import { Ban, CircleAlert, Download, LoaderCircle, Pause, RefreshCw, Trash2, Zap } from 'lucide-react';
+import { useDownloads, useArrAll, useQueueAction, type QueueActionName } from '@/hooks/queries';
+import { useAuth } from '@/hooks/useAuth';
+import { bytes, duration, speed } from '@/lib/format';
 import type { QueueItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { AreaGradient, axisProps, ChartTooltip, gridProps, Legend, SERIES, timeLabel } from '../ui/Chart';
@@ -10,8 +11,43 @@ import { FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { EmptyState, Skeleton } from '../ui/States';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
+import { Menu, type MenuItem } from '../ui/Menu';
 
-export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: number }) {
+const CONFIRM: Partial<Record<QueueActionName, string>> = {
+  remove: 'Remove this download and delete it from the download client?',
+  blocklist: 'Remove and blocklist this release? It won’t be grabbed again.',
+  'blocklist-search': 'Remove and blocklist this release, then search for another?',
+};
+
+/** Admin actions for one queue item. */
+function QueueMenu({ item }: { item: QueueItem }) {
+  const act = useQueueAction();
+  const run = (action: QueueActionName) => {
+    const msg = CONFIRM[action];
+    if (msg && !confirm(`${msg}\n\n${item.releaseTitle}`)) return;
+    act.mutate({ kind: item.source, instance: item.instance, id: item.id, action });
+  };
+  const delayed = item.status === 'delay' || item.status === 'pending';
+  const items: MenuItem[] = [
+    ...(delayed ? [{ label: 'Grab now', icon: Zap, hint: 'Skip the delay profile', onSelect: () => run('grab') }] : []),
+    { label: 'Blocklist & search again', icon: RefreshCw, hint: 'Find a different release', onSelect: () => run('blocklist-search') },
+    { label: 'Blocklist', icon: Ban, hint: 'Don’t grab this release again', onSelect: () => run('blocklist') },
+    { label: 'Remove from queue only', icon: Trash2, hint: 'Leave it in the download client', onSelect: () => run('remove-keep') },
+    { label: 'Remove & delete download', icon: Trash2, danger: true, onSelect: () => run('remove') },
+  ];
+  return (
+    <div className="flex items-center" title={act.error ? (act.error as Error).message : undefined}>
+      {act.isPending ? (
+        <LoaderCircle className="m-1.5 size-4 animate-spin text-ink-4" />
+      ) : (
+        <Menu items={items} label={`Actions for ${item.title}`} trigger={act.isError ? <CircleAlert className="size-4 text-bad" /> : undefined} />
+      )}
+    </div>
+  );
+}
+
+export function QueueRow({ item, speedBps, stalledSince, actions = true }: { item: QueueItem; speedBps?: number; stalledSince?: string; actions?: boolean }) {
+  const { user } = useAuth();
   const failed = item.trackedStatus === 'error' || item.status === 'failed' || !!item.errorMessage;
   const warn = item.trackedStatus === 'warning';
   const paused = item.status === 'paused';
@@ -31,7 +67,7 @@ export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: numbe
           <span className="truncate text-[13px] font-medium">{item.title}</span>
         </div>
         <div className="truncate text-[11px] text-ink-3" title={item.releaseTitle}>
-          {[item.subtitle, item.quality, item.client].filter(Boolean).join(' · ')}
+          {[item.instanceName, item.subtitle, item.quality, item.client].filter(Boolean).join(' · ')}
         </div>
         <ProgressBar
           value={item.progress}
@@ -51,23 +87,29 @@ export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: numbe
         ) : (
           <>
             <div className="font-medium text-ink-2">{Math.round(item.progress * 100)}%</div>
-            <div className="text-ink-4">{speedBps ? speed(speedBps) : item.timeLeft ?? bytes(item.sizeLeft)}</div>
+            {stalledSince ? (
+              <div className="text-warn" title={`No progress since ${new Date(stalledSince).toLocaleString()}`}>
+                Stalled {duration(Date.now() - Date.parse(stalledSince))}
+              </div>
+            ) : (
+              <div className="text-ink-4">{speedBps ? speed(speedBps) : item.timeLeft ?? bytes(item.sizeLeft)}</div>
+            )}
           </>
         )}
       </div>
+      {actions && user?.isAdmin && <QueueMenu item={item} />}
     </motion.li>
   );
 }
 
 export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
   const dl = useDownloads();
-  const sonarr = useSonarr();
-  const radarr = useRadarr();
-  const items = [...(sonarr.data?.queue.items ?? []), ...(radarr.data?.queue.items ?? [])].sort(
+  const all = [...useArrAll('sonarr'), ...useArrAll('radarr')];
+  const items = all.flatMap((r) => r.data?.queue.items ?? []).sort(
     (a, b) => Number(b.status === 'downloading') - Number(a.status === 'downloading') || b.progress - a.progress,
   );
-  const total = (sonarr.data?.queue.total ?? 0) + (radarr.data?.queue.total ?? 0);
-  const loading = (sonarr.isPending && sonarr.fetchStatus !== 'idle') || (radarr.isPending && radarr.fetchStatus !== 'idle');
+  const total = all.reduce((n, r) => n + (r.data?.queue.total ?? 0), 0);
+  const loading = all.some((r) => r.isPending && r.fetchStatus !== 'idle');
   const remaining = items.reduce((a, i) => a + i.sizeLeft, 0);
   const latest = dl.data?.history.at(-1);
 
@@ -119,7 +161,7 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
                 <ul className="divide-y divide-line">
                   <AnimatePresence initial={false}>
                     {items.slice(0, limit).map((i) => (
-                      <QueueRow key={`${i.source}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.source}:${i.id}`]} />
+                      <QueueRow key={`${i.instance}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} stalledSince={dl.data?.stalled?.[`${i.instance}:${i.id}`]} />
                     ))}
                   </AnimatePresence>
                 </ul>

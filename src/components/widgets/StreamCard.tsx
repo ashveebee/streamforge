@@ -1,3 +1,4 @@
+import { SessionControls } from './SessionControls';
 import { motion } from 'motion/react';
 import { Cpu, Gauge, Globe, Pause, Play, Volume2, VolumeX, Zap } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
@@ -81,6 +82,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
           </div>
           {s.state.isMuted ? <VolumeX className="size-4 text-ink-4" /> : <Volume2 className="size-4 text-ink-4" />}
         </div>
+        <SessionControls s={s} />
 
         <div className="mt-3 divide-y divide-line">
           <Row icon={Zap} label="Playback">

@@ -22,11 +22,15 @@ server.
   </tr>
   <tr>
     <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
-    <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue and episodes airing soon"></a><br><b>Sonarr and Radarr.</b> Queues, upcoming releases and disk space.</td>
+    <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue, airing soon, auto-import and missing episodes"></a><br><b>Sonarr and Radarr.</b> Queues with actions, auto-import, missing items and what's airing.</td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/seerr.jpg"><img src="docs/screenshots/seerr.jpg" alt="Seerr: requests awaiting approval and recent requests"></a><br><b>Seerr.</b> Pending approvals and recent requests.</td>
     <td><a href="docs/screenshots/infinidisk.jpg"><img src="docs/screenshots/infinidisk.jpg" alt="Infinidisk: storage capacity and drive health"></a><br><b>Infinidisk.</b> Capacity, drive health and temperatures.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/stats.jpg"><img src="docs/screenshots/stats.jpg" alt="Stats: plays per day by direct play and transcode, top viewers, titles and clients"></a><br><b>Stats.</b> Watch time, direct play vs transcode and who watches what.</td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" alt="Library health: incomplete series, upgrades available and mismatches with Jellyfin"></a><br><b>Library health.</b> Missing episodes, upgrades and items out of sync with Jellyfin.</td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services from the UI, test each connection and apply changes without a restart.</td>
@@ -41,17 +45,27 @@ server.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:
-  codecs, bitrate, hardware acceleration and transcode reasons.
+  codecs, bitrate, hardware acceleration and transcode reasons. Admins can
+  pause or resume a stream, send the viewer a message, or stop it with a reason.
 - **Service integrations**
   - *Jellyfin:* server info, sessions, users, library statistics, recently added
     items, daily plays and the activity log.
-  - *Sonarr:* series stats, missing episodes, queue, airing calendar and disk space.
-  - *Radarr:* movie stats, missing movies, queue, cinema/digital/physical release
-    dates, quality breakdown and disk space.
+  - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
+    missing-episodes list with search buttons.
+  - *Radarr:* movie stats, queue, cinema/digital/physical release dates,
+    quality breakdown and disk space, plus a missing-movies list with search
+    buttons.
+  - *Sonarr and Radarr queues:* admins can blocklist and search again,
+    blocklist, remove (with or without deleting the download) or grab a
+    delayed release now. Queue rows show how long a download has been stalled.
+  - *Multiple instances:* add extra Sonarr/Radarr instances (a 4K Radarr, an
+    anime Sonarr) under the main service in Settings. Each gets its own tab,
+    health check and place in the queues, calendar and download charts.
   - *Prowlarr:* health, query/grab/failure stats and response time for each
     indexer, plus connected apps.
   - *Seerr:* request counts by status, pending approvals and recent requests,
-    with TMDB artwork.
+    with TMDB artwork. Admins can approve or decline requests from the Seerr
+    page or the dashboard.
   - *Infinidisk:* drives, capacity, usage, temperature and health.
 - **System status.** A background monitor checks every service on an interval
   and records:
@@ -61,13 +75,50 @@ server.
   - the last successful check;
   - issues the service reports about itself.
 
-  It also shows host CPU, RAM, network and filesystems, and computes download
-  throughput.
+  It also shows host CPU, RAM, network and filesystems, computes download
+  throughput, and forecasts storage: disk usage is recorded hourly and a trend
+  through the last 30 days estimates when each volume will be full.
+- **Playback stats.** A Stats page shows plays per day split by direct play vs
+  transcode, watch time, top viewers, titles and clients, and a weekday-by-hour
+  heatmap. Watch time and transcode figures need a Jellyfin API key (see
+  *Notes on data sources*).
+- **Library health.** Cross-checks Sonarr, Radarr and Jellyfin by TVDB/TMDB/IMDb
+  id. It lists monitored series with missing episodes, files that could be
+  upgraded (with a search button), downloads Jellyfin doesn't have, and Jellyfin
+  items no Sonarr/Radarr instance manages.
 - **Customisable dashboard.** Drag widgets to reorder them, resize them (⅓, ½, ⅔
   or full width), or hide them. The layout is saved per user on each device.
 - **Settings in the UI.** Connect services from a Settings page with a
   connection test for each one. Changes apply instantly and are stored in a
-  local SQLite database. No config files to edit.
+  local SQLite database. No config files to edit. Services you don't use can
+  be switched off; they're hidden from the sidebar and dashboard and never
+  contacted, and their settings are kept for later.
+- **Auto-import (Sonarr and Radarr).** Finds finished downloads that couldn't
+  be imported (for example "Unknown Series", "Unable to parse" or "matched by
+  ID") and imports them. For each file it uses the first answer it can get:
+  - **Series or movie:** the app's own match, then what the release was grabbed
+    for, then the app's release-name parser, then a strict title match against
+    your library (including alternate titles). Movies must also match on year.
+  - **Episodes:** season and episode, absolute or air-date numbering.
+
+  It skips a file when the signals conflict, when the file is a sample, when a
+  movie download holds several video files, or when the app would still reject
+  it (for example "not an upgrade"). It runs on a schedule, shortly after a
+  download gets stuck, or when you press **Run now**. **Preview** shows what it
+  would do without changing anything. It is off by default; turn it on from
+  the Sonarr or Radarr page.
+- **Stalled download cleanup.** When turned on (System page), downloads with no
+  progress for a chosen time, and optionally ones the client reports as failed,
+  are removed, blocklisted and searched for again. At most 10 per sweep.
+- **Notifications.** Send alerts to Discord, ntfy, Pushover, any webhook
+  (optionally HMAC-signed) or straight to your phone or browser with web push.
+  Pick events per channel: service offline or back, disk almost full, imports
+  done or failed, stalled downloads removed, and new requests to approve.
+- **Member access.** Let non-admin Jellyfin users sign in and choose which
+  pages they see. Access is enforced by the server, and every action stays
+  admin-only.
+- **Installable.** StreamForge is a progressive web app: install it on a phone
+  or desktop, and the app shell opens offline. Web push needs HTTPS.
 - **Real-time updates.** Each endpoint is polled at a cadence that suits its
   data. Playback progress advances every second between polls. The backend
   de-duplicates upstream calls across clients.
@@ -171,9 +222,9 @@ automatically if you use the example file). Settings saved in the UI take
 precedence. **Use environment** on a service in Settings removes the saved
 copy and falls back to the variables.
 
-Server options such as `PORT`, `TRUST_PROXY` (set when behind a reverse proxy),
-`SESSION_TTL_HOURS` and `ALLOW_NON_ADMIN` are environment-only. See
-`.env.example` for the full list.
+Server options such as `PORT`, `TRUST_PROXY` (set when behind a reverse proxy)
+and `SESSION_TTL_HOURS` are environment-only. `ALLOW_NON_ADMIN` sets the
+default for **Member access** in Settings. See `.env.example` for the full list.
 
 ### Troubleshooting
 
@@ -304,11 +355,24 @@ To add an integration:
   a user in Jellyfin ends their StreamForge session.
 - State-changing requests require a custom header, which acts as CSRF
   protection. Login is rate-limited, and Helmet sets the CSP and other headers.
-- Only Jellyfin administrators can sign in by default. Set `ALLOW_NON_ADMIN=true`
-  to open access to other users.
+- Only Jellyfin administrators can sign in by default. Turn on **Member access**
+  in Settings (or set `ALLOW_NON_ADMIN=true`) to let other users in. Members
+  only reach the pages you allow, checked on the server, and can't change
+  anything.
+- Notification secrets (webhook URLs, tokens) are stored on the server and
+  never sent back to the browser.
 - Sessions are held in memory, so restarting the server signs everyone out.
 
 ## Notes on data sources
+
+- **Playback stats.** With a Jellyfin API key set (Settings → Jellyfin), a
+  recorder samples active sessions every 30 seconds and stores each play,
+  including watch time and whether it transcoded. Without a key, or for days
+  before recording started, the Stats page uses Jellyfin's activity log, which
+  has plays but no watch time or transcode data.
+- **Storage forecast.** Usage is sampled hourly from Infinidisk, the host and
+  Sonarr/Radarr; volumes seen by several of them are counted once. A forecast
+  appears after a day of history.
 
 - **Download speeds.** Sonarr and Radarr don't report a live speed, so
   StreamForge works it out from how much each queue item's remaining size drops

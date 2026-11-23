@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings } from 'lucide-react';
+import { Activity, BarChart3, LayoutDashboard, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useHealth, useNowPlaying } from '@/hooks/queries';
+import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { ServiceId } from '@/lib/types';
@@ -81,7 +81,11 @@ export function Sidebar({
   const { user, logout } = useAuth();
   const health = useHealth();
   const playing = useNowPlaying();
+  const config = useServiceConfig();
+  const canSee = useCanSee();
   const byId = new Map(health.data?.services.map((s) => [s.id, s]));
+  // Services switched off in Settings are hidden from navigation.
+  const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
   const streams = playing.data?.length ?? 0;
 
   return (
@@ -104,7 +108,7 @@ export function Sidebar({
 
       <nav className="mt-5 flex flex-1 flex-col gap-0.5 overflow-y-auto no-scrollbar" aria-label="Main">
         <NavItem to="/" icon={LayoutDashboard} label="Overview" collapsed={collapsed} onNavigate={onNavigate} />
-        <NavItem
+        {canSee('now-playing') && <NavItem
           to="/now-playing"
           icon={PlayCircle}
           label="Now Playing"
@@ -119,15 +123,17 @@ export function Sidebar({
               )
             ) : undefined
           }
-        />
-        <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />
+        />}
+        {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} onNavigate={onNavigate} />}
 
         <div className={cn('mt-5 mb-1.5 px-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-4 uppercase', collapsed && 'sr-only')}>
           Services
         </div>
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
-        {SERVICE_ORDER.map((id) => {
+        {shown.map((id) => {
           const s = byId.get(id);
           const meta = SERVICES[id];
           return (

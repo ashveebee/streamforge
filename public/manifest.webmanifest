@@ -1,0 +1,20 @@
+{
+  "name": "StreamForge",
+  "short_name": "StreamForge",
+  "description": "Control centre for Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Now Playing", "url": "/now-playing", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "System Status", "url": "/system", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

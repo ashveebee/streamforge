@@ -16,6 +16,8 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
+  /** Sent as-is instead of JSON-encoding `body`. */
+  rawBody?: string;
   timeoutMs?: number;
   service?: string;
 }
@@ -54,7 +56,7 @@ export async function requestRaw(url: string, opts: RequestOptions = {}): Promis
         ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...opts.headers,
       },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.rawBody ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
       signal: AbortSignal.timeout(opts.timeoutMs ?? config.requestTimeoutMs),
       redirect: 'follow',
     });
@@ -89,6 +91,12 @@ export function createClient(service: string, baseUrl: string, headers: Record<s
     baseUrl,
     get: <T>(path: string, query?: RequestOptions['query']) =>
       requestJson<T>(buildUrl(baseUrl, path, query), { headers, service }),
+    post: <T>(path: string, body: unknown, query?: RequestOptions['query']) =>
+      requestJson<T>(buildUrl(baseUrl, path, query), { method: 'POST', body, headers, service }),
+    put: <T>(path: string, body: unknown, query?: RequestOptions['query']) =>
+      requestJson<T>(buildUrl(baseUrl, path, query), { method: 'PUT', body, headers, service }),
+    del: <T>(path: string, query?: RequestOptions['query']) =>
+      requestJson<T>(buildUrl(baseUrl, path, query), { method: 'DELETE', headers, service }),
     raw: (path: string, query?: RequestOptions['query'], extraHeaders?: Record<string, string>) =>
       requestRaw(buildUrl(baseUrl, path, query), {
         headers: { ...headers, Accept: '*/*', ...extraHeaders },

@@ -30,7 +30,58 @@ const migrations = [
      updated_at TEXT NOT NULL,
      updated_by TEXT
    )`,
+  // App-wide preferences (enabled services, auto-import options, …) as JSON.
+  `CREATE TABLE app_settings (
+     key        TEXT PRIMARY KEY,
+     data       TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   )`,
+  // Playback history recorded from Jellyfin sessions (see services/playStats.ts).
+  `CREATE TABLE plays (
+     id          TEXT PRIMARY KEY,
+     user_id     TEXT,
+     user_name   TEXT,
+     item_id     TEXT,
+     title       TEXT NOT NULL,
+     series      TEXT,
+     type        TEXT,
+     client      TEXT,
+     device      TEXT,
+     method      TEXT NOT NULL,
+     started_at  INTEGER NOT NULL,
+     last_seen   INTEGER NOT NULL,
+     watched_ms  INTEGER NOT NULL DEFAULT 0
+   );
+   CREATE INDEX plays_started ON plays(started_at);`,
+  // Disk usage samples for the storage forecast (see services/storage.ts).
+  `CREATE TABLE disk_samples (
+     key    TEXT NOT NULL,
+     label  TEXT NOT NULL,
+     t      INTEGER NOT NULL,
+     used   INTEGER NOT NULL,
+     total  INTEGER NOT NULL,
+     PRIMARY KEY (key, t)
+   );
+   CREATE INDEX disk_samples_t ON disk_samples(t);`,
 ];
+
+/** Reads a JSON preference, or `fallback` when missing or unreadable. */
+export function readPref<T>(key: string, fallback: T): T {
+  const row = db.prepare('SELECT data FROM app_settings WHERE key = ?').get(key) as { data: string } | undefined;
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.data) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function writePref(key: string, value: unknown) {
+  db.prepare(
+    `INSERT INTO app_settings (key, data, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(key, JSON.stringify(value), new Date().toISOString());
+}
 
 const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
 for (let i = current; i < migrations.length; i++) {

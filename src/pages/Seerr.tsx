@@ -8,7 +8,7 @@ import { ChartTooltip, Legend } from '@/components/ui/Chart';
 import { FadeImage } from '@/components/ui/Image';
 import { StatTile } from '@/components/ui/Stat';
 import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
-import { RequestRow } from '@/components/widgets/RequestsWidget';
+import { RequestDecision, RequestRow } from '@/components/widgets/RequestsWidget';
 
 // Two-slice categorical split; validated pair.
 const SPLIT = [
@@ -51,6 +51,7 @@ export default function SeerrPage() {
                                 <div className="text-[11px] text-ink-3">{r.year} · {r.type === 'tv' ? 'Series' : 'Movie'}{r.is4k ? ' · 4K' : ''}</div>
                                 <div className="mt-2 text-[11px] text-ink-4">Requested by <span className="text-ink-2">{r.requestedBy}</span></div>
                                 <div className="text-[11px] text-ink-4">{relative(r.createdAt)}</div>
+                                <div className="mt-2"><RequestDecision r={r} /></div>
                               </div>
                             </div>
                           </div>

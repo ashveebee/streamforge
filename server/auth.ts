@@ -3,6 +3,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from './config.js';
+import { membersCanSignIn } from './access.js';
 import { newDeviceId, sessions, SESSION_COOKIE, type Session } from './lib/sessions.js';
 import { UpstreamError } from './lib/http.js';
 import * as jellyfin from './services/jellyfin.js';
@@ -43,6 +44,15 @@ export function publicUser(s: Session) {
   };
 }
 
+/** Restricts a route to Jellyfin administrators. Use after requireAuth. */
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdmin) {
+    res.status(403).json({ error: 'forbidden', message: 'Only Jellyfin administrators can do this.' });
+    return;
+  }
+  next();
+}
+
 export const ctxOf = (s: Session): jellyfin.JfCtx => ({
   token: s.token,
   deviceId: s.deviceId,
@@ -65,7 +75,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       session.lastValidatedAt = Date.now();
       session.isAdmin = !!user.Policy?.IsAdministrator;
       session.primaryImageTag = user.PrimaryImageTag;
-      if (user.Policy?.IsDisabled || (!session.isAdmin && !config.allowNonAdmin)) {
+      if (user.Policy?.IsDisabled || (!session.isAdmin && !membersCanSignIn())) {
         throw new UpstreamError('Access revoked', 401);
       }
     } catch (err) {
@@ -176,7 +186,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   try {
     const result = await jellyfin.authenticate(body.data.username, body.data.password, deviceId);
     const isAdmin = !!result.User.Policy?.IsAdministrator;
-    if (!isAdmin && !config.allowNonAdmin) {
+    if (!isAdmin && !membersCanSignIn()) {
       await jellyfin.logout(result.AccessToken, deviceId);
       res.status(403).json({
         error: 'forbidden',

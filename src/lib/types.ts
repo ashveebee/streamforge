@@ -21,7 +21,11 @@ export interface HealthIssue {
 }
 
 export interface ServiceHealth {
-  id: ServiceId;
+  /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
+  id: string;
+  kind: ServiceId;
+  /** Set for extra Sonarr/Radarr instances. */
+  instance?: string;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -71,7 +75,37 @@ export interface DownloadSnapshot {
   peak: number;
   history: { t: number; sonarr: number; radarr: number }[];
   itemSpeeds: Record<string, number>;
+  /** `instance:id` → when the item last made progress (only items stuck 30+ min). */
+  stalled?: Record<string, string>;
   sampleIntervalMs: number;
+}
+
+export type CleanupAction = 'blocklist-search' | 'blocklist' | 'remove';
+
+export interface CleanupEntry {
+  id: string;
+  at: string;
+  instance: string;
+  instanceName: string;
+  kind: 'sonarr' | 'radarr';
+  title: string;
+  release: string;
+  reason: string;
+  action: CleanupAction;
+  outcome: 'done' | 'failed' | 'preview';
+  error?: string;
+}
+
+export interface CleanupStatus {
+  settings: { enabled: boolean; stalledHours: number; failed: boolean; action: CleanupAction };
+  actions: CleanupAction[];
+  stallHours: number[];
+  available: boolean;
+  lastRun?: string;
+  nextRun?: string;
+  watching: number;
+  pending: number;
+  log: CleanupEntry[];
 }
 
 export interface NowPlaying {
@@ -186,6 +220,11 @@ export interface PlayDay {
 export interface QueueItem {
   id: number;
   source: 'sonarr' | 'radarr';
+  /** Instance id (`sonarr`, `radarr`, or an extra instance like `radarr-4k`). */
+  instance: string;
+  instanceName?: string;
+  downloadId?: string;
+  added?: string;
   title: string;
   subtitle?: string;
   releaseTitle: string;
@@ -358,6 +397,9 @@ export interface ServiceSettingsView {
   name: string;
   source: SettingsSource;
   configured: boolean;
+  /** Disabled services keep their settings but are hidden and not polled. */
+  enabled: boolean;
+  canDisable: boolean;
   /** Whether environment variables exist to fall back to. */
   envAvailable: boolean;
   updatedAt?: string;
@@ -370,6 +412,37 @@ export interface ServiceSettingsView {
   statusPath?: string;
   healthPath?: string;
   mounts?: string[];
+}
+
+export type ArrKind = 'sonarr' | 'radarr';
+
+/** Parts of the app a member can be given access to. */
+export type Area = 'now-playing' | 'stats' | 'library' | 'system' | ServiceId;
+
+export interface MemberAccess {
+  signIn: boolean;
+  areas: Area[];
+  available: Area[];
+}
+
+/** A Sonarr/Radarr instance as listed in /api/config. */
+export interface ArrInstanceRef {
+  id: string;
+  kind: ArrKind;
+  name: string;
+  primary: boolean;
+}
+
+/** An extra instance as shown on the Settings page. */
+export interface ArrInstanceView {
+  id: string;
+  kind: ArrKind;
+  name: string;
+  url: string;
+  enabled: boolean;
+  apiKeySet: boolean;
+  apiKeyHint?: string;
+  createdAt: string;
 }
 
 export interface ServiceSettingsInput {
@@ -385,3 +458,144 @@ export interface ServiceSettingsInput {
 export type ConnectionTest =
   | { ok: true; version?: string; latencyMs: number; issues: HealthIssue[] }
   | { ok: false; message: string };
+
+/* ------------------------------ auto-import ------------------------------ */
+
+export type AutoImportMethod = 'sonarr' | 'radarr' | 'grab-history' | 'parser' | 'title-match' | 'numbering';
+export type AutoImportOutcome = 'imported' | 'queued' | 'skipped' | 'failed' | 'preview';
+
+export interface AutoImportFile {
+  name: string;
+  /** Series or movie title. */
+  title?: string;
+  /** Episode range or movie year. */
+  detail?: string;
+  titleMethod?: AutoImportMethod;
+  detailMethod?: AutoImportMethod;
+  ok: boolean;
+  reason?: string;
+}
+
+export interface AutoImportEntry {
+  id: string;
+  at: string;
+  trigger: 'schedule' | 'queue' | 'manual';
+  instance: string;
+  instanceName?: string;
+  title: string;
+  release: string;
+  outcome: AutoImportOutcome;
+  message: string;
+  files: AutoImportFile[];
+}
+
+export interface AutoImportStatus {
+  settings: { enabled: boolean; intervalMinutes: number };
+  intervals: number[];
+  running: boolean;
+  lastRun?: string;
+  lastError?: string;
+  nextRun?: string;
+  stuck: number;
+  log: AutoImportEntry[];
+}
+
+/* ------------------------------ notifications ----------------------------- */
+
+export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending';
+export type ChannelType = 'discord' | 'ntfy' | 'pushover' | 'webhook' | 'webpush';
+
+export interface NotifyChannel {
+  id: string;
+  type: ChannelType;
+  name: string;
+  enabled: boolean;
+  events: NotifyEvent[];
+  /** Non-secret fields. */
+  config: Record<string, string>;
+  /** Hints for saved secret fields (undefined = not set). */
+  secrets: Record<string, string | undefined>;
+}
+
+export interface ChannelInput {
+  type: ChannelType;
+  name: string;
+  enabled: boolean;
+  events: NotifyEvent[];
+  /** Omit a secret field to keep the saved value. */
+  config: Record<string, string>;
+}
+
+export interface NotificationsStatus {
+  channels: NotifyChannel[];
+  events: NotifyEvent[];
+  defaultEvents: NotifyEvent[];
+  deliveries: { at: string; channel: string; event: NotifyEvent | 'test'; title: string; ok: boolean; error?: string }[];
+  push: { publicKey: string; devices: number };
+  publicUrl: string;
+}
+
+export interface MissingItem {
+  id: number;
+  title: string;
+  subtitle?: string;
+  date?: string;
+  poster?: string;
+}
+export interface MissingPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: MissingItem[];
+}
+
+export interface PlaybackStats {
+  days: number;
+  source: 'recorder' | 'activity' | 'mixed';
+  recording: boolean;
+  recordingSince?: string;
+  totals: { plays: number; hours?: number; users: number; transcodeShare?: number };
+  daily: { date: string; plays: number; direct: number; transcode: number; hours: number }[];
+  /** [weekday Mon..Sun][hour 0..23] → plays started. */
+  heatmap: number[][];
+  topUsers: { name: string; plays: number; hours: number }[];
+  topTitles: { name: string; plays: number; hours: number }[];
+  topClients: { name: string; plays: number; hours: number }[];
+}
+
+export interface StorageForecast {
+  alertPercent: number;
+  volumes: {
+    key: string;
+    label: string;
+    used: number;
+    total: number;
+    usage: number;
+    since: string;
+    /** Bytes per day; undefined until there's a day of history. */
+    growthPerDay?: number;
+    daysLeft?: number;
+    fullOn?: string;
+    history: { t: number; used: number }[];
+  }[];
+}
+
+export interface LibraryHealthItem {
+  title: string;
+  year?: number;
+  detail: string;
+  instance?: string;
+  instanceName?: string;
+  poster?: string;
+}
+type Section = { total: number; items: LibraryHealthItem[] };
+export interface LibraryHealth {
+  checkedAt: string;
+  hasSonarr: boolean;
+  hasRadarr: boolean;
+  hasJellyfin: boolean;
+  incomplete?: Section;
+  upgrades: { instance: string; instanceName?: string; kind: ArrKind; name: string; count: number }[];
+  notInJellyfin?: Section;
+  unmanaged?: Section;
+}

@@ -1,78 +1,93 @@
-import { Readable } from 'node:stream';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { Router } from 'express';
-import { ctxOf, requireAuth } from './auth.js';
-import { UpstreamError, type ServiceClient } from './lib/http.js';
+import { z } from 'zod';
+import { handle, HttpError, pipeImage } from './lib/handle.js';
+import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup, type CleanupAction } from './services/cleanup.js';
+import { arrRouter } from './arrRoutes.js';
+import { ctxOf, requireAdmin, requireAuth } from './auth.js';
+import { allowedAreas, canSee, requireArea } from './access.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
-import { isConfigured, SERVICE_IDS } from './settings.js';
+import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
 import { settingsRouter } from './settingsRoutes.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
-import { COVER_FILE_RE, radarr, radarrOverview, sonarr, sonarrOverview } from './services/arr.js';
+import { anyInstance, arrInstances } from './services/instances.js';
+import { playbackStats } from './services/playStats.js';
+import { libraryHealth } from './services/libraryHealth.js';
+import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
-import { seerrOverview } from './services/seerr.js';
+import { decideRequest, seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
-import type { ServiceId } from './services/types.js';
 
 export const api = Router();
 api.use(requireAuth);
-
-/** Wraps a handler so upstream failures become clean JSON errors. */
-function handle(service: ServiceId | null, fn: (req: Request) => Promise<unknown>) {
-  return async (req: Request, res: Response) => {
-    if (service && !isConfigured(service)) {
-      res.status(404).json({ error: 'not_configured', service, message: `${service} is not configured` });
-      return;
-    }
-    try {
-      res.set('Cache-Control', 'no-store').json(await fn(req));
-    } catch (err) {
-      const e = err as UpstreamError;
-      const status = e instanceof UpstreamError ? 502 : 500;
-      if (status === 500) console.error(`[${service ?? 'api'}]`, err);
-      res.status(status).json({ error: 'upstream', service, message: e.message });
-    }
-  };
-}
-
-/** Streams an upstream image to the client with sensible cache headers. */
-async function pipeImage(res: Response, upstream: Promise<globalThis.Response>) {
-  try {
-    const r = await upstream;
-    const type = r.headers.get('content-type') ?? '';
-    if (!r.ok || !r.body || !type.startsWith('image/')) {
-      res.status(r.status === 200 ? 404 : r.status).end();
-      return;
-    }
-    res.set({
-      'Content-Type': type,
-      'Cache-Control': 'private, max-age=86400',
-      'X-Content-Type-Options': 'nosniff',
-    });
-    const len = r.headers.get('content-length');
-    if (len) res.set('Content-Length', len);
-    Readable.fromWeb(r.body as never).pipe(res);
-  } catch {
-    res.status(502).end();
-  }
-}
+api.use(requireArea);
 
 /* --------------------------------- core --------------------------------- */
 
-api.get('/config', (_req, res) => {
+api.get('/config', (req, res) => {
   res.json({
+    // Sonarr/Radarr count as configured when any instance is set up.
     services: Object.fromEntries(
-      SERVICE_IDS.map((id) => [
-        id,
-        isConfigured(id),
-      ]),
+      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id))]),
     ),
+    // A service the user can't see counts as switched off for them.
+    enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id) && canSee(req, id)])),
+    instances: arrInstances()
+      .filter((i) => canSee(req, i.kind))
+      .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
+    /** Areas this user can open; null means everything (admins). */
+    access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
   });
 });
-api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot()));
-api.post('/health/recheck', handle(null, () => recheck()));
+api.get('/health', (req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot((kind) => canSee(req, kind))));
+api.post('/health/recheck', handle(null, async (req) => {
+  await recheck();
+  return healthSnapshot((kind) => canSee(req, kind));
+}));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));
+api.get('/storage/forecast', (_req, res) => res.set('Cache-Control', 'no-store').json(storageForecast()));
+api.put(
+  '/storage/alert',
+  requireAdmin,
+  handle(null, async (req) => {
+    const p = Number((req.body as { percent?: unknown } | undefined)?.percent);
+    if (!Number.isInteger(p) || p < 50 || p > 99) throw new HttpError(400, 'Pick a value between 50 and 99%');
+    return setAlertPercent(p);
+  }),
+);
+
+/* Stalled/failed download cleanup across every Sonarr/Radarr instance. */
+const cleanupPatch = z
+  .object({
+    enabled: z.boolean().optional(),
+    stalledHours: z.number().refine((n) => (STALL_HOURS as readonly number[]).includes(n), 'Unsupported period').optional(),
+    failed: z.boolean().optional(),
+    action: z.enum(CLEANUP_ACTIONS as [CleanupAction, ...CleanupAction[]]).optional(),
+  })
+  .strict();
+api.get('/downloads/cleanup', (_req, res) => res.set('Cache-Control', 'no-store').json(cleanupStatus()));
+api.put(
+  '/downloads/cleanup',
+  requireAdmin,
+  handle(null, async (req) => {
+    const r = cleanupPatch.safeParse(req.body ?? {});
+    if (!r.success) throw new HttpError(400, r.error.issues[0]?.message ?? 'Invalid settings');
+    console.log(`[cleanup] settings changed by ${req.session!.userName}: ${JSON.stringify(r.data)}`);
+    return updateCleanup(r.data);
+  }),
+);
+api.post(
+  '/downloads/cleanup/run',
+  requireAdmin,
+  handle(null, async (req) => {
+    const dryRun = (req.body as { dryRun?: unknown } | undefined)?.dryRun === true;
+    const results = await runCleanup({ dryRun });
+    return { results, status: cleanupStatus() };
+  }),
+);
 
 /* -------------------------------- jellyfin ------------------------------ */
 
@@ -81,6 +96,32 @@ api.get('/jellyfin/overview', handle('jellyfin', (req) => jellyfin.overview(ctxO
 api.get('/jellyfin/latest', handle('jellyfin', (req) => jellyfin.latest(ctxOf(req.session!))));
 api.get('/jellyfin/activity', handle('jellyfin', (req) => jellyfin.activity(ctxOf(req.session!))));
 api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/stats',
+  handle('jellyfin', (req) => {
+    const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    return playbackStats(ctxOf(req.session!), days);
+  }),
+);
+
+const sessionBody = z
+  .object({ command: z.enum(['pause', 'unpause', 'stop', 'message']), text: z.string().trim().max(500).optional() })
+  .strict();
+api.post(
+  '/jellyfin/sessions/:id/control',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    const b = sessionBody.safeParse(req.body ?? {});
+    if (!jellyfin.SESSION_ID_RE.test(id) || !b.success) throw new HttpError(400, 'Invalid request');
+    if (b.data.command === 'message' && !b.data.text) throw new HttpError(400, 'Enter a message');
+    // A stop can carry a message explaining why, shown before playback ends.
+    if (b.data.command === 'stop' && b.data.text) await jellyfin.controlSession(ctxOf(req.session!), id, 'message', b.data.text);
+    await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
+    console.log(`[jellyfin] session ${id}: ${b.data.command} by ${req.session!.userName}`);
+    return { ok: true };
+  }),
+);
 
 function imageOpts(req: Request) {
   const tag = typeof req.query.tag === 'string' && /^[\w-]{1,64}$/.test(req.query.tag) ? req.query.tag : undefined;
@@ -109,27 +150,21 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
 
 /* ---------------------------------- arr --------------------------------- */
 
-function coverRoute(getClient: () => ServiceClient | undefined) {
-  return (req: Request, res: Response) => {
-    const client = getClient();
-    const id = String(req.params.id);
-    const file = String(req.params.file);
-    if (!client || !/^\d{1,9}$/.test(id) || !COVER_FILE_RE.test(file)) {
-      res.status(400).end();
-      return;
-    }
-    // Ask for the small variant (e.g. poster-250.jpg) unless one was requested.
-    const sized = /-\d+\./.test(file) ? file : file.replace(/\.(\w+)$/, '-500.$1');
-    void pipeImage(res, client.raw(`/MediaCover/${id}/${sized}`, undefined, { Accept: 'image/*' }));
-  };
-}
-
-api.get('/sonarr/overview', handle('sonarr', () => sonarrOverview()));
-api.get('/sonarr/cover/:id/:file', coverRoute(sonarr));
-api.get('/radarr/overview', handle('radarr', () => radarrOverview()));
-api.get('/radarr/cover/:id/:file', coverRoute(radarr));
+api.use(arrRouter);
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
 api.get('/seerr/overview', handle('seerr', () => seerrOverview()));
+api.post(
+  '/seerr/requests/:id/:decision',
+  requireAdmin,
+  handle('seerr', async (req) => {
+    const id = Number(req.params.id);
+    const decision = String(req.params.decision);
+    if (!Number.isInteger(id) || id <= 0 || (decision !== 'approve' && decision !== 'decline')) throw new HttpError(400, 'Invalid request');
+    await decideRequest(id, decision);
+    console.log(`[seerr] request #${id} ${decision}d by ${req.session!.userName}`);
+    return { ok: true };
+  }),
+);
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));
 
 /* -------------------------------- settings ------------------------------ */

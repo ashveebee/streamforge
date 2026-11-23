@@ -8,6 +8,11 @@ import { authRouter, requireCsrfHeader } from './auth.js';
 import { api } from './routes.js';
 import { startMonitors } from './health.js';
 import { startHostMetrics } from './host.js';
+import { startAutoImport } from './services/autoImport.js';
+import { startCleanup } from './services/cleanup.js';
+import { startSeerrWatch } from './services/seerr.js';
+import { startPlaybackRecorder } from './services/playStats.js';
+import { startStorageSampler } from './services/storage.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -48,7 +53,21 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDist = path.resolve(here, '..', 'dist');
 if (existsSync(webDist)) {
-  app.use(express.static(webDist, { index: false, maxAge: '1y', immutable: true }));
+  // The service worker and manifest must always be revalidated, or updates never arrive.
+  app.get(['/sw.js', '/manifest.webmanifest'], (req, res, next) => {
+    res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+    if (req.path.endsWith('.webmanifest')) res.type('application/manifest+json');
+    next();
+  });
+  app.use(
+    express.static(webDist, {
+      index: false,
+      setHeaders: (res, file) => {
+        // Only Vite's hashed bundles are safe to cache forever.
+        res.set('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    }),
+  );
   app.get(/^(?!\/api\/).*/, (_req, res) => {
     res.set('Cache-Control', 'no-cache').sendFile(path.join(webDist, 'index.html'));
   });
@@ -67,4 +86,9 @@ app.listen(config.port, config.host, () => {
   if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
   startMonitors();
   void startHostMetrics();
+  startAutoImport();
+  startCleanup();
+  startSeerrWatch();
+  startPlaybackRecorder();
+  startStorageSampler();
 });

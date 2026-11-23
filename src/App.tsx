@@ -1,7 +1,12 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanSee } from '@/hooks/queries';
+import type { Area } from '@/lib/types';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/States';
 import { AppShell } from '@/components/layout/AppShell';
 import { LogoMark } from '@/components/layout/Logo';
 import Login from '@/pages/Login';
@@ -15,6 +20,8 @@ const Prowlarr = lazy(() => import('@/pages/Prowlarr'));
 const Seerr = lazy(() => import('@/pages/Seerr'));
 const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
 const System = lazy(() => import('@/pages/System'));
+const Stats = lazy(() => import('@/pages/Stats'));
+const LibraryHealth = lazy(() => import('@/pages/LibraryHealth'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -43,7 +50,24 @@ function PublicOnly() {
   return <Outlet />;
 }
 
-const page = (el: React.ReactNode) => <Suspense fallback={<div className="min-h-[60vh]" />}>{el}</Suspense>;
+/** Pages a member hasn't been given access to say so instead of erroring. */
+function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }) {
+  const canSee = useCanSee();
+  if (area && !canSee(area)) {
+    return (
+      <Card>
+        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask a Jellyfin administrator if you need it." />
+      </Card>
+    );
+  }
+  return <>{children}</>;
+}
+
+const page = (el: React.ReactNode, area?: Area) => (
+  <Suspense fallback={<div className="min-h-[60vh]" />}>
+    <AreaGate area={area}>{el}</AreaGate>
+  </Suspense>
+);
 
 const router = createBrowserRouter([
   { element: <PublicOnly />, children: [{ path: '/login', element: <Login /> }] },
@@ -51,15 +75,17 @@ const router = createBrowserRouter([
     element: <Protected />,
     children: [
       { path: '/', element: <Dashboard /> },
-      { path: '/now-playing', element: page(<NowPlaying />) },
-      { path: '/system', element: page(<System />) },
+      { path: '/now-playing', element: page(<NowPlaying />, 'now-playing') },
+      { path: '/system', element: page(<System />, 'system') },
+      { path: '/stats', element: page(<Stats />, 'stats') },
+      { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
-      { path: '/jellyfin', element: page(<Jellyfin />) },
-      { path: '/sonarr', element: page(<Sonarr />) },
-      { path: '/radarr', element: page(<Radarr />) },
-      { path: '/prowlarr', element: page(<Prowlarr />) },
-      { path: '/seerr', element: page(<Seerr />) },
-      { path: '/infinidisk', element: page(<Infinidisk />) },
+      { path: '/jellyfin', element: page(<Jellyfin />, 'jellyfin') },
+      { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },
+      { path: '/radarr', element: page(<Radarr />, 'radarr') },
+      { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },
+      { path: '/seerr', element: page(<Seerr />, 'seerr') },
+      { path: '/infinidisk', element: page(<Infinidisk />, 'infinidisk') },
       { path: '*', element: page(<NotFound />) },
     ],
   },

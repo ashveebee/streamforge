@@ -11,6 +11,11 @@
 import express from 'express';
 import type {
   ActivityEntry,
+  AutoImportEntry,
+  AutoImportStatus,
+  CleanupStatus,
+  NotificationsStatus,
+  MemberAccess,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -393,6 +398,7 @@ function health(): HealthSnapshot {
           : [];
     return {
       id,
+      kind: id,
       name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
       configured: true,
       status: id === 'prowlarr' ? 'degraded' : 'healthy',
@@ -465,12 +471,37 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
           { title: 'Iron Bloom', subtitle: '2026', size: 18.4 * GB, pct: 0.57, rate: 22e6, quality: 'Bluray-2160p' },
           { title: 'Lanterns Over Kessa', subtitle: '2024', size: 8.7 * GB, pct: 0.23, rate: 11e6, quality: 'Remux-1080p' },
         ];
-  return items.map((it, i) => {
+  const stuck: QueueItem[] =
+    source === 'sonarr'
+      ? [
+          {
+            id: 9,
+            source,
+            instance: source,
+            title: 'Low Tide',
+            subtitle: 'S3E3 · Riptide',
+            releaseTitle: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
+            status: 'completed',
+            trackedState: 'importPending',
+            trackedStatus: 'warning',
+            protocol: 'torrent',
+            client: 'qBittorrent',
+            quality: 'WEBDL-1080p',
+            size: 1.9 * GB,
+            sizeLeft: 0,
+            progress: 1,
+            warnings: ['Found matching series via grab history, but release was matched to series by ID. Automatic import is not possible.'],
+            poster: poster('Low Tide'),
+          },
+        ]
+      : [];
+  return [...items.map((it, i) => {
     const left = Math.max(0.05 * it.size, it.size * (1 - it.pct) - it.rate * elapsed);
     const progress = 1 - left / it.size;
     return {
       id: i + 1,
       source,
+      instance: source,
       title: it.title,
       subtitle: it.subtitle,
       releaseTitle: `${it.title.replace(/\s+/g, '.')}.${it.quality}.DEMO-GROUP`,
@@ -488,7 +519,7 @@ function queue(source: 'sonarr' | 'radarr'): QueueItem[] {
       warnings: [],
       poster: poster(it.title),
     };
-  });
+  }), ...stuck];
 }
 
 function downloads(): DownloadSnapshot {
@@ -505,6 +536,7 @@ function downloads(): DownloadSnapshot {
     peak: Math.max(...history.map((h) => h.sonarr + h.radarr)),
     history,
     itemSpeeds: { 'sonarr:1': 9e6, 'sonarr:2': 4e6, 'sonarr:3': 0, 'radarr:1': 22e6, 'radarr:2': 11e6 },
+    stalled: { 'sonarr:3': iso(2 * HOUR + 14 * MIN) },
     sampleIntervalMs: 5_000,
   };
 }
@@ -705,6 +737,54 @@ function infinidisk(): InfinidiskOverview {
   };
 }
 
+const disabledServices = new Set<ServiceId>();
+const autoImport: AutoImportStatus = {
+  settings: { enabled: true, intervalMinutes: 15 },
+  intervals: [5, 15, 30, 60, 180, 360],
+  running: false,
+  lastRun: iso(6 * 60_000),
+  nextRun: ahead(9 * 60_000),
+  stuck: 1,
+  log: [
+    {
+      id: 'demo-1',
+      at: iso(2 * HOUR),
+      trigger: 'queue',
+      instance: 'sonarr',
+      title: 'Signal Fire',
+      release: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO',
+      outcome: 'imported',
+      message: 'Imported 1 of 1 file',
+      files: [{ name: 'Signal.Fire.2025.S02E05.Containment.Line.1080p.AMZN.WEB-DL-DEMO.mkv', title: 'Signal Fire', detail: 'S02E05', titleMethod: 'title-match', detailMethod: 'numbering', ok: true }],
+    },
+    {
+      id: 'demo-2',
+      at: iso(9 * HOUR),
+      trigger: 'schedule',
+      instance: 'sonarr',
+      title: 'Starfall Academy',
+      release: 'Starfall.Academy.Season.1.Complete.1080p.WEB-DEMO',
+      outcome: 'imported',
+      message: 'Imported 8 of 9 files',
+      files: [
+        { name: 'Starfall.Academy.S01E01.mkv', title: 'Starfall Academy', detail: 'S01E01', titleMethod: 'grab-history', detailMethod: 'parser', ok: true },
+        { name: 'Starfall.Academy.Extras.Featurette.mkv', title: 'Starfall Academy', titleMethod: 'grab-history', ok: false, reason: 'Could not work out which episode(s) this is' },
+      ],
+    },
+    {
+      id: 'demo-3',
+      at: iso(26 * HOUR),
+      trigger: 'schedule',
+      instance: 'sonarr',
+      title: 'The Cartographers',
+      release: 'The.Cartographers.S01E02.720p.HDTV-DEMO',
+      outcome: 'skipped',
+      message: 'Not an upgrade for existing episode file(s)',
+      files: [{ name: 'The.Cartographers.S01E02.720p.HDTV-DEMO.mkv', ok: false, reason: 'Not an upgrade for existing episode file(s)' }],
+    },
+  ],
+};
+
 function settings(): ServiceSettingsView[] {
   const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined };
   return (Object.keys(VERSIONS) as ServiceId[]).map((id) => ({
@@ -712,6 +792,8 @@ function settings(): ServiceSettingsView[] {
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
     source: id === 'infinidisk' ? 'environment' : 'database',
     configured: true,
+    enabled: !disabledServices.has(id),
+    canDisable: id !== 'jellyfin',
     envAvailable: id === 'infinidisk',
     updatedAt: id === 'infinidisk' ? undefined : iso((id.length * 5 + 3) * HOUR),
     updatedBy: id === 'infinidisk' ? undefined : 'Alex',
@@ -737,9 +819,30 @@ app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));
 app.get('/api/auth/server', json(() => ({ name: 'Homelab', version: '10.11.2', online: true, configured: true })));
 
-app.get('/api/config', json(() => ({ services: Object.fromEntries(Object.keys(VERSIONS).map((k) => [k, true])) })));
-app.get('/api/health', json(health));
-app.post('/api/health/recheck', json(health));
+app.get('/api/config', json(() => ({
+  services: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
+  enabled: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
+  instances: [
+    { id: 'sonarr', kind: 'sonarr', name: 'Sonarr', primary: true },
+    { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
+    { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
+  ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
+  access: null,
+})));
+const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] };
+app.get('/api/settings/members', json(() => members));
+app.put('/api/settings/members', (req, res) => {
+  Object.assign(members, req.body);
+  res.json(members);
+});
+const enabledHealth = () => {
+  const h = health();
+  const radarr = h.services.find((s) => s.id === 'radarr')!;
+  const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83 };
+  return { ...h, services: [...h.services, extra].filter((s) => !disabledServices.has(s.kind)) };
+};
+app.get('/api/health', json(enabledHealth));
+app.post('/api/health/recheck', json(enabledHealth));
 app.get('/api/system/host', json(host));
 app.get('/api/downloads', json(downloads));
 
@@ -749,11 +852,160 @@ app.get('/api/jellyfin/latest', json(latest));
 app.get('/api/jellyfin/activity', json(activity));
 app.get('/api/jellyfin/plays', json(plays));
 app.get('/api/sonarr/overview', json(sonarr));
-app.get('/api/radarr/overview', json(radarr));
+const radarrAutoImport: AutoImportStatus = { ...autoImport, settings: { enabled: false, intervalMinutes: 30 }, nextRun: undefined, stuck: 0, log: [] };
+app.get('/api/radarr/auto-import', json(() => radarrAutoImport));
+app.put('/api/radarr/auto-import', (req, res) => {
+  Object.assign(radarrAutoImport.settings, req.body);
+  res.json(radarrAutoImport);
+});
+app.post('/api/radarr/auto-import/run', (_req, res) => res.json({ results: [], status: radarrAutoImport }));
+app.get('/api/settings/instances', json(() => ({
+  instances: [{ id: 'radarr-4k', kind: 'radarr', name: '4K', url: 'https://radarr-4k.example.com', enabled: true, apiKeySet: true, apiKeyHint: '••••77ab', createdAt: iso(20 * DAY) }],
+})));
+app.post('/api/settings/instances/test', (_req, res) => res.json({ ok: true, version: VERSIONS.radarr, latencyMs: 80, issues: [] }));
+app.get('/api/sonarr/auto-import', json(() => autoImport));
+app.put('/api/sonarr/auto-import', (req, res) => {
+  Object.assign(autoImport.settings, req.body);
+  autoImport.nextRun = autoImport.settings.enabled ? ahead(autoImport.settings.intervalMinutes * 60_000) : undefined;
+  res.json(autoImport);
+});
+app.post('/api/sonarr/auto-import/run', (req, res) => {
+  const entry: AutoImportEntry = {
+    id: `demo-${Date.now()}`,
+    at: new Date().toISOString(),
+    trigger: 'manual',
+    instance: 'sonarr',
+    title: 'Low Tide',
+    release: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO',
+    outcome: req.body?.dryRun ? 'preview' : 'imported',
+    message: req.body?.dryRun ? 'Would import 1 of 1 file' : 'Imported 1 of 1 file',
+    files: [{ name: 'Low.Tide.UK.S03E03.1080p.WEB.H264-DEMO.mkv', title: 'Low Tide', detail: 'S03E03', titleMethod: 'grab-history', detailMethod: 'parser', ok: true }],
+  };
+  if (!req.body?.dryRun) {
+    autoImport.log.unshift(entry);
+    autoImport.lastRun = entry.at;
+  }
+  res.json({ results: [entry], status: autoImport });
+});
+app.get('/api/radarr/overview', (req, res) => {
+  const d = radarr();
+  const inst = req.query.instance === 'radarr-4k' ? 'radarr-4k' : 'radarr';
+  if (inst === 'radarr') return res.set('Cache-Control', 'no-store').json(d);
+  // The 4K instance: same library, a smaller queue.
+  const items = d.queue.items.slice(0, 1).map((i) => ({ ...i, instance: inst, instanceName: '4K', quality: 'Remux-2160p' }));
+  res.set('Cache-Control', 'no-store').json({ ...d, queue: { total: items.length, items } });
+});
 app.get('/api/prowlarr/overview', json(prowlarr));
 app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));
 
+app.post('/api/:kind/queue/:id/action', (_req, res) => res.json({ ok: true }));
+app.get('/api/:kind/missing', (req, res) => {
+  const sonarr = req.params.kind === 'sonarr';
+  const titles = sonarr ? ['Low Tide', 'Atlas Station', 'Signal Fire', 'Kitchen Brigade'] : ['Small Hours', 'The Last Lighthouse', 'Velvet Static'];
+  const items = titles.map((t, i) => ({
+    id: i + 1,
+    title: t,
+    subtitle: sonarr ? `S0${i + 1}E0${i + 2} · Episode ${i + 2}` : String(2023 + i),
+    date: iso((i + 1) * 3 * DAY),
+    poster: poster(t),
+  }));
+  res.json({ total: sonarr ? 41 : 17, page: 1, pageSize: 25, items });
+});
+app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
+app.post('/api/seerr/requests/:id/:decision', (_req, res) => res.json({ ok: true }));
+app.post('/api/jellyfin/sessions/:id/control', (_req, res) => res.json({ ok: true }));
+app.get('/api/jellyfin/stats', (req, res) => {
+  const days = Number(req.query.days) || 30;
+  const r = rng(`stats${days}`);
+  const daily = Array.from({ length: days }, (_, i) => {
+    const d = new Date(Date.now() - (days - 1 - i) * DAY);
+    const weekend = d.getDay() === 0 || d.getDay() === 6;
+    const direct = Math.round(r() * 6 + (weekend ? 5 : 2));
+    const transcode = Math.round(r() * 3);
+    return { date: d.toISOString().slice(0, 10), plays: direct + transcode, direct, transcode, hours: Math.round((direct + transcode) * 0.8 * 10) / 10 };
+  });
+  const heatmap = Array.from({ length: 7 }, (_, w) =>
+    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r())),
+  );
+  const plays = daily.reduce((a, d) => a + d.plays, 0);
+  const tc = daily.reduce((a, d) => a + d.transcode, 0);
+  const users = ['Alex', 'Maya', 'Leo', 'Priya', 'Sam'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
+  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
+  const clients = ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Infuse'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
+  res.json({ days, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays, hours: Math.round(plays * 0.8), users: 5, transcodeShare: tc / plays }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
+});
+const cleanup: CleanupStatus = {
+  settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },
+  actions: ['blocklist-search', 'blocklist', 'remove'],
+  stallHours: [1, 2, 3, 6, 12, 24, 48],
+  available: true,
+  lastRun: iso(3 * MIN),
+  nextRun: ahead(2 * MIN),
+  watching: 6,
+  pending: 0,
+  log: [
+    { id: 'c1', at: iso(5 * HOUR), instance: 'radarr', instanceName: 'Radarr', kind: 'radarr', title: 'Small Hours · 2025', release: 'Small.Hours.2025.1080p.WEB-DEMO', reason: 'No progress for 6 hours', action: 'blocklist-search', outcome: 'done' },
+    { id: 'c2', at: iso(30 * HOUR), instance: 'sonarr', instanceName: 'Sonarr', kind: 'sonarr', title: 'Low Tide · S3E2 · Slack Water', release: 'Low.Tide.S03E02.720p-DEMO', reason: 'Download failed: missing articles', action: 'blocklist-search', outcome: 'done' },
+  ],
+};
+app.get('/api/downloads/cleanup', json(() => cleanup));
+app.get('/api/library/health', json(() => ({
+  checkedAt: iso(2 * MIN),
+  hasSonarr: true,
+  hasRadarr: true,
+  hasJellyfin: true,
+  incomplete: { total: 3, items: [
+    { title: 'Low Tide', year: 2021, detail: '4 of 30 episodes missing', instance: 'sonarr', poster: poster('Low Tide') },
+    { title: 'The Cartographers', year: 2025, detail: '2 of 3 episodes missing', instance: 'sonarr', poster: poster('The Cartographers') },
+    { title: 'Kitchen Brigade', year: 2023, detail: '1 of 14 episodes missing · ended', instance: 'sonarr', poster: poster('Kitchen Brigade') },
+  ] },
+  upgrades: [
+    { instance: 'sonarr', kind: 'sonarr', name: 'Sonarr', count: 37 },
+    { instance: 'radarr', kind: 'radarr', name: 'Radarr', count: 12 },
+    { instance: 'radarr-4k', instanceName: '4K', kind: 'radarr', name: '4K', count: 0 },
+  ],
+  notInJellyfin: { total: 1, items: [{ title: 'Small Hours', year: 2025, detail: 'Downloaded in Radarr', instance: 'radarr', poster: poster('Small Hours') }] },
+  unmanaged: { total: 2, items: [{ title: 'Family Holiday 2019', detail: 'No metadata ids — identify it in Jellyfin' }, { title: 'Old Favourite', year: 1998, detail: 'Series not in Sonarr' }] },
+})));
+app.post('/api/:kind/search-upgrades', (_req, res) => res.json({ ok: true }));
+app.get('/api/storage/forecast', json(() => {
+  const vol = (key: string, label: string, totalTb: number, usedTb: number, growGb: number) => {
+    const total = totalTb * TB;
+    const used = usedTb * TB;
+    const g = growGb * GB;
+    const free = total - used;
+    const daysLeft = g > 0 ? Math.round(free / g) : undefined;
+    return {
+      key, label, used, total, usage: used / total, since: iso(30 * DAY), growthPerDay: g, daysLeft,
+      fullOn: daysLeft ? ahead(daysLeft * DAY) : undefined,
+      history: Array.from({ length: 30 }, (_, i) => ({ t: Date.now() - (29 - i) * DAY, used: used - (29 - i) * g + (i % 4) * GB * 5 })),
+    };
+  };
+  return { alertPercent: 90, volumes: [vol('inf:pool', 'Media pool', 48, 33.6, 61), vol('host:/mnt/downloads', '/mnt/downloads', 4, 1.1, 0), vol('host:/', '/', 1, 0.31, 2)] };
+}));
+app.put('/api/storage/alert', (_req, res) => res.json({ ok: true }));
+const notifications: NotificationsStatus = {
+  channels: [
+    { id: 'n1', type: 'discord', name: 'Discord #homelab', enabled: true, events: ['service_down', 'service_up', 'disk_low', 'import_failed', 'request_pending'], config: {}, secrets: { webhookUrl: 'webhook …8812' } },
+    { id: 'n2', type: 'ntfy', name: 'Phone (ntfy)', enabled: true, events: ['service_down', 'disk_low'], config: { server: 'https://ntfy.sh', topic: 'homelab-demo' }, secrets: {} },
+  ],
+  events: ['service_down', 'service_up', 'disk_low', 'import_done', 'import_failed', 'download_removed', 'request_pending'],
+  defaultEvents: ['service_down', 'service_up', 'disk_low', 'import_failed', 'download_removed', 'request_pending'],
+  deliveries: [
+    { at: iso(5 * HOUR), channel: 'Discord #homelab', event: 'download_removed', title: 'Removed stalled download: Small Hours · 2025', ok: true },
+    { at: iso(26 * HOUR), channel: 'Phone (ntfy)', event: 'service_down', title: 'Prowlarr is offline', ok: true },
+  ],
+  push: { publicKey: 'BDemoKeyNotUsable', devices: 1 },
+  publicUrl: 'https://streamforge.example.com',
+};
+app.get('/api/settings/notifications', json(() => notifications));
+app.all('/api/settings/notifications/*rest', (_req, res) => res.json({ ok: true, subscribed: false }));
+app.put('/api/downloads/cleanup', (req, res) => {
+  Object.assign(cleanup.settings, req.body);
+  res.json(cleanup);
+});
+app.post('/api/downloads/cleanup/run', (_req, res) => res.json({ results: [], status: cleanup }));
 app.get('/api/settings/services', json(() => ({ services: settings() })));
 app.post('/api/settings/services/:id/test', (req, res) => {
   const id = req.params.id as ServiceId;
@@ -762,6 +1014,12 @@ app.post('/api/settings/services/:id/test', (req, res) => {
 app.put('/api/settings/services/:id', (req, res) => {
   const s = settings().find((x) => x.id === req.params.id);
   res.json({ service: s, signedOut: false });
+});
+app.put('/api/settings/services/:id/enabled', (req, res) => {
+  const id = req.params.id as ServiceId;
+  if (req.body?.enabled) disabledServices.delete(id);
+  else if (id !== 'jellyfin') disabledServices.add(id);
+  res.json({ service: settings().find((x) => x.id === id), signedOut: false });
 });
 app.delete('/api/settings/services/:id', (req, res) => {
   const s = settings().find((x) => x.id === req.params.id);
