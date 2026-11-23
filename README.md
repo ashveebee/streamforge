@@ -7,6 +7,8 @@ Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
 server.
 
+[**Website**](https://ashveebee.github.io/streamforge/) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
+
 ![StreamForge dashboard: the stream playing now, health of every service, download activity and storage](docs/screenshots/dashboard.jpg)
 
 <sub>Screenshots use the built-in demo data. All titles, people and artwork are fictional.</sub>
@@ -327,3 +329,21 @@ To add an integration:
   If your Infinidisk API uses different field names, extend `normaliseRemote()`.
 - **Self-signed TLS.** If a service uses a self-signed certificate, point
   `NODE_EXTRA_CA_CERTS` at your CA bundle.
+
+## License
+
+StreamForge is **free for personal and non-commercial use**, and you're welcome
+to modify it. It's licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.md).
+
+- ✅ Run it at home, in a homelab, or for friends and family
+- ✅ Change it, fork it and share your changes (keep the license and its
+  `Required Notice` line with any copy)
+- ✅ Use by charities, schools, public research and government organisations
+- ❌ Commercial use, such as selling it, bundling it in a paid product or
+  service, or running it for a business, needs separate permission. Open an
+  issue to ask.
+
+This summary is for convenience; the [license text](LICENSE.md) is what applies.
+StreamForge is source-available rather than "open source" in the OSI sense,
+because the license doesn't allow commercial use.

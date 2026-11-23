@@ -29,9 +29,10 @@ RUN mkdir -p /data && chown node:node /data && chmod 700 /data
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-server ./dist-server
-COPY package.json ./
+COPY package.json LICENSE.md ./
 LABEL org.opencontainers.image.title="StreamForge" \
       org.opencontainers.image.description="A unified control centre for your Jellyfin media server ecosystem" \
+      org.opencontainers.image.licenses="PolyForm-Noncommercial-1.0.0" \
       org.opencontainers.image.version="${VERSION}"
 USER node
 VOLUME /data
