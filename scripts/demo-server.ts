@@ -906,6 +906,7 @@ app.get('/api/:kind/missing', (req, res) => {
 });
 app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
 app.post('/api/seerr/requests/:id/:decision', (_req, res) => res.json({ ok: true }));
+app.post('/api/jellyfin/sessions/:id/control', (_req, res) => res.json({ ok: true }));
 const cleanup: CleanupStatus = {
   settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },
   actions: ['blocklist-search', 'blocklist', 'remove'],

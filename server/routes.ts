@@ -73,6 +73,25 @@ api.get('/jellyfin/latest', handle('jellyfin', (req) => jellyfin.latest(ctxOf(re
 api.get('/jellyfin/activity', handle('jellyfin', (req) => jellyfin.activity(ctxOf(req.session!))));
 api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
 
+const sessionBody = z
+  .object({ command: z.enum(['pause', 'unpause', 'stop', 'message']), text: z.string().trim().max(500).optional() })
+  .strict();
+api.post(
+  '/jellyfin/sessions/:id/control',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    const b = sessionBody.safeParse(req.body ?? {});
+    if (!jellyfin.SESSION_ID_RE.test(id) || !b.success) throw new HttpError(400, 'Invalid request');
+    if (b.data.command === 'message' && !b.data.text) throw new HttpError(400, 'Enter a message');
+    // A stop can carry a message explaining why, shown before playback ends.
+    if (b.data.command === 'stop' && b.data.text) await jellyfin.controlSession(ctxOf(req.session!), id, 'message', b.data.text);
+    await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
+    console.log(`[jellyfin] session ${id}: ${b.data.command} by ${req.session!.userName}`);
+    return { ok: true };
+  }),
+);
+
 function imageOpts(req: Request) {
   const tag = typeof req.query.tag === 'string' && /^[\w-]{1,64}$/.test(req.query.tag) ? req.query.tag : undefined;
   const w = Number(req.query.w);

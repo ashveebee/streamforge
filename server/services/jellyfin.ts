@@ -609,3 +609,26 @@ export async function image(
     { headers: { ...authHeader(ctx.token, ctx.deviceId), Accept: 'image/*' }, service: 'jellyfin' },
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Session controls                                                    */
+/* ------------------------------------------------------------------ */
+
+export const SESSION_ID_RE = /^[\w-]{1,64}$/;
+export type SessionCommand = 'pause' | 'unpause' | 'stop' | 'message';
+
+/** Controls a playback session. Needs an administrator token. */
+export async function controlSession(ctx: JfCtx, sessionId: string, command: SessionCommand, text?: string) {
+  const token = serverToken(ctx);
+  const path =
+    command === 'message'
+      ? `/Sessions/${sessionId}/Message`
+      : `/Sessions/${sessionId}/Playing/${command === 'pause' ? 'Pause' : command === 'unpause' ? 'Unpause' : 'Stop'}`;
+  await requestJson(buildUrl(base(), path), {
+    method: 'POST',
+    headers: authHeader(token, ctx.deviceId),
+    body: command === 'message' ? { Header: 'Message from the server admin', Text: text ?? '', TimeoutMs: 15_000 } : undefined,
+    service: 'jellyfin',
+  });
+  cache.delete('jf:sessions:');
+}

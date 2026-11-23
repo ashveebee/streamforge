@@ -338,3 +338,14 @@ export function useDecideRequest() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seerr'] }),
   });
 }
+
+/* ---------------------------- jellyfin sessions ---------------------------- */
+
+export function useSessionControl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, command, text }: { id: string; command: 'pause' | 'unpause' | 'stop' | 'message'; text?: string }) =>
+      api<{ ok: true }>(`/jellyfin/sessions/${encodeURIComponent(id)}/control`, { method: 'POST', body: { command, text } }),
+    onSuccess: () => setTimeout(() => void qc.invalidateQueries({ queryKey: ['jellyfin', 'now-playing'] }), 800),
+  });
+}
