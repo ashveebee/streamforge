@@ -5,6 +5,7 @@ import { handle, HttpError, pipeImage } from './lib/handle.js';
 import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup, type CleanupAction } from './services/cleanup.js';
 import { arrRouter } from './arrRoutes.js';
 import { ctxOf, requireAdmin, requireAuth } from './auth.js';
+import { allowedAreas, canSee, requireArea } from './access.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
 import { settingsRouter } from './settingsRoutes.js';
@@ -20,21 +21,30 @@ import { infinidiskOverview } from './services/infinidisk.js';
 
 export const api = Router();
 api.use(requireAuth);
+api.use(requireArea);
 
 /* --------------------------------- core --------------------------------- */
 
-api.get('/config', (_req, res) => {
+api.get('/config', (req, res) => {
   res.json({
     // Sonarr/Radarr count as configured when any instance is set up.
     services: Object.fromEntries(
-      SERVICE_IDS.map((id) => [id, id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id)]),
+      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id))]),
     ),
-    enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id)])),
-    instances: arrInstances().map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
+    // A service the user can't see counts as switched off for them.
+    enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id) && canSee(req, id)])),
+    instances: arrInstances()
+      .filter((i) => canSee(req, i.kind))
+      .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
+    /** Areas this user can open; null means everything (admins). */
+    access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
   });
 });
-api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot()));
-api.post('/health/recheck', handle(null, () => recheck()));
+api.get('/health', (req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot((kind) => canSee(req, kind))));
+api.post('/health/recheck', handle(null, async (req) => {
+  await recheck();
+  return healthSnapshot((kind) => canSee(req, kind));
+}));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
 api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));

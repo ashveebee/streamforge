@@ -184,9 +184,9 @@ async function runAll() {
   await Promise.allSettled([...state.keys()].map(check));
 }
 
-export function healthSnapshot() {
+export function healthSnapshot(visible: (kind: ServiceId) => boolean = () => true) {
   // Disabled services are hidden entirely, not reported as "unconfigured".
-  const services = [...state.values()].filter((s) => isEnabled(s.kind));
+  const services = [...state.values()].filter((s) => isEnabled(s.kind) && visible(s.kind));
   return {
     services,
     checkedAt: lastRun ? new Date(lastRun).toISOString() : undefined,

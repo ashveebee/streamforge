@@ -13,7 +13,7 @@ import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordi
 import { CSS } from '@dnd-kit/utilities';
 import { Check, EyeOff, GripVertical, LayoutGrid, Plus, RefreshCw, RotateCcw, Scaling } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useHealth, useNowPlaying, useRecheck, useServiceConfig } from '@/hooks/queries';
+import { useHealth, useNowPlaying, useRecheck, useServiceConfig, useCanSee } from '@/hooks/queries';
 import { useLocalState } from '@/hooks/useLocalState';
 import { greeting, relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -132,13 +132,16 @@ function Summary() {
 export default function Dashboard() {
   const { user } = useAuth();
   const config = useServiceConfig();
+  const canSee = useCanSee();
   const recheck = useRecheck();
   const [stored, setStored] = useLocalState<Layout>(`sf:layout:v1:${user?.id ?? 'anon'}`, DEFAULT_LAYOUT);
   const layout = useMemo(() => normaliseLayout(stored), [stored]);
   const [editing, setEditing] = useState(false);
 
   const available = (id: string) => {
-    const req = WIDGET_MAP.get(id)?.requires;
+    const def = WIDGET_MAP.get(id);
+    if (def?.area && !canSee(def.area)) return false;
+    const req = def?.requires;
     if (!req || !config.data) return true;
     return req.some((s) => config.data.services[s]);
   };

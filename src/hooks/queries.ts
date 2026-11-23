@@ -3,6 +3,8 @@ import { api, ApiError } from '@/lib/api';
 import type {
   ActivityEntry,
   ArrInstanceRef,
+  Area,
+  MemberAccess,
   ArrInstanceView,
   ArrKind,
   ChannelInput,
@@ -53,13 +55,19 @@ export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
     queryFn: () =>
-      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[] }>('/config'),
+      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; access: Area[] | null }>('/config'),
     staleTime: Infinity,
   });
 
 export function useConfigured(id: ServiceId) {
   const { data } = useServiceConfig();
   return data?.services[id] ?? true;
+}
+
+/** Whether the signed-in user may open an area (always true for admins). */
+export function useCanSee() {
+  const { data } = useServiceConfig();
+  return (area: Area) => !data?.access || data.access.includes(area);
 }
 
 /** False only once the server says the service has been switched off. */
@@ -72,8 +80,10 @@ export const useHealth = () => useQuery(poll<HealthSnapshot>(['health'], '/healt
 export const useHost = () => useQuery(poll<HostSnapshot>(['host'], '/system/host', 5 * SECOND));
 export const useDownloads = () => useQuery(poll<DownloadSnapshot>(['downloads'], '/downloads', 5 * SECOND));
 
-export const useNowPlaying = () =>
-  useQuery(poll<NowPlaying[]>(['jellyfin', 'now-playing'], '/jellyfin/now-playing', 5 * SECOND));
+export const useNowPlaying = () => {
+  const on = useCanSee()('now-playing');
+  return useQuery(poll<NowPlaying[]>(['jellyfin', 'now-playing'], '/jellyfin/now-playing', 5 * SECOND, on));
+};
 export const useJellyfin = () =>
   useQuery(poll<JellyfinOverview>(['jellyfin', 'overview'], '/jellyfin/overview', 30 * SECOND));
 export const useLatest = () => useQuery(poll<LatestItem[]>(['jellyfin', 'latest'], '/jellyfin/latest', 120 * SECOND));
@@ -376,5 +386,18 @@ export function useSearchUpgrades() {
   return useMutation({
     mutationFn: ({ kind, instance }: { kind: ArrKind; instance: string }) =>
       api<{ ok: boolean }>(`/${kind}/search-upgrades`, { method: 'POST', body: { instance } }),
+  });
+}
+
+/* ------------------------------ member access ------------------------------ */
+
+export const useMemberAccess = () =>
+  useQuery({ queryKey: ['settings', 'members'], queryFn: ({ signal }) => api<MemberAccess>('/settings/members', { signal }) });
+
+export function useSaveMemberAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<Pick<MemberAccess, 'signIn' | 'areas'>>) => api<MemberAccess>('/settings/members', { method: 'PUT', body: patch }),
+    onSuccess: (d) => qc.setQueryData(['settings', 'members'], d),
   });
 }

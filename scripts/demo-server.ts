@@ -15,6 +15,7 @@ import type {
   AutoImportStatus,
   CleanupStatus,
   NotificationsStatus,
+  MemberAccess,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -826,7 +827,14 @@ app.get('/api/config', json(() => ({
     { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
+  access: null,
 })));
+const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] };
+app.get('/api/settings/members', json(() => members));
+app.put('/api/settings/members', (req, res) => {
+  Object.assign(members, req.body);
+  res.json(members);
+});
 const enabledHealth = () => {
   const h = health();
   const radarr = h.services.find((s) => s.id === 'radarr')!;

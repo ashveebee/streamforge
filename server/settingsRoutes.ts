@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
+import { AREAS, memberAccess, setMemberAccess } from './access.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { createClient, UpstreamError } from './lib/http.js';
@@ -409,4 +410,18 @@ settingsRouter.post('/notifications/push/unsubscribe', (req, res) => {
 settingsRouter.post('/notifications/push/status', (req, res) => {
   const endpoint = (req.body as { endpoint?: unknown } | undefined)?.endpoint;
   res.json({ subscribed: typeof endpoint === 'string' && hasPushSubscription(endpoint) });
+});
+
+/* ------------------------------ member access ----------------------------- */
+
+settingsRouter.get('/members', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ ...memberAccess(), areas: memberAccess().areas, available: AREAS });
+});
+
+settingsRouter.put('/members', (req, res) => {
+  const parsed = z.object({ signIn: z.boolean().optional(), areas: z.array(z.enum(AREAS)).max(AREAS.length).optional() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid');
+  const next = setMemberAccess(parsed.data);
+  console.log(`[settings] member access changed by ${req.session!.userName}: ${JSON.stringify(next)}`);
+  res.json({ ...next, available: AREAS });
 });

@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { ServiceId } from '@/lib/types';
+import type { Area, ServiceId } from '@/lib/types';
 import { ActivityWidget } from './ActivityWidget';
 import { DownloadsWidget } from './DownloadsWidget';
 import { IndexersWidget } from './IndexersWidget';
@@ -33,14 +33,16 @@ export interface WidgetDef {
   defaultSize: WidgetSize;
   /** Widget is only offered when at least one of these services is configured. */
   requires?: ServiceId[];
+  /** Area a member needs access to (see Settings → Member access). */
+  area?: Area;
 }
 
 export const WIDGETS: WidgetDef[] = [
-  { id: 'now-playing', title: 'Now playing', description: 'Live streams with artwork and progress', component: NowPlayingHero, defaultSize: 'full', requires: ['jellyfin'] },
-  { id: 'services', title: 'Service status', description: 'Health of every integration', component: ServiceStatusGrid, defaultSize: 'full' },
-  { id: 'downloads', title: 'Download activity', description: 'Throughput and queue', component: DownloadsWidget, defaultSize: 'lg', requires: ['sonarr', 'radarr'] },
-  { id: 'storage', title: 'Storage', description: 'Drives and capacity', component: StorageWidget, defaultSize: 'sm' },
-  { id: 'resources', title: 'System resources', description: 'CPU, memory and network', component: () => <SystemResourcesWidget />, defaultSize: 'md' },
+  { id: 'now-playing', title: 'Now playing', description: 'Live streams with artwork and progress', component: NowPlayingHero, defaultSize: 'full', area: 'now-playing' },
+  { id: 'services', title: 'Service status', description: 'Health of every integration', component: ServiceStatusGrid, defaultSize: 'full', area: 'system' },
+  { id: 'downloads', title: 'Download activity', description: 'Throughput and queue', component: DownloadsWidget, defaultSize: 'lg', requires: ['sonarr', 'radarr'], area: 'system' },
+  { id: 'storage', title: 'Storage', description: 'Drives and capacity', component: StorageWidget, defaultSize: 'sm', area: 'system' },
+  { id: 'resources', title: 'System resources', description: 'CPU, memory and network', component: () => <SystemResourcesWidget />, defaultSize: 'md', area: 'system' },
   { id: 'plays', title: 'Playback activity', description: 'Plays per day', component: PlaysWidget, defaultSize: 'md', requires: ['jellyfin'] },
   { id: 'upcoming', title: 'Upcoming', description: 'Calendar from Sonarr and Radarr', component: UpcomingWidget, defaultSize: 'sm', requires: ['sonarr', 'radarr'] },
   { id: 'requests', title: 'Requests', description: 'Seerr request summary', component: RequestsWidget, defaultSize: 'sm', requires: ['seerr'] },

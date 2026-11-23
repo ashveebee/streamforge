@@ -416,6 +416,15 @@ export interface ServiceSettingsView {
 
 export type ArrKind = 'sonarr' | 'radarr';
 
+/** Parts of the app a member can be given access to. */
+export type Area = 'now-playing' | 'stats' | 'library' | 'system' | ServiceId;
+
+export interface MemberAccess {
+  signIn: boolean;
+  areas: Area[];
+  available: Area[];
+}
+
 /** A Sonarr/Radarr instance as listed in /api/config. */
 export interface ArrInstanceRef {
   id: string;
