@@ -12,8 +12,9 @@
     "dev": "concurrently -n api,web -c magenta,cyan \"npm:dev:server\" \"npm:dev:web\"",
     "dev:web": "vite",
     "dev:server": "tsx watch --env-file-if-exists=.env server/index.ts",
+    "demo": "concurrently -n demo,web -c yellow,cyan \"tsx watch scripts/demo-server.ts\" \"STREAMFORGE_API=http://localhost:4010 vite\"",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.scripts.json",
     "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning --env-file-if-exists=.env dist-server/index.js",
     "preview": "npm run build && npm start"
   },

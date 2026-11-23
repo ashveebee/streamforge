@@ -10,3 +10,4 @@ dist-server
 !README.md
 docker-compose*.yml
 data
+docs
