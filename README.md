@@ -22,11 +22,15 @@ server.
   </tr>
   <tr>
     <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
-    <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue and episodes airing soon"></a><br><b>Sonarr and Radarr.</b> Queues, upcoming releases and disk space.</td>
+    <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue, airing soon, auto-import and missing episodes"></a><br><b>Sonarr and Radarr.</b> Queues with actions, auto-import, missing items and what's airing.</td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/seerr.jpg"><img src="docs/screenshots/seerr.jpg" alt="Seerr: requests awaiting approval and recent requests"></a><br><b>Seerr.</b> Pending approvals and recent requests.</td>
     <td><a href="docs/screenshots/infinidisk.jpg"><img src="docs/screenshots/infinidisk.jpg" alt="Infinidisk: storage capacity and drive health"></a><br><b>Infinidisk.</b> Capacity, drive health and temperatures.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/stats.jpg"><img src="docs/screenshots/stats.jpg" alt="Stats: plays per day by direct play and transcode, top viewers, titles and clients"></a><br><b>Stats.</b> Watch time, direct play vs transcode and who watches what.</td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" alt="Library health: incomplete series, upgrades available and mismatches with Jellyfin"></a><br><b>Library health.</b> Missing episodes, upgrades and items out of sync with Jellyfin.</td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services from the UI, test each connection and apply changes without a restart.</td>
