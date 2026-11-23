@@ -7,6 +7,30 @@ Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
 server.
 
+![StreamForge dashboard: the stream playing now, health of every service, download activity and storage](docs/screenshots/dashboard.jpg)
+
+<sub>Screenshots use the built-in demo data. All titles, people and artwork are fictional.</sub>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/now-playing.jpg"><img src="docs/screenshots/now-playing.jpg" alt="Now Playing: every active stream with artwork, progress and playback details"></a><br><b>Now Playing.</b> Every stream, with direct play or transcode details.</td>
+    <td width="50%"><a href="docs/screenshots/system.jpg"><img src="docs/screenshots/system.jpg" alt="System Status: health, response time and uptime for each service"></a><br><b>System Status.</b> Health, response times and issues for each service.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
+    <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue and episodes airing soon"></a><br><b>Sonarr and Radarr.</b> Queues, upcoming releases and disk space.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/seerr.jpg"><img src="docs/screenshots/seerr.jpg" alt="Seerr: requests awaiting approval and recent requests"></a><br><b>Seerr.</b> Pending approvals and recent requests.</td>
+    <td><a href="docs/screenshots/infinidisk.jpg"><img src="docs/screenshots/infinidisk.jpg" alt="Infinidisk: storage capacity and drive health"></a><br><b>Infinidisk.</b> Capacity, drive health and temperatures.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services from the UI, test each connection and apply changes without a restart.</td>
+  </tr>
+</table>
+
 ## Features
 
 - **Jellyfin sign-in.** Users sign in with their Jellyfin account. The server
@@ -173,8 +197,24 @@ npm install
 npm run dev               # API on :4000, UI on :5173 (proxied)
 ```
 
-Settings are stored in `./data` (git-ignored). For a production build without
-Docker:
+Settings are stored in `./data` (git-ignored).
+
+### Demo mode
+
+To try the UI without any media services:
+
+```bash
+npm run demo              # UI on http://localhost:5173, already signed in
+```
+
+This runs a mock API (`scripts/demo-server.ts`) with fictional streams,
+libraries, queues and requests, and generated artwork. To re-create the README
+screenshots after changing the UI, keep the demo running and run
+`./scripts/screenshots.sh` (needs Google Chrome).
+
+### Production build
+
+For a production build without Docker:
 
 ```bash
 npm run build
