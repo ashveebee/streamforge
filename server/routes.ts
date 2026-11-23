@@ -12,7 +12,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { prowlarrOverview } from './services/prowlarr.js';
-import { seerrOverview } from './services/seerr.js';
+import { decideRequest, seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
 
 export const api = Router();
@@ -103,6 +103,18 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
 api.use(arrRouter);
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
 api.get('/seerr/overview', handle('seerr', () => seerrOverview()));
+api.post(
+  '/seerr/requests/:id/:decision',
+  requireAdmin,
+  handle('seerr', async (req) => {
+    const id = Number(req.params.id);
+    const decision = String(req.params.decision);
+    if (!Number.isInteger(id) || id <= 0 || (decision !== 'approve' && decision !== 'decline')) throw new HttpError(400, 'Invalid request');
+    await decideRequest(id, decision);
+    console.log(`[seerr] request #${id} ${decision}d by ${req.session!.userName}`);
+    return { ok: true };
+  }),
+);
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));
 
 /* -------------------------------- settings ------------------------------ */

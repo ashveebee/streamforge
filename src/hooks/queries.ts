@@ -327,3 +327,14 @@ export function useSearch(kind: ArrKind) {
       api<{ ok: boolean }>(`/${kind}/search`, { method: 'POST', body: { instance, ids } }),
   });
 }
+
+/* ------------------------------ seerr approvals ----------------------------- */
+
+export function useDecideRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision }: { id: number; decision: 'approve' | 'decline' }) =>
+      api<{ ok: true }>(`/seerr/requests/${id}/${decision}`, { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seerr'] }),
+  });
+}
