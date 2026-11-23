@@ -7,6 +7,8 @@ Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
 server.
 
+[**Website**](https://ashveebee.github.io/streamforge/) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
+
 ![StreamForge dashboard: the stream playing now, health of every service, download activity and storage](docs/screenshots/dashboard.jpg)
 
 <sub>Screenshots use the built-in demo data. All titles, people and artwork are fictional.</sub>
@@ -327,3 +329,26 @@ To add an integration:
   If your Infinidisk API uses different field names, extend `normaliseRemote()`.
 - **Self-signed TLS.** If a service uses a self-signed certificate, point
   `NODE_EXTRA_CA_CERTS` at your CA bundle.
+
+## License
+
+StreamForge is free and open source software, licensed under the
+[GNU General Public License v2.0](LICENSE), the same license as Jellyfin.
+
+- ✅ Use it for anything, at home or at work, commercially or not
+- ✅ Study it, change it and share your changes
+- 📄 If you distribute StreamForge or a modified version, you must make the
+  source code available under the same license
+
+```
+StreamForge
+Copyright (C) 2026 ashveebee and contributors
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+```

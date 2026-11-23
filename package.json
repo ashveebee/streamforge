@@ -4,6 +4,7 @@
   "version": "1.0.2",
   "type": "module",
   "description": "A unified control centre for your Jellyfin media server ecosystem.",
+  "license": "GPL-2.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/ashveebee/streamforge.git"
