@@ -888,6 +888,7 @@ app.get('/api/prowlarr/overview', json(prowlarr));
 app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));
 
+app.post('/api/:kind/queue/:id/action', (_req, res) => res.json({ ok: true }));
 app.get('/api/settings/services', json(() => ({ services: settings() })));
 app.post('/api/settings/services/:id/test', (req, res) => {
   const id = req.params.id as ServiceId;

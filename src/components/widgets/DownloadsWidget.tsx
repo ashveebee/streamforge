@@ -1,7 +1,8 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatePresence, motion } from 'motion/react';
-import { CircleAlert, Download, Pause } from 'lucide-react';
-import { useDownloads, useArrAll } from '@/hooks/queries';
+import { Ban, CircleAlert, Download, LoaderCircle, Pause, RefreshCw, Trash2, Zap } from 'lucide-react';
+import { useDownloads, useArrAll, useQueueAction, type QueueActionName } from '@/hooks/queries';
+import { useAuth } from '@/hooks/useAuth';
 import { bytes, speed } from '@/lib/format';
 import type { QueueItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
@@ -10,8 +11,43 @@ import { FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { EmptyState, Skeleton } from '../ui/States';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
+import { Menu, type MenuItem } from '../ui/Menu';
 
-export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: number }) {
+const CONFIRM: Partial<Record<QueueActionName, string>> = {
+  remove: 'Remove this download and delete it from the download client?',
+  blocklist: 'Remove and blocklist this release? It won’t be grabbed again.',
+  'blocklist-search': 'Remove and blocklist this release, then search for another?',
+};
+
+/** Admin actions for one queue item. */
+function QueueMenu({ item }: { item: QueueItem }) {
+  const act = useQueueAction();
+  const run = (action: QueueActionName) => {
+    const msg = CONFIRM[action];
+    if (msg && !confirm(`${msg}\n\n${item.releaseTitle}`)) return;
+    act.mutate({ kind: item.source, instance: item.instance, id: item.id, action });
+  };
+  const delayed = item.status === 'delay' || item.status === 'pending';
+  const items: MenuItem[] = [
+    ...(delayed ? [{ label: 'Grab now', icon: Zap, hint: 'Skip the delay profile', onSelect: () => run('grab') }] : []),
+    { label: 'Blocklist & search again', icon: RefreshCw, hint: 'Find a different release', onSelect: () => run('blocklist-search') },
+    { label: 'Blocklist', icon: Ban, hint: 'Don’t grab this release again', onSelect: () => run('blocklist') },
+    { label: 'Remove from queue only', icon: Trash2, hint: 'Leave it in the download client', onSelect: () => run('remove-keep') },
+    { label: 'Remove & delete download', icon: Trash2, danger: true, onSelect: () => run('remove') },
+  ];
+  return (
+    <div className="flex items-center" title={act.error ? (act.error as Error).message : undefined}>
+      {act.isPending ? (
+        <LoaderCircle className="m-1.5 size-4 animate-spin text-ink-4" />
+      ) : (
+        <Menu items={items} label={`Actions for ${item.title}`} trigger={act.isError ? <CircleAlert className="size-4 text-bad" /> : undefined} />
+      )}
+    </div>
+  );
+}
+
+export function QueueRow({ item, speedBps, actions = true }: { item: QueueItem; speedBps?: number; actions?: boolean }) {
+  const { user } = useAuth();
   const failed = item.trackedStatus === 'error' || item.status === 'failed' || !!item.errorMessage;
   const warn = item.trackedStatus === 'warning';
   const paused = item.status === 'paused';
@@ -55,6 +91,7 @@ export function QueueRow({ item, speedBps }: { item: QueueItem; speedBps?: numbe
           </>
         )}
       </div>
+      {actions && user?.isAdmin && <QueueMenu item={item} />}
     </motion.li>
   );
 }

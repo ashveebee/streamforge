@@ -378,3 +378,40 @@ export async function radarrOverview(inst: ArrInstance) {
     disks,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Queue actions                                                       */
+/* ------------------------------------------------------------------ */
+
+export const QUEUE_ACTIONS = ['remove', 'remove-keep', 'blocklist', 'blocklist-search', 'grab'] as const;
+export type QueueAction = (typeof QUEUE_ACTIONS)[number];
+
+/**
+ * Acts on a queue item:
+ *  - remove            remove from the queue and the download client
+ *  - remove-keep       remove from the queue but leave the download in the client
+ *  - blocklist         remove + blocklist the release, don't search again
+ *  - blocklist-search  remove + blocklist + search for another release
+ *  - grab              grab a delayed/pending release now
+ */
+export async function queueAction(inst: ArrInstance, id: number, action: QueueAction) {
+  const path = `/api/v3/queue/${id}`;
+  switch (action) {
+    case 'grab':
+      await inst.client.post(`/api/v3/queue/grab/${id}`, {});
+      break;
+    case 'remove':
+      await inst.client.del(path, { removeFromClient: true, blocklist: false, skipRedownload: true });
+      break;
+    case 'remove-keep':
+      await inst.client.del(path, { removeFromClient: false, blocklist: false, skipRedownload: true });
+      break;
+    case 'blocklist':
+      await inst.client.del(path, { removeFromClient: true, blocklist: true, skipRedownload: true });
+      break;
+    case 'blocklist-search':
+      await inst.client.del(path, { removeFromClient: true, blocklist: true, skipRedownload: false });
+      break;
+  }
+  cache.delete(`${inst.id}:queue`);
+}

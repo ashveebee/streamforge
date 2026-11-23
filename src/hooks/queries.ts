@@ -240,3 +240,16 @@ export function useRemoveInstance() {
     onSuccess: changed,
   });
 }
+
+/* ------------------------------ queue actions ----------------------------- */
+
+export type QueueActionName = 'remove' | 'remove-keep' | 'blocklist' | 'blocklist-search' | 'grab';
+
+export function useQueueAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, instance, id, action }: { kind: ArrKind; instance: string; id: number; action: QueueActionName }) =>
+      api<{ ok: true }>(`/${kind}/queue/${id}/action`, { method: 'POST', body: { action, instance } }),
+    onSuccess: (_d, v) => void qc.invalidateQueries({ queryKey: [v.kind] }),
+  });
+}
