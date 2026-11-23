@@ -38,5 +38,5 @@ VOLUME /data
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1
-# node:sqlite is stable in practice but still flagged experimental on Node 22.
+# Silences node:sqlite's ExperimentalWarning on Node versions that still emit it.
 CMD ["node", "--disable-warning=ExperimentalWarning", "dist-server/index.js"]
