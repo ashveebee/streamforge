@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/ashveebee/streamforge/compare/v1.0.1...v1.0.2) (2026-11-23)
+
+
+### Documentation
+
+* add screenshots and a demo mode ([412dce9](https://github.com/ashveebee/streamforge/commit/412dce9706c7aaad9df7f331799643a826151268))
+* add screenshots and a demo mode ([7e1038a](https://github.com/ashveebee/streamforge/commit/7e1038a6a12f9b48342055f4b97cb8a08c15bdfa))
+
 ## [1.0.1](https://github.com/ashveebee/streamforge/compare/v1.0.0...v1.0.1) (2026-11-23)
 
 
