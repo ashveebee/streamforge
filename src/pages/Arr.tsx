@@ -24,7 +24,9 @@ function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number
       <CardBody>
         {items.length ? (
           <ul className="divide-y divide-line">
-            {items.map((i) => <QueueRow key={i.id} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} />)}
+            {items.map((i) => (
+              <QueueRow key={i.id} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} stalledSince={dl.data?.stalled?.[`${i.instance}:${i.id}`]} />
+            ))}
           </ul>
         ) : (
           <EmptyState icon={Download} title="Queue is empty" description="Nothing downloading right now." />

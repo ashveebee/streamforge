@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Ban, CircleAlert, Download, LoaderCircle, Pause, RefreshCw, Trash2, Zap } from 'lucide-react';
 import { useDownloads, useArrAll, useQueueAction, type QueueActionName } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
-import { bytes, speed } from '@/lib/format';
+import { bytes, duration, speed } from '@/lib/format';
 import type { QueueItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { AreaGradient, axisProps, ChartTooltip, gridProps, Legend, SERIES, timeLabel } from '../ui/Chart';
@@ -46,7 +46,7 @@ function QueueMenu({ item }: { item: QueueItem }) {
   );
 }
 
-export function QueueRow({ item, speedBps, actions = true }: { item: QueueItem; speedBps?: number; actions?: boolean }) {
+export function QueueRow({ item, speedBps, stalledSince, actions = true }: { item: QueueItem; speedBps?: number; stalledSince?: string; actions?: boolean }) {
   const { user } = useAuth();
   const failed = item.trackedStatus === 'error' || item.status === 'failed' || !!item.errorMessage;
   const warn = item.trackedStatus === 'warning';
@@ -87,7 +87,13 @@ export function QueueRow({ item, speedBps, actions = true }: { item: QueueItem; 
         ) : (
           <>
             <div className="font-medium text-ink-2">{Math.round(item.progress * 100)}%</div>
-            <div className="text-ink-4">{speedBps ? speed(speedBps) : item.timeLeft ?? bytes(item.sizeLeft)}</div>
+            {stalledSince ? (
+              <div className="text-warn" title={`No progress since ${new Date(stalledSince).toLocaleString()}`}>
+                Stalled {duration(Date.now() - Date.parse(stalledSince))}
+              </div>
+            ) : (
+              <div className="text-ink-4">{speedBps ? speed(speedBps) : item.timeLeft ?? bytes(item.sizeLeft)}</div>
+            )}
           </>
         )}
       </div>
@@ -155,7 +161,7 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
                 <ul className="divide-y divide-line">
                   <AnimatePresence initial={false}>
                     {items.slice(0, limit).map((i) => (
-                      <QueueRow key={`${i.instance}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} />
+                      <QueueRow key={`${i.instance}-${i.id}`} item={i} speedBps={dl.data?.itemSpeeds[`${i.instance}:${i.id}`]} stalledSince={dl.data?.stalled?.[`${i.instance}:${i.id}`]} />
                     ))}
                   </AnimatePresence>
                 </ul>

@@ -9,6 +9,7 @@ import { api } from './routes.js';
 import { startMonitors } from './health.js';
 import { startHostMetrics } from './host.js';
 import { startAutoImport } from './services/autoImport.js';
+import { startCleanup } from './services/cleanup.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -69,4 +70,5 @@ app.listen(config.port, config.host, () => {
   startMonitors();
   void startHostMetrics();
   startAutoImport();
+  startCleanup();
 });

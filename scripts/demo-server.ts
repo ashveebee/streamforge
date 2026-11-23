@@ -13,6 +13,7 @@ import type {
   ActivityEntry,
   AutoImportEntry,
   AutoImportStatus,
+  CleanupStatus,
   DownloadSnapshot,
   HealthSnapshot,
   HostSnapshot,
@@ -533,6 +534,7 @@ function downloads(): DownloadSnapshot {
     peak: Math.max(...history.map((h) => h.sonarr + h.radarr)),
     history,
     itemSpeeds: { 'sonarr:1': 9e6, 'sonarr:2': 4e6, 'sonarr:3': 0, 'radarr:1': 22e6, 'radarr:2': 11e6 },
+    stalled: { 'sonarr:3': iso(2 * HOUR + 14 * MIN) },
     sampleIntervalMs: 5_000,
   };
 }
@@ -889,6 +891,26 @@ app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));
 
 app.post('/api/:kind/queue/:id/action', (_req, res) => res.json({ ok: true }));
+const cleanup: CleanupStatus = {
+  settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },
+  actions: ['blocklist-search', 'blocklist', 'remove'],
+  stallHours: [1, 2, 3, 6, 12, 24, 48],
+  available: true,
+  lastRun: iso(3 * MIN),
+  nextRun: ahead(2 * MIN),
+  watching: 6,
+  pending: 0,
+  log: [
+    { id: 'c1', at: iso(5 * HOUR), instance: 'radarr', instanceName: 'Radarr', kind: 'radarr', title: 'Small Hours · 2025', release: 'Small.Hours.2025.1080p.WEB-DEMO', reason: 'No progress for 6 hours', action: 'blocklist-search', outcome: 'done' },
+    { id: 'c2', at: iso(30 * HOUR), instance: 'sonarr', instanceName: 'Sonarr', kind: 'sonarr', title: 'Low Tide · S3E2 · Slack Water', release: 'Low.Tide.S03E02.720p-DEMO', reason: 'Download failed: missing articles', action: 'blocklist-search', outcome: 'done' },
+  ],
+};
+app.get('/api/downloads/cleanup', json(() => cleanup));
+app.put('/api/downloads/cleanup', (req, res) => {
+  Object.assign(cleanup.settings, req.body);
+  res.json(cleanup);
+});
+app.post('/api/downloads/cleanup/run', (_req, res) => res.json({ results: [], status: cleanup }));
 app.get('/api/settings/services', json(() => ({ services: settings() })));
 app.post('/api/settings/services/:id/test', (req, res) => {
   const id = req.params.id as ServiceId;

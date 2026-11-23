@@ -6,6 +6,8 @@ import type {
   ArrInstanceView,
   ArrKind,
   AutoImportEntry,
+  CleanupEntry,
+  CleanupStatus,
   AutoImportStatus,
   DownloadSnapshot,
   HealthSnapshot,
@@ -251,5 +253,29 @@ export function useQueueAction() {
     mutationFn: ({ kind, instance, id, action }: { kind: ArrKind; instance: string; id: number; action: QueueActionName }) =>
       api<{ ok: true }>(`/${kind}/queue/${id}/action`, { method: 'POST', body: { action, instance } }),
     onSuccess: (_d, v) => void qc.invalidateQueries({ queryKey: [v.kind] }),
+  });
+}
+
+/* ---------------------------- download cleanup --------------------------- */
+
+export const useCleanup = () => useQuery(poll<CleanupStatus>(['cleanup'], '/downloads/cleanup', 30 * SECOND));
+
+export function useUpdateCleanup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<CleanupStatus['settings']>) => api<CleanupStatus>('/downloads/cleanup', { method: 'PUT', body: patch }),
+    onSuccess: (d) => qc.setQueryData(['cleanup'], d),
+  });
+}
+
+export function useRunCleanup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dryRun: boolean) =>
+      api<{ results: CleanupEntry[]; status: CleanupStatus }>('/downloads/cleanup/run', { method: 'POST', body: { dryRun } }),
+    onSuccess: (d) => {
+      qc.setQueryData(['cleanup'], d.status);
+      void qc.invalidateQueries({ queryKey: ['downloads'] });
+    },
   });
 }

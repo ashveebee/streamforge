@@ -14,6 +14,7 @@ import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { StatTile } from '@/components/ui/Stat';
 import { STATUS_META, StatusBadge } from '@/components/ui/Status';
 import { EmptyState, Skeleton } from '@/components/ui/States';
+import { CleanupCard } from '@/components/widgets/CleanupCard';
 import { DownloadsWidget } from '@/components/widgets/DownloadsWidget';
 import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
@@ -177,6 +178,8 @@ export default function SystemPage() {
           <div><StorageWidget /></div>
         </div>
       </div>
+
+      <div className="mt-5"><CleanupCard /></div>
 
       {host.data?.filesystems && host.data.filesystems.length > 0 && (
         <Card className="mt-5">

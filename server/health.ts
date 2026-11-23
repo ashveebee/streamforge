@@ -6,6 +6,7 @@ import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
 import { onQueueSample } from './services/queueWatch.js';
+import { stalledMap } from './services/cleanup.js';
 import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
@@ -249,6 +250,7 @@ export function downloadSnapshot() {
     peak: speedHistory.reduce((m, s) => Math.max(m, s.sonarr + s.radarr), 0),
     history: speedHistory,
     itemSpeeds: Object.fromEntries(itemSpeeds),
+    stalled: stalledMap(),
     sampleIntervalMs: DL_INTERVAL,
   };
 }

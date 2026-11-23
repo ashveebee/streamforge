@@ -1,8 +1,10 @@
 import type { Request } from 'express';
 import { Router } from 'express';
-import { handle, pipeImage } from './lib/handle.js';
+import { z } from 'zod';
+import { handle, HttpError, pipeImage } from './lib/handle.js';
+import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup, type CleanupAction } from './services/cleanup.js';
 import { arrRouter } from './arrRoutes.js';
-import { ctxOf, requireAuth } from './auth.js';
+import { ctxOf, requireAdmin, requireAuth } from './auth.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
 import { settingsRouter } from './settingsRoutes.js';
@@ -32,6 +34,36 @@ api.get('/health', (_req, res) => res.set('Cache-Control', 'no-store').json(heal
 api.post('/health/recheck', handle(null, () => recheck()));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+
+/* Stalled/failed download cleanup across every Sonarr/Radarr instance. */
+const cleanupPatch = z
+  .object({
+    enabled: z.boolean().optional(),
+    stalledHours: z.number().refine((n) => (STALL_HOURS as readonly number[]).includes(n), 'Unsupported period').optional(),
+    failed: z.boolean().optional(),
+    action: z.enum(CLEANUP_ACTIONS as [CleanupAction, ...CleanupAction[]]).optional(),
+  })
+  .strict();
+api.get('/downloads/cleanup', (_req, res) => res.set('Cache-Control', 'no-store').json(cleanupStatus()));
+api.put(
+  '/downloads/cleanup',
+  requireAdmin,
+  handle(null, async (req) => {
+    const r = cleanupPatch.safeParse(req.body ?? {});
+    if (!r.success) throw new HttpError(400, r.error.issues[0]?.message ?? 'Invalid settings');
+    console.log(`[cleanup] settings changed by ${req.session!.userName}: ${JSON.stringify(r.data)}`);
+    return updateCleanup(r.data);
+  }),
+);
+api.post(
+  '/downloads/cleanup/run',
+  requireAdmin,
+  handle(null, async (req) => {
+    const dryRun = (req.body as { dryRun?: unknown } | undefined)?.dryRun === true;
+    const results = await runCleanup({ dryRun });
+    return { results, status: cleanupStatus() };
+  }),
+);
 
 /* -------------------------------- jellyfin ------------------------------ */
 

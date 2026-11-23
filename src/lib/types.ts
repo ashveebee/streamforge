@@ -75,7 +75,37 @@ export interface DownloadSnapshot {
   peak: number;
   history: { t: number; sonarr: number; radarr: number }[];
   itemSpeeds: Record<string, number>;
+  /** `instance:id` → when the item last made progress (only items stuck 30+ min). */
+  stalled?: Record<string, string>;
   sampleIntervalMs: number;
+}
+
+export type CleanupAction = 'blocklist-search' | 'blocklist' | 'remove';
+
+export interface CleanupEntry {
+  id: string;
+  at: string;
+  instance: string;
+  instanceName: string;
+  kind: 'sonarr' | 'radarr';
+  title: string;
+  release: string;
+  reason: string;
+  action: CleanupAction;
+  outcome: 'done' | 'failed' | 'preview';
+  error?: string;
+}
+
+export interface CleanupStatus {
+  settings: { enabled: boolean; stalledHours: number; failed: boolean; action: CleanupAction };
+  actions: CleanupAction[];
+  stallHours: number[];
+  available: boolean;
+  lastRun?: string;
+  nextRun?: string;
+  watching: number;
+  pending: number;
+  log: CleanupEntry[];
 }
 
 export interface NowPlaying {
