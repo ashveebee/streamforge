@@ -178,13 +178,15 @@ export function Sidebar({
       <div className="mt-3 border-t border-line pt-3">
         {user && (
           <div className={cn('flex items-center gap-2.5 rounded-xl p-1.5', collapsed && 'flex-col')}>
-            <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={32} />
-            {!collapsed && (
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-[13px] font-medium">{user.name}</div>
-                <div className="text-[11px] text-ink-4">{user.isAdmin ? 'Administrator' : 'Member'}</div>
-              </div>
-            )}
+            <NavLink to="/me" onClick={onNavigate} title="Your activity and account" className={cn('flex min-w-0 items-center gap-2.5 rounded-lg transition hover:opacity-80', !collapsed && 'flex-1')}>
+              <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={32} />
+              {!collapsed && (
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="truncate text-[13px] font-medium">{user.name}</div>
+                  <div className="text-[11px] text-ink-4">{user.isAdmin ? 'Administrator' : 'Member'}</div>
+                </div>
+              )}
+            </NavLink>
             <button
               onClick={() => void logout()}
               className="grid size-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white/[0.06] hover:text-ink"

@@ -16,6 +16,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
@@ -250,6 +251,11 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
     }),
   );
 }
+
+/* ---------------------------------- me ---------------------------------- */
+
+api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!))));
+api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
 
 /* -------------------------------- search -------------------------------- */
 

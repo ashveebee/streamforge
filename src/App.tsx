@@ -25,6 +25,7 @@ const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
 const System = lazy(() => import('@/pages/System'));
 const Stats = lazy(() => import('@/pages/Stats'));
 const LibraryHealth = lazy(() => import('@/pages/LibraryHealth'));
+const Me = lazy(() => import('@/pages/Me'));
 const Downloads = lazy(() => import('@/pages/Downloads'));
 const Audit = lazy(() => import('@/pages/Audit'));
 const Settings = lazy(() => import('@/pages/Settings'));
@@ -86,6 +87,7 @@ const router = createBrowserRouter([
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
+      { path: '/me', element: page(<Me />) },
       { path: '/downloads', element: page(<Downloads />, 'downloads') },
       { path: '/jellyfin', element: page(<Jellyfin />, 'jellyfin') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },

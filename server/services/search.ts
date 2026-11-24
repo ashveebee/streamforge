@@ -5,7 +5,7 @@ import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, type JfCtx } from './jellyfin.js';
 import { creatorName, musicLibrary } from './music.js';
-import { seerr } from './seerr.js';
+import { seerr, seerrUserFor } from './seerr.js';
 
 /*
  * Global search. One query fans out to every connected service the user can
@@ -211,13 +211,6 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
 
 /* -------------------------------- actions -------------------------------- */
 
-/** The Seerr user linked to a Jellyfin user, so requests are made in their name. */
-async function seerrUserFor(jellyfinUserId: string) {
-  const users = await cache.get('seerr:users', 10 * 60_000, () =>
-    seerr()!.get<{ results: { id: number; jellyfinUserId?: string; displayName?: string }[] }>('/api/v1/user', { take: 1000 }),
-  );
-  return users.results.find((u) => u.jellyfinUserId?.replace(/-/g, '') === jellyfinUserId.replace(/-/g, ''));
-}
 
 export async function requestMedia(jellyfinUserId: string, mediaType: 'movie' | 'tv', tmdbId: number) {
   const c = seerr();
