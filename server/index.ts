@@ -45,7 +45,10 @@ app.use(
     strictTransportSecurity: config.cookieSecure === 'true',
   }),
 );
-app.use(express.json({ limit: '32kb' }));
+// Backups can be large (they may include play history); everything else is small.
+const smallJson = express.json({ limit: '32kb' });
+const largeJson = express.json({ limit: '50mb' });
+app.use((req, res, next) => (req.path === '/api/settings/backup/restore' ? largeJson : smallJson)(req, res, next));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
 app.use('/api', requireCsrfHeader);

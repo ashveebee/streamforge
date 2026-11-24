@@ -32,6 +32,7 @@ import { InstancesSection } from '@/components/settings/InstancesSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
+import { BackupSection } from '@/components/settings/BackupSection';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 
 /** Where each service keeps its API key, and an example address. */
@@ -445,6 +446,7 @@ export default function SettingsPage() {
       {q.data && <ClientsSection />}
       {q.data && <NotificationsSection />}
       {q.data && <MembersSection />}
+      {q.data && <BackupSection />}
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
       </p>

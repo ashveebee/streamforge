@@ -25,6 +25,7 @@ import {
   setPublicUrl,
   testChannel,
 } from './services/notify.js';
+import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
 import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
@@ -520,4 +521,32 @@ settingsRouter.put('/members', (req, res) => {
   const next = setMemberAccess(parsed.data);
   audit(req, `[settings] member access changed: ${JSON.stringify(next)}`);
   res.json({ ...next, available: AREAS });
+});
+
+/* ---------------------------- backup & restore ---------------------------- */
+
+const passphrase = z.string().min(8, 'Use a passphrase of at least 8 characters').max(1024);
+
+settingsRouter.post('/backup', async (req, res) => {
+  const parsed = z.object({ passphrase, history: z.boolean().default(false) }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', 'passphrase');
+  const file = await createBackup(parsed.data.passphrase, parsed.data.history);
+  audit(req, `[settings] backup downloaded${parsed.data.history ? ' (with history)' : ''}`);
+  const name = `streamforge-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  res.set({ 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name}"` }).json(file);
+});
+
+settingsRouter.post('/backup/restore', async (req, res) => {
+  const parsed = z.object({ passphrase, file: z.record(z.string(), z.unknown()) }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path[0] === 'passphrase' ? 'passphrase' : 'file');
+  try {
+    const r = await restoreBackup(parsed.data.file, parsed.data.passphrase);
+    audit(req, `[settings] backup from ${r.createdAt ?? 'an unknown date'} restored (${Object.entries(r.counts).map(([t, n]) => `${t}: ${n}`).join(', ')})`);
+    const restarting = canSelfRestart();
+    res.json({ ok: true, ...r, restarting });
+    if (restarting) restartSoon();
+  } catch (err) {
+    if (err instanceof BackupError) return badRequest(res, err.message, 'file');
+    throw err;
+  }
 });
