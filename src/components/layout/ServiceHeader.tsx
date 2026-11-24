@@ -27,7 +27,23 @@ export function ServiceHeader({ id, instance, description, actions }: { id: Serv
             {description && <span className="text-ink-4">{description}</span>}
           </span>
         }
-        actions={actions}
+        actions={
+          s?.publicUrl && /^https?:\/\//.test(s.publicUrl) ? (
+            <>
+              {actions}
+              <a
+                href={s.publicUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink"
+              >
+                Open {meta.name} <ExternalLink className="size-3.5" />
+              </a>
+            </>
+          ) : (
+            actions
+          )
+        }
       />
       {s && s.issues.length > 0 && (
         <div className="mb-6 space-y-2">

@@ -11,7 +11,7 @@ import { onQueueSample } from './services/queueWatch.js';
 import { stalledMap } from './services/cleanup.js';
 import { clientTotals } from './services/clients/index.js';
 import { emit } from './services/notify.js';
-import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
+import { isConfigured, isEnabled, onSettingsChange, publicUrl, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
 import type { HealthIssue, HealthProbe, ServiceId } from './services/types.js';
 
@@ -195,7 +195,10 @@ async function runAll() {
 
 export function healthSnapshot(visible: (kind: ServiceId) => boolean = () => true) {
   // Disabled services are hidden entirely, not reported as "unconfigured".
-  const services = [...state.values()].filter((s) => isEnabled(s.kind) && visible(s.kind));
+  // Primary services carry the address to open them in a browser.
+  const services = [...state.values()]
+    .filter((s) => isEnabled(s.kind) && visible(s.kind))
+    .map((s) => (s.instance || s.status === 'unconfigured' ? s : { ...s, publicUrl: publicUrl(s.kind) }));
   return {
     services,
     checkedAt: lastRun ? new Date(lastRun).toISOString() : undefined,

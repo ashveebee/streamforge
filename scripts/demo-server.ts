@@ -414,6 +414,7 @@ function health(): HealthSnapshot {
       lastSuccess: iso(4_000),
       issues,
       meta: id === 'jellyfin' ? { server: 'Homelab' } : undefined,
+      publicUrl: id === 'infinidisk' ? undefined : `https://${id}.example.com`,
       uptime: 1,
       history,
     };
@@ -803,7 +804,8 @@ function settings(): ServiceSettingsView[] {
     envAvailable: id === 'infinidisk',
     updatedAt: id === 'infinidisk' ? undefined : iso((id.length * 5 + 3) * HOUR),
     updatedBy: id === 'infinidisk' ? undefined : 'Alex',
-    url: `https://${id}.example.com`,
+    url: `http://${id}:8080`,
+    publicUrl: id === 'infinidisk' ? '' : `https://${id}.example.com`,
     apiKeySet: !!hints[id],
     apiKeyHint: hints[id],
     ...(id === 'infinidisk' ? { authHeader: 'X-Api-Key', statusPath: '/api/v1/status', healthPath: '', mounts: [] } : {}),
@@ -845,7 +847,7 @@ app.put('/api/settings/members', (req, res) => {
 const enabledHealth = () => {
   const h = health();
   const radarr = h.services.find((s) => s.id === 'radarr')!;
-  const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83 };
+  const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83, publicUrl: undefined };
   return { ...h, services: [...h.services, extra].filter((s) => !disabledServices.has(s.kind)) };
 };
 app.get('/api/health', json(enabledHealth));
