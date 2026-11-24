@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/ashveebee/streamforge/compare/v1.3.0...v1.4.0) (2026-11-24)
+
+
+### Features
+
+* Jellyfin library details on title pages, and fix the page on phones ([c7f809d](https://github.com/ashveebee/streamforge/commit/c7f809dcc5c64288b3d4f94de77358df937f00f0))
+* Jellyfin library details on title pages, and fix the page on phones ([61625b4](https://github.com/ashveebee/streamforge/commit/61625b4e5c0338ea1ff5f4bbfd4bf59b8b45b58e))
+
 ## [1.3.0](https://github.com/ashveebee/streamforge/compare/v1.2.1...v1.3.0) (2026-11-24)
 
 
