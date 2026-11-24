@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
@@ -78,6 +79,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       if (user.Policy?.IsDisabled || (!session.isAdmin && !membersCanSignIn())) {
         throw new UpstreamError('Access revoked', 401);
       }
+      sessions.save(session);
     } catch (err) {
       if (err instanceof UpstreamError && (err.status === 401 || err.status === 403)) {
         sessions.destroy(session.id);
@@ -88,9 +90,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       // Jellyfin temporarily unreachable: keep the session, try again later.
     }
   }
+  sessions.touch(session, req.get('user-agent'));
   req.session = session;
   next();
 }
+
+/** A stable, non-secret handle for a session (the real id is the cookie). */
+export const sessionHandle = (s: Session) => createHash('sha256').update(s.id).digest('base64url').slice(0, 16);
 
 /**
  * Cheap CSRF defence: state-changing requests must carry a custom header.
@@ -229,4 +235,35 @@ authRouter.post('/logout', async (req, res) => {
 
 authRouter.get('/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.session!) });
+});
+
+/* Signed-in devices: users can see and end their own sessions. */
+authRouter.get('/sessions', requireAuth, (req, res) => {
+  const me = req.session!;
+  res.set('Cache-Control', 'no-store').json({
+    sessions: sessions
+      .forUser(me.userId)
+      .sort((a, b) => (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0))
+      .map((s) => ({
+        id: sessionHandle(s),
+        current: s.id === me.id,
+        method: s.method ?? 'password',
+        userAgent: s.userAgent,
+        createdAt: new Date(s.createdAt).toISOString(),
+        lastSeenAt: new Date(s.lastSeenAt ?? s.createdAt).toISOString(),
+        expiresAt: new Date(s.expiresAt).toISOString(),
+      })),
+  });
+});
+
+authRouter.delete('/sessions/:id', requireAuth, async (req, res) => {
+  const me = req.session!;
+  const target = sessions.forUser(me.userId).find((s) => sessionHandle(s) === String(req.params.id));
+  if (!target) {
+    res.status(404).json({ error: 'not_found', message: 'Unknown session' });
+    return;
+  }
+  sessions.destroy(target.id);
+  await jellyfin.logout(target.token, target.deviceId);
+  res.json({ ok: true });
 });

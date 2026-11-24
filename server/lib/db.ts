@@ -63,6 +63,13 @@ const migrations = [
      PRIMARY KEY (key, t)
    );
    CREATE INDEX disk_samples_t ON disk_samples(t);`,
+  // Sign-in sessions, so a restart or upgrade doesn't sign everyone out.
+  `CREATE TABLE sessions (
+     id          TEXT PRIMARY KEY,
+     data        TEXT NOT NULL,
+     expires_at  INTEGER NOT NULL
+   );
+   CREATE INDEX sessions_expires ON sessions(expires_at);`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */
