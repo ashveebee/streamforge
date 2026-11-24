@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/ashveebee/streamforge/compare/v1.2.0...v1.2.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* search crash, requesting from search, and a loader for slow pages ([c42d186](https://github.com/ashveebee/streamforge/commit/c42d1864169d466d0216fcdaadbf455bf0391012))
+* search crash, requesting from search, and a loader for slow pages ([8a23ee3](https://github.com/ashveebee/streamforge/commit/8a23ee33c62620877dcc6bdb04fdc725f755aa43))
+
 ## [1.2.0](https://github.com/ashveebee/streamforge/compare/v1.1.0...v1.2.0) (2026-11-24)
 
 
