@@ -53,8 +53,8 @@ export interface Who {
 }
 
 async function added(who: Who, since: number) {
-  const path = who.userId ? `/Users/${who.userId}/Items` : '/Items';
-  const res = await jf<{ Items: JfItem[] }>(path, who.token, who.deviceId, {
+  const res = await jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, {
+    userId: who.userId,
     Recursive: true,
     IncludeItemTypes: 'Movie,Episode,MusicAlbum,Book,AudioBook',
     MinDateCreated: new Date(since).toISOString(),

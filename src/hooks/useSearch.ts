@@ -22,6 +22,8 @@ export interface SearchResults {
   discover: SearchHit[];
   canRequest: boolean;
   canAdd: boolean;
+  /** Services that failed to answer, with why. */
+  errors?: Record<string, string>;
 }
 
 export const useGlobalSearch = (q: string) =>
@@ -34,7 +36,7 @@ export const useGlobalSearch = (q: string) =>
   });
 
 export const useRequestMedia = () =>
-  useMutation({ mutationFn: (b: { mediaType: 'movie' | 'tv'; tmdbId: number; title: string }) => api<{ ok: boolean }>('/search/request', { method: 'POST', body: b }) });
+  useMutation({ mutationFn: (b: { mediaType: 'movie' | 'tv'; tmdbId: number; title: string }) => api<{ ok: boolean; asSelf?: boolean }>('/search/request', { method: 'POST', body: b }) });
 
 export const useAddMedia = () =>
   useMutation({

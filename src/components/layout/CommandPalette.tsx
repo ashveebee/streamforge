@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -74,47 +74,88 @@ const STATUS: Record<string, { label: string; tone: 'neutral' | 'brand' | 'ok' |
   missing: { label: 'Missing', tone: 'warn' },
 };
 
-function DiscoverActions({ hit, canRequest, canAdd }: { hit: SearchHit; canRequest: boolean; canAdd: boolean }) {
+/** Whether a discover hit can still be requested or added. */
+const requestable = (h: SearchHit) => !!h.mediaType && !!h.tmdbId && (h.status === 'none' || (h.status === 'partial' && h.mediaType === 'tv'));
+
+function DiscoverActions({ hit, canRequest, canAdd, trigger }: { hit: SearchHit; canRequest: boolean; canAdd: boolean; trigger: number }) {
   const request = useRequestMedia();
   const add = useAddMedia();
-  if (!hit.mediaType || !hit.tmdbId) return null;
+  const busy = request.isPending || add.isPending;
+  const doRequest = () => request.mutate({ mediaType: hit.mediaType!, tmdbId: hit.tmdbId!, title: hit.title });
+  // Enter on the row requests it (or adds it, without Seerr).
+  useEffect(() => {
+    if (!trigger || busy || request.isSuccess || add.isSuccess || !requestable(hit)) return;
+    if (canRequest) doRequest();
+    else if (canAdd && hit.status === 'none') add.mutate({ kind: hit.mediaType === 'tv' ? 'sonarr' : 'radarr', tmdbId: hit.tmdbId, tvdbId: hit.tvdbId, title: hit.title });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger]);
+  if (!requestable(hit)) return null;
   const err = (request.error ?? add.error) as Error | null;
   if (request.isSuccess || add.isSuccess) {
-    return <span className="inline-flex items-center gap-1 text-[11px] text-ok"><Check className="size-3.5" /> {request.isSuccess ? 'Requested' : `Added to ${add.data?.instance}`}</span>;
+    return <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-ok"><Check className="size-3.5" /> {request.isSuccess ? 'Requested' : `Added to ${add.data?.instance}`}</span>;
   }
-  const busy = request.isPending || add.isPending;
   return (
-    <div className="flex shrink-0 items-center gap-1.5" title={err?.message}>
-      {err && <span className="max-w-40 truncate text-[11px] text-bad">{err.message}</span>}
-      {canRequest && hit.status === 'none' && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={(e) => {
-            e.stopPropagation();
-            request.mutate({ mediaType: hit.mediaType!, tmdbId: hit.tmdbId!, title: hit.title });
-          }}
-          className="inline-flex h-7 items-center gap-1 rounded-lg bg-brand/15 px-2 text-[11px] font-medium text-brand transition hover:bg-brand/25 disabled:opacity-50"
-        >
-          {request.isPending ? <LoaderCircle className="size-3 animate-spin" /> : <Send className="size-3" />} Request
-        </button>
-      )}
-      {canAdd && hit.status === 'none' && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={(e) => {
-            e.stopPropagation();
-            add.mutate({ kind: hit.mediaType === 'tv' ? 'sonarr' : 'radarr', tmdbId: hit.tmdbId, tvdbId: hit.tvdbId, title: hit.title });
-          }}
-          className="inline-flex h-7 items-center gap-1 rounded-lg border border-line-strong px-2 text-[11px] font-medium text-ink-2 transition hover:bg-white/[0.06] disabled:opacity-50"
-          title={`Add to ${hit.mediaType === 'tv' ? 'Sonarr' : 'Radarr'} and search now`}
-        >
-          {add.isPending ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />} {hit.mediaType === 'tv' ? 'Sonarr' : 'Radarr'}
-        </button>
-      )}
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        {canRequest && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => {
+              e.stopPropagation();
+              doRequest();
+            }}
+            className="inline-flex h-7 items-center gap-1 rounded-lg bg-brand/15 px-2 text-[11px] font-medium text-brand transition hover:bg-brand/25 disabled:opacity-50"
+          >
+            {request.isPending ? <LoaderCircle className="size-3 animate-spin" /> : <Send className="size-3" />} {hit.status === 'partial' ? 'Request the rest' : 'Request'}
+          </button>
+        )}
+        {canAdd && hit.status === 'none' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => {
+              e.stopPropagation();
+              add.mutate({ kind: hit.mediaType === 'tv' ? 'sonarr' : 'radarr', tmdbId: hit.tmdbId, tvdbId: hit.tvdbId, title: hit.title });
+            }}
+            className="inline-flex h-7 items-center gap-1 rounded-lg border border-line-strong px-2 text-[11px] font-medium text-ink-2 transition hover:bg-white/[0.06] disabled:opacity-50"
+            title={`Add to ${hit.mediaType === 'tv' ? 'Sonarr' : 'Radarr'} and search now`}
+          >
+            {add.isPending ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />} {hit.mediaType === 'tv' ? 'Sonarr' : 'Radarr'}
+          </button>
+        )}
+      </div>
+      {err && <span role="alert" className="max-w-72 text-right text-[11px] leading-snug text-bad">{err.message}</span>}
     </div>
   );
+}
+
+/** Keeps a bad search result from taking the whole page down. */
+class PaletteBoundary extends Component<{ children: React.ReactNode; onReset: () => void }, { error?: Error }> {
+  state: { error?: Error } = {};
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error('[search]', error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="px-4 py-8 text-center">
+        <p className="text-sm text-bad">Search hit a problem: {this.state.error.message}</p>
+        <button
+          className="mt-3 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 hover:bg-white/[0.06]"
+          onClick={() => {
+            this.setState({ error: undefined });
+            this.props.onReset();
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 }
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -125,6 +166,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
   const [active, setActive] = useState(0);
+  // Bumped when Enter is pressed on a discover row, which then requests it.
+  const [trigger, setTrigger] = useState<{ key: string; n: number }>({ key: '', n: 0 });
 
   useEffect(() => {
     if (open) {
@@ -141,15 +184,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ? [
         { title: 'In your library', hits: d.library },
         { title: 'Managed by your apps', hits: d.managed },
-        { title: d.canRequest ? 'Request something new' : 'Add something new', hits: d.discover },
+        { title: d.canRequest ? 'Request something new' : d.canAdd ? 'Add something new' : 'Not in your library yet (ask an admin for request access)', hits: d.discover },
       ].filter((s) => s.hits.length)
     : [];
   const flat: ({ kind: 'page'; p: PageCmd } | { kind: 'hit'; h: SearchHit })[] = [...pageHits.map((p) => ({ kind: 'page' as const, p })), ...sections.flatMap((s) => s.hits.map((h) => ({ kind: 'hit' as const, h })))];
   useEffect(() => setActive(0), [q]);
 
-  const go = (i: number) => {
+  const go = (i: number, fromKeyboard = false) => {
     const row = flat[i];
     if (!row) return;
+    if (fromKeyboard && row.kind === 'hit' && d && d.discover.includes(row.h) && requestable(row.h) && (d.canRequest || d.canAdd)) {
+      setTrigger((t) => ({ key: row.h.key, n: t.n + 1 }));
+      return;
+    }
     const path = row.kind === 'page' ? row.p.path : row.h.path ?? (row.h.source === 'jellyfin' ? '/jellyfin' : row.h.source === 'seerr' ? '/seerr' : undefined);
     if (path) {
       navigate(path);
@@ -166,10 +213,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActive((a) => Math.max(0, a - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      go(active);
+      go(active, true);
     } else if (e.key === 'Escape') onClose();
   };
-  useEffect(() => document.getElementById(`cmd-${active}`)?.scrollIntoView({ block: 'nearest' }), [active]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an
+  // effect must return nothing or a cleanup function.
+  useEffect(() => {
+    document.getElementById(`cmd-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
 
   let idx = -1;
   return (
@@ -203,6 +254,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               />
               <kbd className="hidden rounded-md border border-line px-1.5 py-0.5 text-[10px] text-ink-4 sm:block">Esc</kbd>
             </div>
+            <PaletteBoundary onReset={() => setText('')}>
             <div id="cmd-list" role="listbox" className="overflow-y-auto p-2">
               {pageHits.length > 0 && (
                 <div className="mb-1">
@@ -240,7 +292,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                           {h.overview && active === i && <p className="mt-0.5 line-clamp-2 text-[11px] text-ink-4">{h.overview}</p>}
                         </div>
                         {st && <Pill tone={st.tone} className="shrink-0">{st.label}</Pill>}
-                        {s.hits === d?.discover && <DiscoverActions hit={h} canRequest={d.canRequest} canAdd={d.canAdd} />}
+                        {s.hits === d?.discover && <DiscoverActions hit={h} canRequest={d.canRequest} canAdd={d.canAdd} trigger={trigger.key === h.key ? trigger.n : 0} />}
                       </div>
                     );
                   })}
@@ -248,10 +300,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               ))}
               {q.length >= 2 && d && !sections.length && !res.isFetching && <p className="px-3 py-8 text-center text-sm text-ink-4">Nothing found for “{q}”.</p>}
               {q.length === 1 && <p className="px-3 py-4 text-center text-xs text-ink-4">Keep typing to search your services…</p>}
+              {q.length >= 2 && res.isError && <p role="alert" className="px-3 py-4 text-center text-xs text-bad">Search failed: {(res.error as Error).message}</p>}
+              {q.length >= 2 && d?.errors && Object.keys(d.errors).length > 0 && (
+                <p className="px-3 pt-2 pb-1 text-[11px] text-warn">
+                  Couldn’t search {Object.entries(d.errors).map(([k, v]) => `${k} (${v})`).join(', ')}.
+                </p>
+              )}
             </div>
+            </PaletteBoundary>
             <div className="flex items-center gap-3 border-t border-line px-4 py-2 text-[11px] text-ink-4">
               <span><kbd className="font-sans">↑↓</kbd> to move</span>
-              <span><kbd className="font-sans">↵</kbd> to open</span>
+              <span><kbd className="font-sans">↵</kbd> to open{d?.canRequest ? ' or request' : ''}</span>
               <span className="ml-auto">Searches Jellyfin, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
             </div>
           </motion.div>

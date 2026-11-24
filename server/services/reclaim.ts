@@ -66,7 +66,8 @@ async function lastPlayed(ctx: JfCtx) {
     };
     for (const u of users.filter((x) => !x.Policy?.IsDisabled)) {
       for (const filter of ['IsPlayed', 'IsResumable']) {
-        const res = await jf<{ Items: JfPlayed[] }>(`/Users/${u.Id}/Items`, token, ctx.deviceId, {
+        const res = await jf<{ Items: JfPlayed[] }>('/Items', token, ctx.deviceId, {
+          userId: u.Id,
           Recursive: true,
           IncludeItemTypes: 'Movie,Episode',
           Filters: filter,

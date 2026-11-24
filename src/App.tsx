@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router';
-import { AnimatePresence, motion } from 'motion/react';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, useRouteError } from 'react-router';
+import { AnimatePresence } from 'motion/react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanSee } from '@/hooks/queries';
@@ -8,7 +8,7 @@ import type { Area } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/States';
 import { AppShell } from '@/components/layout/AppShell';
-import { LogoMark } from '@/components/layout/Logo';
+import { Loader } from '@/components/ui/Loader';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 
@@ -36,10 +36,7 @@ const NotFound = lazy(() => import('@/pages/NotFound'));
 function Splash() {
   return (
     <div className="grid min-h-dvh place-items-center">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative">
-        <div className="absolute inset-0 animate-pulse rounded-2xl bg-brand/30 blur-2xl" />
-        <div className="relative"><LogoMark size={52} /></div>
-      </motion.div>
+      <Loader label="Starting StreamForge" slowHint="Still connecting to the server…" />
     </div>
   );
 }
@@ -72,15 +69,33 @@ function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }
 }
 
 const page = (el: React.ReactNode, area?: Area) => (
-  <Suspense fallback={<div className="min-h-[60vh]" />}>
+  <Suspense fallback={<Loader className="min-h-[60vh]" label="Loading" />}>
     <AreaGate area={area}>{el}</AreaGate>
   </Suspense>
 );
+
+/** Shown instead of a blank page if a page crashes. */
+function RouteError() {
+  const error = useRouteError() as Error | undefined;
+  return (
+    <div className="grid min-h-dvh place-items-center p-6">
+      <Card className="max-w-md p-6 text-center">
+        <h1 className="text-lg font-semibold">Something went wrong on this page</h1>
+        <p className="mt-2 text-sm text-ink-3">{error?.message ?? 'An unexpected error occurred.'}</p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button className="rounded-xl border border-line-strong px-4 py-2 text-sm text-ink-2 hover:bg-white/[0.06]" onClick={() => location.reload()}>Reload</button>
+          <a className="rounded-xl bg-brand/15 px-4 py-2 text-sm text-brand hover:bg-brand/25" href="/">Go to Overview</a>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 const router = createBrowserRouter([
   { element: <PublicOnly />, children: [{ path: '/login', element: <Login /> }] },
   {
     element: <Protected />,
+    errorElement: <RouteError />,
     children: [
       { path: '/', element: <Dashboard /> },
       { path: '/now-playing', element: page(<NowPlaying />, 'now-playing') },
