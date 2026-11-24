@@ -22,6 +22,9 @@ export const EVENT_LABEL: Record<NotifyEvent, string> = {
   import_failed: 'Import failed or gave up',
   download_removed: 'Stalled download removed',
   request_pending: 'New request to approve',
+  playback_alert: 'Transcode and bandwidth alerts',
+  weekly_digest: 'Weekly digest',
+  rule: 'Rule alerts',
 };
 
 interface FieldDef {

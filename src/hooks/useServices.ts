@@ -136,3 +136,26 @@ export function useReclaimAction() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['library', 'reclaim'] }),
   });
 }
+
+/* ------------------------------ playback guard ------------------------------ */
+
+export interface GuardSettings {
+  enabled: boolean;
+  maxTranscodes: number;
+  fourK: 'off' | 'alert' | 'message';
+  maxMbps: number;
+  message: string;
+}
+export interface GuardStatus {
+  settings: GuardSettings;
+  last: { at?: string; streams: number; transcodes: number; mbps: number; error?: string };
+  recent: { at: string; kind: 'transcodes' | '4k' | 'bandwidth'; message: string }[];
+}
+
+export const useGuard = (enabled: boolean) =>
+  useQuery({ queryKey: ['jellyfin', 'guard'], queryFn: ({ signal }) => api<GuardStatus>('/jellyfin/guard', { signal }), enabled, refetchInterval: 30_000 });
+
+export function useSaveGuard() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (b: Partial<GuardSettings>) => api<GuardStatus>('/jellyfin/guard', { method: 'PUT', body: b }), onSuccess: (d) => qc.setQueryData(['jellyfin', 'guard'], d) });
+}

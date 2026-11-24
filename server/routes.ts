@@ -19,6 +19,7 @@ import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
+import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
@@ -158,6 +159,28 @@ api.post(
     await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
     audit(req, `[jellyfin] stream ${id}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
     return { ok: true };
+  }),
+);
+
+/* Transcode and bandwidth alerts. */
+api.get('/jellyfin/guard', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(guardStatus()));
+const guardBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxTranscodes: z.number().int().min(0).max(50).optional(),
+    fourK: z.enum(['off', 'alert', 'message']).optional(),
+    maxMbps: z.number().int().min(0).max(100_000).optional(),
+    message: z.string().trim().min(1).max(400).optional(),
+  })
+  .strict();
+api.put(
+  '/jellyfin/guard',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = guardBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid settings');
+    audit(req, `[jellyfin] playback alerts changed: ${JSON.stringify(b.data)}`);
+    return updateGuard(b.data);
   }),
 );
 

@@ -504,7 +504,7 @@ export interface AutoImportStatus {
 
 /* ------------------------------ notifications ----------------------------- */
 
-export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending';
+export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending' | 'playback_alert' | 'weekly_digest' | 'rule';
 export type ChannelType = 'discord' | 'ntfy' | 'pushover' | 'webhook' | 'webpush';
 
 export interface NotifyChannel {

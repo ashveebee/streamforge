@@ -326,6 +326,8 @@ function normaliseSession(s: JfSession) {
       resolution: resolutionLabel(video?.Width, video?.Height),
       hdr: video?.VideoRangeType && video.VideoRangeType !== 'SDR' ? video.VideoRangeType : undefined,
       videoCodec: video?.Codec,
+      /** Source video bitrate in bits/s, when Jellyfin reports it. */
+      bitrate: video?.BitRate,
       audio: audio?.DisplayTitle ?? audio?.Codec,
       ...artworkFor(item),
     },
@@ -646,6 +648,13 @@ export async function serverNowPlaying() {
 }
 
 export const hasServerKey = () => !!serverApiKey();
+
+/** Controls a session with the server API key (for background features). */
+export async function controlSessionAsServer(sessionId: string, command: SessionCommand, text?: string) {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', undefined, 'jellyfin');
+  await controlSession({ token: key, deviceId: 'streamforge-server', userId: '' }, sessionId, command, text);
+}
 
 /** Raw playback entries from the activity log, for stats without a recorder. */
 export async function playbackEntries(ctx: JfCtx, since: Date) {
