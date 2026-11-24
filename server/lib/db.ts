@@ -63,6 +63,25 @@ const migrations = [
      PRIMARY KEY (key, t)
    );
    CREATE INDEX disk_samples_t ON disk_samples(t);`,
+  // Sign-in sessions, so a restart or upgrade doesn't sign everyone out.
+  `CREATE TABLE sessions (
+     id          TEXT PRIMARY KEY,
+     data        TEXT NOT NULL,
+     expires_at  INTEGER NOT NULL
+   );
+   CREATE INDEX sessions_expires ON sessions(expires_at);`,
+  // Who did what (see lib/audit.ts).
+  `CREATE TABLE audit (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     at         INTEGER NOT NULL,
+     user_id    TEXT,
+     user_name  TEXT,
+     ip         TEXT,
+     category   TEXT NOT NULL,
+     message    TEXT NOT NULL,
+     ok         INTEGER NOT NULL DEFAULT 1
+   );
+   CREATE INDEX audit_at ON audit(at);`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */

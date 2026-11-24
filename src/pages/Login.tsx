@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Globe, LoaderCircle, Lock, User } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
 import { LogoMark } from '@/components/layout/Logo';
@@ -18,7 +18,7 @@ function Field({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElem
   );
 }
 
-type ServerInfo = { name?: string; version?: string; online: boolean; configured?: boolean };
+type ServerInfo = { name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
 
 /** First run: no Jellyfin server is configured yet, so ask for one. */
 function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
@@ -73,8 +73,62 @@ function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
   );
 }
 
+/** Second step: a code from the user's authenticator app (or a recovery code). */
+function MfaStep({ challenge, onBack }: { challenge: string; onBack: (msg?: string) => void }) {
+  const { verifyMfa } = useAuth();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await verifyMfa(challenge, code);
+    } catch (err) {
+      const e2 = err as ApiError;
+      if (e2.code === 'expired') return onBack(e2.message);
+      setError(e2 instanceof ApiError ? e2.message : 'Sign-in failed');
+      setCode('');
+      setBusy(false);
+    }
+  }
+  return (
+    <form onSubmit={submit} className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <div className="mb-4 flex items-center gap-2 text-sm font-medium text-ink"><ShieldCheck className="size-4 text-brand" /> Two-factor sign-in</div>
+      <p className="mb-4 text-xs leading-relaxed text-ink-3">Enter the 6-digit code from your authenticator app, or one of your recovery codes.</p>
+      <Field
+        icon={KeyRound}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        placeholder="123456"
+        autoFocus
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        aria-label="Verification code"
+        maxLength={20}
+        required
+      />
+      {error && (
+        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="mt-3 rounded-lg border border-bad/25 bg-bad/10 px-3 py-2 text-xs text-bad">
+          {error}
+        </motion.p>
+      )}
+      <button
+        type="submit"
+        disabled={busy || code.trim().length < 6}
+        className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 text-sm font-semibold text-white shadow-[0_12px_32px_-12px_rgb(168_85_247/0.8)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
+      >
+        {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Verify <ArrowRight className="size-4" /></>}
+      </button>
+      <button type="button" onClick={() => onBack()} className="mt-3 w-full text-center text-xs text-ink-4 hover:text-ink-2">Use a different account</button>
+    </form>
+  );
+}
+
 export default function Login() {
   const { login } = useAuth();
+  const [challenge, setChallenge] = useState<string>();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
@@ -82,9 +136,17 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [server, setServer] = useState<ServerInfo>();
   const needsSetup = server?.configured === false;
+  // ?password forces the password form, in case single sign-on is broken.
+  const hidePassword = !!server?.sso?.hidePassword && !new URLSearchParams(location.search).has('password');
 
   useEffect(() => {
     api<ServerInfo>('/auth/server').then(setServer, () => setServer({ online: false }));
+    // Single sign-on reports problems back through the URL.
+    const err = new URLSearchParams(location.search).get('error');
+    if (err) {
+      setError(err.slice(0, 300));
+      history.replaceState(null, '', '/login');
+    }
   }, []);
 
   async function submit(e: FormEvent) {
@@ -92,7 +154,12 @@ export default function Login() {
     setBusy(true);
     setError(undefined);
     try {
-      await login(username, password);
+      const r = await login(username, password);
+      if (r.mfaChallenge) {
+        setChallenge(r.mfaChallenge);
+        setPassword('');
+        setBusy(false);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign-in failed');
       setBusy(false);
@@ -130,8 +197,35 @@ export default function Login() {
 
         {needsSetup ? (
           <Setup onDone={setServer} />
+        ) : challenge ? (
+          <MfaStep
+            challenge={challenge}
+            onBack={(msg) => {
+              setChallenge(undefined);
+              setError(msg);
+            }}
+          />
         ) : (
           <form onSubmit={submit} className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+            {server?.sso && (
+              <>
+                <a
+                  href="/api/auth/oidc/start"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-line-strong bg-white/[0.04] text-sm font-semibold text-ink transition hover:bg-white/[0.08]"
+                >
+                  <ShieldCheck className="size-4 text-brand" /> Sign in with {server.sso.label}
+                </a>
+                {!hidePassword && (
+                  <div className="my-4 flex items-center gap-3 text-[11px] text-ink-4">
+                    <span className="h-px flex-1 bg-line" /> or use your Jellyfin password <span className="h-px flex-1 bg-line" />
+                  </div>
+                )}
+                {hidePassword && error && (
+                  <p role="alert" className="mt-3 rounded-lg border border-bad/25 bg-bad/10 px-3 py-2 text-xs text-bad">{error}</p>
+                )}
+              </>
+            )}
+            {!hidePassword && <>
             <div className="space-y-3">
               <Field icon={User} placeholder="Username" autoComplete="username" autoFocus value={username} onChange={(e) => setUsername(e.target.value)} required />
               <div className="relative">
@@ -168,6 +262,7 @@ export default function Login() {
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Sign in <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" /></>}
             </button>
+            </>}
 
             <div className="mt-5 flex items-center justify-center gap-2 text-xs text-ink-4">
               <span className={`size-1.5 rounded-full ${server === undefined ? 'bg-idle' : server.online ? 'bg-ok shadow-[0_0_8px_var(--color-ok)]' : 'bg-bad'}`} />

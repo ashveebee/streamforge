@@ -97,28 +97,47 @@ async function requests(filter: 'all' | 'pending' | 'approved' | 'processing' | 
       sort: 'added',
       filter,
     });
-    return Promise.all(
-      res.results.map(async (r) => {
-        const d = await details(r.type, r.media.tmdbId);
-        const date = d.releaseDate ?? d.firstAirDate;
-        return {
-          id: r.id,
-          type: r.type,
-          title: d.title ?? d.name ?? `TMDB #${r.media.tmdbId}`,
-          year: date ? Number(date.slice(0, 4)) : undefined,
-          poster: d.posterPath ? `${TMDB_IMG}/w342${d.posterPath}` : undefined,
-          backdrop: d.backdropPath ? `${TMDB_IMG}/w780${d.backdropPath}` : undefined,
-          status: REQUEST_STATUS[r.status] ?? 'unknown',
-          mediaStatus: MEDIA_STATUS[r.media.status] ?? 'unknown',
-          is4k: !!r.is4k,
-          seasons: r.seasons?.map((s) => s.seasonNumber) ?? [],
-          requestedBy: r.requestedBy?.displayName ?? r.requestedBy?.email ?? 'Unknown',
-          modifiedBy: r.modifiedBy?.displayName,
-          createdAt: r.createdAt,
-        };
-      }),
-    );
+    return Promise.all(res.results.map(normalise));
   });
+}
+
+async function normalise(r: SeerrRequest) {
+  const d = await details(r.type, r.media.tmdbId);
+  const date = d.releaseDate ?? d.firstAirDate;
+  return {
+    id: r.id,
+    type: r.type,
+    title: d.title ?? d.name ?? `TMDB #${r.media.tmdbId}`,
+    year: date ? Number(date.slice(0, 4)) : undefined,
+    poster: d.posterPath ? `${TMDB_IMG}/w342${d.posterPath}` : undefined,
+    backdrop: d.backdropPath ? `${TMDB_IMG}/w780${d.backdropPath}` : undefined,
+    status: REQUEST_STATUS[r.status] ?? 'unknown',
+    mediaStatus: MEDIA_STATUS[r.media.status] ?? 'unknown',
+    is4k: !!r.is4k,
+    seasons: r.seasons?.map((s) => s.seasonNumber) ?? [],
+    requestedBy: r.requestedBy?.displayName ?? r.requestedBy?.email ?? 'Unknown',
+    modifiedBy: r.modifiedBy?.displayName,
+    createdAt: r.createdAt,
+  };
+}
+
+/** The Seerr user linked to a Jellyfin user (Seerr stores the Jellyfin id). */
+export async function seerrUserFor(jellyfinUserId: string) {
+  const users = await cache.get('seerr:users', 10 * 60_000, () =>
+    seerr()!.get<{ results: { id: number; jellyfinUserId?: string; displayName?: string }[] }>('/api/v1/user', { take: 1000 }),
+  );
+  const id = jellyfinUserId.replace(/-/g, '').toLowerCase();
+  return users.results.find((u) => u.jellyfinUserId?.replace(/-/g, '').toLowerCase() === id);
+}
+
+/** One user's own requests, newest first. */
+export async function userRequests(jellyfinUserId: string, take = 20) {
+  const user = await seerrUserFor(jellyfinUserId);
+  if (!user) return { linked: false, requests: [] };
+  const res = await cache.get(`seerr:requests:user:${user.id}`, 30_000, () =>
+    seerr()!.get<{ results: SeerrRequest[] }>(`/api/v1/user/${user.id}/requests`, { take, skip: 0 }),
+  );
+  return { linked: true, requests: await Promise.all(res.results.map(normalise)) };
 }
 
 export async function seerrOverview() {

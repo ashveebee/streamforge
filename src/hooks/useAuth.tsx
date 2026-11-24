@@ -6,7 +6,9 @@ import type { User } from '@/lib/types';
 interface AuthState {
   user: User | null;
   status: 'loading' | 'authenticated' | 'anonymous';
-  login: (username: string, password: string) => Promise<void>;
+  /** Resolves with a challenge when a two-factor code is needed next. */
+  login: (username: string, password: string) => Promise<{ mfaChallenge?: string }>;
+  verifyMfa: (challenge: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -37,7 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(async (username: string, password: string) => {
-    const r = await api<{ user: User }>('/auth/login', { method: 'POST', body: { username, password } });
+    const r = await api<{ user?: User; mfaRequired?: boolean; challenge?: string }>('/auth/login', { method: 'POST', body: { username, password } });
+    if (r.mfaRequired && r.challenge) return { mfaChallenge: r.challenge };
+    setUser(r.user!);
+    setStatus('authenticated');
+    return {};
+  }, []);
+
+  const verifyMfa = useCallback(async (challenge: string, code: string) => {
+    const r = await api<{ user: User }>('/auth/mfa/verify', { method: 'POST', body: { challenge, code } });
     setUser(r.user);
     setStatus('authenticated');
   }, []);
@@ -49,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     qc.clear();
   }, [qc]);
 
-  const value = useMemo(() => ({ user, status, login, logout }), [user, status, login, logout]);
+  const value = useMemo(() => ({ user, status, login, verifyMfa, logout }), [user, status, login, verifyMfa, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

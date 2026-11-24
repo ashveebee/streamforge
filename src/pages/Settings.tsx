@@ -31,6 +31,9 @@ import { Switch } from '@/components/ui/Switch';
 import { InstancesSection } from '@/components/settings/InstancesSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { MembersSection } from '@/components/settings/MembersSection';
+import { ClientsSection } from '@/components/settings/ClientsSection';
+import { BackupSection } from '@/components/settings/BackupSection';
+import { SsoSection } from '@/components/settings/SsoSection';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 
 /** Where each service keeps its API key, and an example address. */
@@ -44,6 +47,9 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptiona
   radarr: { placeholder: 'https://radarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   prowlarr: { placeholder: 'https://prowlarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   seerr: { placeholder: 'https://seerr.example.com', keyHelp: 'Settings → General → API Key' },
+  bazarr: { placeholder: 'https://bazarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
+  lidarr: { placeholder: 'https://lidarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
+  readarr: { placeholder: 'https://readarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   infinidisk: {
     placeholder: 'https://infinidisk.example.com',
     keyHelp: 'Optional if the status endpoint is public.',
@@ -51,7 +57,7 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptiona
   },
 };
 
-const ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'];
+const ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 /* -------------------------------- inputs -------------------------------- */
 
@@ -438,8 +444,11 @@ export default function SettingsPage() {
           })}
         </ul>
       )}
+      {q.data && <ClientsSection />}
       {q.data && <NotificationsSection />}
       {q.data && <MembersSection />}
+      {q.data && <SsoSection />}
+      {q.data && <BackupSection />}
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
       </p>

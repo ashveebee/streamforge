@@ -12,7 +12,7 @@ import { readPref, writePref } from './lib/db.js';
  * is admin-only regardless.
  */
 
-export const AREAS = ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] as const;
+export const AREAS = ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr', 'downloads', 'requests'] as const;
 export type Area = (typeof AREAS)[number];
 
 interface MemberAccess {
@@ -55,7 +55,8 @@ function areasFor(path: string): Area[] | undefined {
   if (path.startsWith('/jellyfin/')) return ['jellyfin'];
   if (path.startsWith('/library/')) return ['library'];
   if (path.startsWith('/system/') || path.startsWith('/downloads') || path.startsWith('/storage/')) return ['system'];
-  for (const a of ['sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] as const) if (path.startsWith(`/${a}/`)) return [a];
+  if (path.startsWith('/clients')) return ['downloads'];
+  for (const a of ['sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr'] as const) if (path.startsWith(`/${a}/`)) return [a];
   return undefined;
 }
 

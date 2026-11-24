@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamForge — one dashboard for your Jellyfin media stack</title>
-  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk: live streams, service health, downloads, requests and storage in one place, with auto-import, stalled-download cleanup and notifications.">
+  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
   <meta property="og:title" content="StreamForge — one dashboard for your Jellyfin media stack">
-  <meta property="og:description" content="Live streams, service health, downloads, requests and storage for Jellyfin and the *arr stack, in one self-hosted dashboard.">
+  <meta property="og:description" content="Live streams, service health, downloads, requests, search and automation for Jellyfin and the *arr stack, in one self-hosted dashboard.">
   <meta property="og:image" content="https://ashveebee.github.io/streamforge/screenshots/dashboard.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,6 +36,10 @@
       --prowlarr: #fe7a34;
       --seerr: #6d6af8;
       --infinidisk: #2dd4bf;
+      --lidarr: #4ade80;
+      --readarr: #f87171;
+      --bazarr: #f0abfc;
+      --downloads: #60a5fa;
       --radius: 20px;
       --max: 1160px;
     }
@@ -202,6 +206,13 @@
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
     <symbol id="i-key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
     <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+    <symbol id="i-captions" viewBox="0 0 24 24"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4"/><path d="M15 15h2"/><path d="M7 11h2"/><path d="M13 11h4"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0l1.58 6.14a2 2 0 0 0 1.44 1.44l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/></symbol>
+    <symbol id="i-recycle" viewBox="0 0 24 24"><path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-2.7l3.9-6.7"/><path d="m11 19 3-3-3-3"/><path d="M14 16H20a1.8 1.8 0 0 0 1.6-2.7l-1.4-2.4"/><path d="m8.6 6.2 1.9-3.3a1.8 1.8 0 0 1 3.1 0l3.9 6.7"/><path d="m13.4 9.9 4.1 1.1 1.1-4.1"/><path d="m7 10.6-4.1-1.1L1.8 13.6"/></symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
@@ -241,7 +252,7 @@
       <div class="wrap">
         <span class="pill"><span class="dot"></span> Self-hosted · Free and open source</span>
         <h1>Your whole media stack, <span class="grad-text">one dashboard.</span></h1>
-        <p class="lede">StreamForge brings Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
+        <p class="lede">StreamForge brings Jellyfin, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
         <div class="cta">
           <a class="btn btn-primary" href="#install">Get started <svg class="i"><use href="#i-arrow"/></svg></a>
           <a class="btn btn-ghost" href="https://github.com/ashveebee/streamforge"><svg class="i"><use href="#i-github"/></svg> View on GitHub</a>
@@ -250,9 +261,13 @@
           <span class="chip" style="--c:var(--jellyfin)"><i></i>Jellyfin</span>
           <span class="chip" style="--c:var(--sonarr)"><i></i>Sonarr</span>
           <span class="chip" style="--c:var(--radarr)"><i></i>Radarr</span>
+          <span class="chip" style="--c:var(--lidarr)"><i></i>Lidarr</span>
+          <span class="chip" style="--c:var(--readarr)"><i></i>Readarr</span>
+          <span class="chip" style="--c:var(--bazarr)"><i></i>Bazarr</span>
           <span class="chip" style="--c:var(--prowlarr)"><i></i>Prowlarr</span>
           <span class="chip" style="--c:var(--seerr)"><i></i>Seerr</span>
           <span class="chip" style="--c:var(--infinidisk)"><i></i>Infinidisk</span>
+          <span class="chip" style="--c:var(--downloads)"><i></i>qBittorrent · Transmission · SABnzbd · NZBGet</span>
         </div>
         <div class="frame reveal">
           <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -266,7 +281,7 @@
         <div class="center">
           <div class="eyebrow">Features</div>
           <h2>Everything at a glance</h2>
-          <p class="section-lede">One place to see your server, instead of six browser tabs.</p>
+          <p class="section-lede">One place to see your server, instead of a dozen browser tabs.</p>
         </div>
         <div class="features">
           <article class="card reveal" style="--c:var(--jellyfin)">
@@ -298,6 +313,21 @@
             <div class="ico"><svg class="i"><use href="#i-settings"/></svg></div>
             <h3>Set up from the UI</h3>
             <p>Add each service's address and API key in Settings, test the connection and save. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--downloads)">
+            <div class="ico"><svg class="i"><use href="#i-gauge"/></svg></div>
+            <h3>Download clients</h3>
+            <p>Real speeds from qBittorrent, Transmission, SABnzbd and NZBGet, every download in each client, and buttons to pause, remove or set speed limits.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--cyan)">
+            <div class="ico"><svg class="i"><use href="#i-search"/></svg></div>
+            <h3>Search everything</h3>
+            <p>Press ⌘K to search Jellyfin and every *arr app at once. Request something new through Seerr, or add it straight to Sonarr or Radarr.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--bazarr)">
+            <div class="ico"><svg class="i"><use href="#i-captions"/></svg></div>
+            <h3>Music, books and subtitles</h3>
+            <p>Lidarr and Readarr queues, releases and missing items, and Bazarr's missing subtitles with search buttons.</p>
           </article>
         </div>
       </div>
@@ -340,6 +370,21 @@
             <div class="ico"><svg class="i"><use href="#i-phone"/></svg></div>
             <h3>Install it like an app</h3>
             <p>Add StreamForge to your phone's home screen or your desktop. It opens like any other app, and push notifications reach your phone.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--violet)">
+            <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
+            <h3>Rules</h3>
+            <p>If a disk is nearly full, pause the download clients. If downloads stall, run the cleanup. If a service stays down, tell you. Rules never delete anything.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--ok)">
+            <div class="ico"><svg class="i"><use href="#i-recycle"/></svg></div>
+            <h3>Cleanup suggestions</h3>
+            <p>Big movies and shows nobody has watched in months, ranked by the space they'd free. Keep them, stop monitoring them, or delete them.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--radarr)">
+            <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
+            <h3>Transcode alerts</h3>
+            <p>Hear about it when too many streams transcode, bandwidth passes your limit, or someone transcodes 4K, and optionally message the viewer.</p>
           </article>
         </div>
       </div>
@@ -392,12 +437,61 @@
           <div class="shot"><img src="screenshots/settings.jpg" width="2880" height="2000" loading="lazy" alt="Settings page with an address and API key field for each service"></div>
         </div>
 
+        <div class="show flip reveal">
+          <div class="txt">
+            <div class="eyebrow">Downloads</div>
+            <h3>Every torrent and NZB, with real speeds</h3>
+            <p>Connect your download clients and see exactly what's moving, how fast, and what's stuck, across torrent and usenet.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>qBittorrent, Transmission, SABnzbd and NZBGet</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Live up and down speeds with 15 minutes of history</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Pause, resume or remove, with or without files</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Set speed limits per client</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/downloads.jpg" width="2880" height="2200" loading="lazy" alt="Downloads page with live transfer speeds and every download in qBittorrent and SABnzbd"></div>
+        </div>
+
+        <div class="show reveal">
+          <div class="txt">
+            <div class="eyebrow">Search</div>
+            <h3>Find anything, request anything</h3>
+            <p>One search box for your whole stack. See whether something is already in the library, which app manages it, or request it in one click.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Jellyfin, Sonarr, Radarr, Lidarr and Readarr at once</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Requests go through Seerr in each person's own name</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Admins can add titles straight to Sonarr or Radarr</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Jump to any page from the keyboard</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/search.jpg" width="2880" height="1800" loading="lazy" alt="Search palette showing results from Jellyfin, Sonarr and Seerr with a Request button"></div>
+        </div>
+
+        <div class="show flip reveal">
+          <div class="txt">
+            <div class="eyebrow">For everyone</div>
+            <h3>A page for each person in the house</h3>
+            <p>Everyone who signs in gets their own page: what to watch next, what they've watched, how their requests are going, and where they're signed in.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Continue watching and next up</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Their Seerr requests and their status</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign out devices they don't recognise</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Two-factor sign-in with any authenticator app</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/me.jpg" width="2880" height="3200" loading="lazy" alt="Personal page with continue watching, next up, requests, watch history and signed-in devices"></div>
+        </div>
+
         <div class="gallery">
           <a class="reveal" href="screenshots/jellyfin.jpg"><figure><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with libraries, server details and recently added items"><figcaption><b>Jellyfin.</b> Libraries, users, server details and new additions.</figcaption></figure></a>
           <a class="reveal" href="screenshots/sonarr.jpg"><figure><img src="screenshots/sonarr.jpg" width="2880" height="3400" loading="lazy" alt="Sonarr page with the download queue, episodes airing soon, auto-import and missing episodes"><figcaption><b>Sonarr and Radarr.</b> Queues, upcoming releases, missing items and auto-import.</figcaption></figure></a>
           <a class="reveal" href="screenshots/stats.jpg"><figure><img src="screenshots/stats.jpg" width="2880" height="2200" loading="lazy" alt="Stats page with plays per day split by direct play and transcode, and top viewers and titles"><figcaption><b>Stats.</b> Watch time, transcodes and who watches what.</figcaption></figure></a>
           <a class="reveal" href="screenshots/library.jpg"><figure><img src="screenshots/library.jpg" width="2880" height="1800" loading="lazy" alt="Library health page with incomplete series, upgrades available and mismatches with Jellyfin"><figcaption><b>Library health.</b> Gaps, upgrades and items out of sync.</figcaption></figure></a>
           <a class="reveal" href="screenshots/seerr.jpg"><figure><img src="screenshots/seerr.jpg" width="2880" height="1800" loading="lazy" alt="Seerr page with requests awaiting approval and recent requests"><figcaption><b>Seerr.</b> Pending approvals and recent requests.</figcaption></figure></a>
+          <a class="reveal" href="screenshots/digest.jpg"><figure><img src="screenshots/digest.jpg" width="2880" height="2200" loading="lazy" alt="Weekly digest page with new movies, new episodes and the most watched titles"><figcaption><b>Weekly digest.</b> What's new and what got watched, sent every week.</figcaption></figure></a>
+          <a class="reveal" href="screenshots/rules.jpg"><figure><img src="screenshots/rules.jpg" width="2880" height="1800" loading="lazy" alt="Rules page with automations such as pausing downloads when a disk is almost full"><figcaption><b>Rules.</b> If this happens, do that.</figcaption></figure></a>
+          <a class="reveal" href="screenshots/audit.jpg"><figure><img src="screenshots/audit.jpg" width="2880" height="1800" loading="lazy" alt="Audit log listing changes, approvals and sign-ins with who made them"><figcaption><b>Audit log.</b> Who changed what, and when.</figcaption></figure></a>
+          <a class="reveal" href="screenshots/bazarr.jpg"><figure><img src="screenshots/bazarr.jpg" width="2880" height="2200" loading="lazy" alt="Bazarr page with episodes and movies missing subtitles"><figcaption><b>Bazarr.</b> Missing subtitles, one click to search.</figcaption></figure></a>
           <a class="reveal" href="screenshots/infinidisk.jpg"><figure><img src="screenshots/infinidisk.jpg" width="2880" height="1800" loading="lazy" alt="Infinidisk page with storage capacity and the health of each drive"><figcaption><b>Infinidisk.</b> Capacity, drive health and temperatures.</figcaption></figure></a>
         </div>
         <p class="note center">Screenshots use the built-in demo data. All titles, people and artwork are fictional.</p>
@@ -437,7 +531,7 @@
           </div>
           <div class="card step reveal">
             <h3>Add your services</h3>
-            <p>In Settings, add the address and API key for Sonarr, Radarr, Prowlarr, Seerr and Infinidisk. Skip any you don't use.</p>
+            <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients. Skip any you don't use.</p>
           </div>
         </div>
         <p class="note">Full guide, Docker networking tips, backups and troubleshooting are in the <a href="https://github.com/ashveebee/streamforge#installation">installation docs</a>. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
@@ -453,6 +547,10 @@
           <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Jellyfin sign-in</h3><p>Sign in with your existing Jellyfin account. Only administrators get in by default; you choose which pages the rest of the household sees.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Hardened by default</h3><p>CSRF protection, rate-limited login, a strict content security policy and artwork proxied through validated routes.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--radarr)"><svg class="i"><use href="#i-box"/></svg></div><h3>Signed images</h3><p>Every release image ships with an SBOM and build provenance you can verify with <code>gh attestation verify</code>.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--seerr)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Single sign-on and two-factor</h3><p>Sign in through Authentik, Authelia, Keycloak or any OpenID Connect provider, and protect password sign-ins with authenticator-app codes.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--jellyfin)"><svg class="i"><use href="#i-scroll"/></svg></div><h3>Audit log</h3><p>Every setting change, approval, stream control and sign-in is recorded with who did it and from where.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--infinidisk)"><svg class="i"><use href="#i-archive"/></svg></div><h3>Encrypted backups</h3><p>Download all your settings as one passphrase-encrypted file and restore it on a new server in seconds.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-users"/></svg></div><h3>Your devices, your control</h3><p>Sessions survive restarts and upgrades, and everyone can see and sign out the devices they're signed in on.</p></div>
         </div>
       </div>
     </section>

@@ -1,7 +1,9 @@
 # StreamForge
 
 A modern control centre for a Jellyfin media server and the services around it:
-**Jellyfin, Sonarr, Radarr, Prowlarr, Seerr and Infinidisk**.
+**Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
+Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
+NZBGet).
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
@@ -33,7 +35,20 @@ server.
     <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" alt="Library health: incomplete series, upgrades available and mismatches with Jellyfin"></a><br><b>Library health.</b> Missing episodes, upgrades and items out of sync with Jellyfin.</td>
   </tr>
   <tr>
-    <td colspan="2"><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services from the UI, test each connection and apply changes without a restart.</td>
+    <td><a href="docs/screenshots/downloads.jpg"><img src="docs/screenshots/downloads.jpg" alt="Downloads: live speeds and every download in qBittorrent and SABnzbd"></a><br><b>Downloads.</b> Real speeds and controls for your download clients.</td>
+    <td><a href="docs/screenshots/search.jpg"><img src="docs/screenshots/search.jpg" alt="Search: results from Jellyfin, Sonarr and Seerr with a Request button"></a><br><b>Search.</b> ⌘K searches everything and requests what's missing.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/me.jpg"><img src="docs/screenshots/me.jpg" alt="Personal page: continue watching, next up, requests, history and devices"></a><br><b>Your page.</b> Continue watching, requests, history and devices.</td>
+    <td><a href="docs/screenshots/digest.jpg"><img src="docs/screenshots/digest.jpg" alt="Weekly digest: new movies and episodes and the most watched titles"></a><br><b>Weekly digest.</b> What's new and what got watched.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/rules.jpg"><img src="docs/screenshots/rules.jpg" alt="Rules: automations such as pausing downloads when a disk is almost full"></a><br><b>Rules.</b> If this happens, do that.</td>
+    <td><a href="docs/screenshots/audit.jpg"><img src="docs/screenshots/audit.jpg" alt="Audit log: changes, approvals and sign-ins with who made them"></a><br><b>Audit log.</b> Who changed what, and when.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/bazarr.jpg"><img src="docs/screenshots/bazarr.jpg" alt="Bazarr: episodes and movies missing subtitles"></a><br><b>Bazarr.</b> Missing subtitles with search buttons.</td>
+    <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
   </tr>
 </table>
 
@@ -67,6 +82,13 @@ server.
     with TMDB artwork. Admins can approve or decline requests from the Seerr
     page or the dashboard.
   - *Infinidisk:* drives, capacity, usage, temperature and health.
+  - *Lidarr and Readarr:* library stats, download queue (remove and
+    blocklist), upcoming releases, and missing albums or books with search
+    buttons.
+  - *Bazarr:* episodes and movies missing subtitles, with per-title and bulk
+    searches, plus recent subtitle activity.
+  - *Jellyfin maintenance:* admins can scan all libraries or one, refresh a
+    library's metadata, and run or stop Jellyfin's scheduled tasks.
 - **System status.** A background monitor checks every service on an interval
   and records:
   - healthy, degraded or offline status;
@@ -117,6 +139,35 @@ server.
 - **Member access.** Let non-admin Jellyfin users sign in and choose which
   pages they see. Access is enforced by the server, and every action stays
   admin-only.
+- **Download clients.** Connect qBittorrent, Transmission, SABnzbd or NZBGet
+  for real transfer speeds and a Downloads page listing everything in each
+  client. Admins can pause and resume, remove (with or without files) and set
+  speed limits.
+- **Global search.** Press ⌘K / Ctrl+K (or `/`) to search Jellyfin, every
+  Sonarr/Radarr instance, Lidarr and Readarr at once, and jump to any page.
+  New titles come from Seerr, where people can request them in their own
+  name; admins can also add a title straight to Sonarr or Radarr.
+- **Your own page.** Everyone gets a page (click your name in the sidebar)
+  with continue watching, next up, watch history, their Seerr requests,
+  signed-in devices and two-factor settings.
+- **Weekly digest.** A "This week" page shows what was added and what got
+  watched. Admins can send it every week through the notification channels.
+- **Cleanup suggestions.** Library health lists big movies and series nobody
+  has watched in 3–24 months, with the space each would free. Keep, stop
+  monitoring, or delete them from there.
+- **Transcode and bandwidth alerts.** Get alerted when too many streams
+  transcode at once, total bandwidth passes a limit, or a 4K file is being
+  transcoded (optionally messaging the viewer).
+- **Rules.** Simple automations: if a disk is nearly full, pause the download
+  clients; if downloads stall, run the cleanup; if a service stays down,
+  notify; and more. Rules never delete anything.
+- **Audit log.** Every change made through StreamForge — settings, approvals,
+  stream controls, queue actions, sign-ins — with who did it and from where.
+- **Single sign-on and two-factor.** Sign in through any OpenID Connect
+  provider (Authentik, Authelia, Keycloak, Pocket ID, …), and turn on
+  two-factor sign-in with an authenticator app.
+- **Backup and restore.** Download all settings as one encrypted file and
+  restore it on another server from Settings.
 - **Installable.** StreamForge is a progressive web app: install it on a phone
   or desktop, and the app shell opens offline. Web push needs HTTPS.
 - **Real-time updates.** Each endpoint is polled at a cadence that suits its
@@ -183,6 +234,9 @@ immediately; no restart is needed. Skip any service you don't run.
 | Jellyfin | Dashboard → API Keys (optional; enables server-wide stats and update warnings) |
 | Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
 | Seerr | Settings → General → API Key |
+| Lidarr / Readarr / Bazarr | Settings → General → Security → API Key |
+| qBittorrent / Transmission / NZBGet | Your web UI username and password (Settings → Download clients) |
+| SABnzbd | Config → General → API Key (Settings → Download clients) |
 | Infinidisk | Your Infinidisk settings (optional if its status endpoint is public) |
 
 > **Addresses are resolved from inside the container.** `localhost` means the
@@ -204,7 +258,12 @@ following `latest`.
 
 ### Backing up
 
-Everything StreamForge stores is in `/data/streamforge.db`. To back it up:
+The easiest way is **Settings → Backup & restore**: it downloads every setting
+as one file encrypted with a passphrase, and restores it on any StreamForge
+server (in Docker, StreamForge restarts itself to apply it).
+
+Everything StreamForge stores is in `/data/streamforge.db`. To back up the whole
+volume instead:
 
 ```bash
 docker run --rm -v streamforge-data:/data -v "$PWD":/backup alpine \
@@ -238,6 +297,13 @@ default for **Member access** in Settings. See `.env.example` for the full list.
 - **Locked out after changing the Jellyfin server:** this is expected, because
   everyone is signed out. Sign in again with an administrator account on the
   new server.
+- **Lost your two-factor device and recovery codes:** another admin can reset
+  it under Settings → Sign-in security. If you're the only admin, start the
+  container once with `STREAMFORGE_RESET_2FA=<your Jellyfin user name>`, sign
+  in, and remove the variable again.
+- **Single sign-on says there's no Jellyfin user:** the username claim
+  (`preferred_username` by default) must match a Jellyfin user name. Change the
+  claim under Settings → Sign-in security if your provider sends something else.
 - **Logs:** `docker logs streamforge`. The startup banner lists every service
   and where its settings come from.
 
@@ -361,10 +427,27 @@ To add an integration:
   anything.
 - Notification secrets (webhook URLs, tokens) are stored on the server and
   never sent back to the browser.
-- Sessions are held in memory, so restarting the server signs everyone out.
+- Sessions are stored in the settings database, so restarts and upgrades keep
+  people signed in. Everyone can see and sign out their own devices.
+- Two-factor sign-in uses standard authenticator-app codes with ten
+  single-use recovery codes. Codes can't be reused, and attempts are
+  rate-limited.
+- Single sign-on uses the OpenID Connect code flow with PKCE and checks the ID
+  token's signature against the provider's keys. It needs a Jellyfin API key,
+  because there is no Jellyfin password to sign in with.
+- Backups are encrypted with your passphrase (scrypt and AES-256-GCM) and never
+  include sign-in sessions.
+- Every change and sign-in is recorded in the audit log for 180 days.
 
 ## Notes on data sources
 
+- **Features that need the Jellyfin API key.** Transcode alerts, the weekly
+  digest notification, single sign-on, the active-streams and ended-series
+  rules, and watch history all work in the background, so they use the
+  Jellyfin API key (Settings → Jellyfin).
+- **Cleanup suggestions** count a title as watched when any Jellyfin user has
+  played or started it, or StreamForge recorded a play. Results are cached for
+  ten minutes.
 - **Playback stats.** With a Jellyfin API key set (Settings → Jellyfin), a
   recorder samples active sessions every 30 seconds and stores each play,
   including watch time and whether it transcoded. Without a key, or for days

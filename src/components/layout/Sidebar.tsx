@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, LayoutDashboard, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Settings } from 'lucide-react';
+import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
@@ -11,7 +11,7 @@ import { SERVICES } from '../ui/ServiceIcon';
 import { StatusDot } from '../ui/Status';
 import { LogoMark } from './Logo';
 
-const SERVICE_ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'];
+const SERVICE_ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 function NavItem({
   to,
@@ -72,7 +72,9 @@ export function Sidebar({
   onToggle,
   onNavigate,
   mobile,
+  onSearch,
 }: {
+  onSearch?: () => void;
   collapsed: boolean;
   onToggle?: () => void;
   onNavigate?: () => void;
@@ -106,6 +108,26 @@ export function Sidebar({
         )}
       </div>
 
+      {onSearch && (
+        <button
+          onClick={() => {
+            onNavigate?.();
+            onSearch();
+          }}
+          title={collapsed ? 'Search (⌘K)' : undefined}
+          aria-label="Search"
+          className={cn('mt-4 flex h-9 items-center gap-2.5 rounded-xl border border-line bg-white/[0.02] px-2.5 text-[13px] text-ink-4 transition hover:bg-white/[0.05] hover:text-ink-2', collapsed && 'justify-center px-0')}
+        >
+          <Search className="size-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">Search</span>
+              <kbd className="rounded border border-line px-1 text-[10px]">⌘K</kbd>
+            </>
+          )}
+        </button>
+      )}
+
       <nav className="mt-5 flex flex-1 flex-col gap-0.5 overflow-y-auto no-scrollbar" aria-label="Main">
         <NavItem to="/" icon={LayoutDashboard} label="Overview" collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('now-playing') && <NavItem
@@ -124,10 +146,14 @@ export function Sidebar({
             ) : undefined
           }
         />}
+        <NavItem to="/digest" icon={Newspaper} label="This week" collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/rules" icon={Sparkles} label="Rules" collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/audit" icon={ScrollText} label="Audit log" collapsed={collapsed} onNavigate={onNavigate} />}
 
         <div className={cn('mt-5 mb-1.5 px-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-4 uppercase', collapsed && 'sr-only')}>
           Services
@@ -154,13 +180,15 @@ export function Sidebar({
       <div className="mt-3 border-t border-line pt-3">
         {user && (
           <div className={cn('flex items-center gap-2.5 rounded-xl p-1.5', collapsed && 'flex-col')}>
-            <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={32} />
-            {!collapsed && (
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-[13px] font-medium">{user.name}</div>
-                <div className="text-[11px] text-ink-4">{user.isAdmin ? 'Administrator' : 'Member'}</div>
-              </div>
-            )}
+            <NavLink to="/me" onClick={onNavigate} title="Your activity and account" className={cn('flex min-w-0 items-center gap-2.5 rounded-lg transition hover:opacity-80', !collapsed && 'flex-1')}>
+              <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={32} />
+              {!collapsed && (
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="truncate text-[13px] font-medium">{user.name}</div>
+                  <div className="text-[11px] text-ink-4">{user.isAdmin ? 'Administrator' : 'Member'}</div>
+                </div>
+              )}
+            </NavLink>
             <button
               onClick={() => void logout()}
               className="grid size-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white/[0.06] hover:text-ink"

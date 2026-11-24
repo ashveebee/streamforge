@@ -18,10 +18,18 @@ const Sonarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.Sonarr
 const Radarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
 const Prowlarr = lazy(() => import('@/pages/Prowlarr'));
 const Seerr = lazy(() => import('@/pages/Seerr'));
+const Bazarr = lazy(() => import('@/pages/Bazarr'));
+const Lidarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.LidarrPage })));
+const Readarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.ReadarrPage })));
 const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
 const System = lazy(() => import('@/pages/System'));
 const Stats = lazy(() => import('@/pages/Stats'));
 const LibraryHealth = lazy(() => import('@/pages/LibraryHealth'));
+const Rules = lazy(() => import('@/pages/Rules'));
+const Digest = lazy(() => import('@/pages/Digest'));
+const Me = lazy(() => import('@/pages/Me'));
+const Downloads = lazy(() => import('@/pages/Downloads'));
+const Audit = lazy(() => import('@/pages/Audit'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -80,12 +88,20 @@ const router = createBrowserRouter([
       { path: '/stats', element: page(<Stats />, 'stats') },
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
+      { path: '/audit', element: page(<Audit />) },
+      { path: '/me', element: page(<Me />) },
+      { path: '/digest', element: page(<Digest />) },
+      { path: '/rules', element: page(<Rules />) },
+      { path: '/downloads', element: page(<Downloads />, 'downloads') },
       { path: '/jellyfin', element: page(<Jellyfin />, 'jellyfin') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },
       { path: '/radarr', element: page(<Radarr />, 'radarr') },
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },
       { path: '/seerr', element: page(<Seerr />, 'seerr') },
       { path: '/infinidisk', element: page(<Infinidisk />, 'infinidisk') },
+      { path: '/bazarr', element: page(<Bazarr />, 'bazarr') },
+      { path: '/lidarr', element: page(<Lidarr />, 'lidarr') },
+      { path: '/readarr', element: page(<Readarr />, 'readarr') },
       { path: '*', element: page(<NotFound />) },
     ],
   },

@@ -13,6 +13,11 @@ import { startCleanup } from './services/cleanup.js';
 import { startSeerrWatch } from './services/seerr.js';
 import { startPlaybackRecorder } from './services/playStats.js';
 import { startStorageSampler } from './services/storage.js';
+import { startClientSampler } from './services/clients/index.js';
+import { startPlaybackGuard } from './services/playbackGuard.js';
+import { startDigest } from './services/digest.js';
+import { startRules } from './services/rules.js';
+import { resetByName } from './services/mfa.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -41,7 +46,10 @@ app.use(
     strictTransportSecurity: config.cookieSecure === 'true',
   }),
 );
-app.use(express.json({ limit: '32kb' }));
+// Backups can be large (they may include play history); everything else is small.
+const smallJson = express.json({ limit: '32kb' });
+const largeJson = express.json({ limit: '50mb' });
+app.use((req, res, next) => (req.path === '/api/settings/backup/restore' ? largeJson : smallJson)(req, res, next));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
 app.use('/api', requireCsrfHeader);
@@ -83,6 +91,10 @@ app.listen(config.port, config.host, () => {
     console.log(`    ${SERVICE_NAMES[id].padEnd(11)}→ ${where}`);
   }
   console.log(`    Settings DB → ${dbPath}\n`);
+  if (process.env.STREAMFORGE_RESET_2FA) {
+    const n = resetByName(process.env.STREAMFORGE_RESET_2FA);
+    console.log(`  ! Two-factor sign-in reset for ${n} account(s) named "${process.env.STREAMFORGE_RESET_2FA}". Remove STREAMFORGE_RESET_2FA now.\n`);
+  }
   if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
   startMonitors();
   void startHostMetrics();
@@ -91,4 +103,8 @@ app.listen(config.port, config.host, () => {
   startSeerrWatch();
   startPlaybackRecorder();
   startStorageSampler();
+  startClientSampler();
+  startPlaybackGuard();
+  startDigest();
+  startRules();
 });

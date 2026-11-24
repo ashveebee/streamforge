@@ -27,6 +27,9 @@ export const EVENT_TYPES = [
   'import_failed',
   'download_removed',
   'request_pending',
+  'playback_alert',
+  'weekly_digest',
+  'rule',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -224,6 +227,9 @@ const COLORS: Record<EventType | 'test', number> = {
   import_failed: 0xfb7185,
   download_removed: 0xfbbf24,
   request_pending: 0x818cf8,
+  playback_alert: 0xfbbf24,
+  weekly_digest: 0x22d3ee,
+  rule: 0xa78bfa,
   test: 0xa78bfa,
 };
 const TAGS: Record<EventType | 'test', string> = {
@@ -234,6 +240,9 @@ const TAGS: Record<EventType | 'test', string> = {
   import_failed: 'warning',
   download_removed: 'wastebasket',
   request_pending: 'raising_hand',
+  playback_alert: 'film_projector',
+  weekly_digest: 'newspaper',
+  rule: 'robot',
   test: 'wave',
 };
 

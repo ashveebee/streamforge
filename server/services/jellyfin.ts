@@ -5,12 +5,12 @@ import { VERSION as APP_VERSION } from '../version.js';
 import type { HealthProbe } from './types.js';
 
 /** The configured Jellyfin URL; throws when Jellyfin hasn't been set up yet. */
-function base() {
+export function base() {
   const url = resolve('jellyfin').settings.url;
   if (!url) throw new UpstreamError('Jellyfin is not configured', undefined, 'jellyfin');
   return url;
 }
-const serverApiKey = () => resolve('jellyfin').settings.apiKey;
+export const serverApiKey = () => resolve('jellyfin').settings.apiKey;
 const CLIENT = 'StreamForge';
 const VERSION = APP_VERSION;
 const TICKS_PER_MS = 10_000;
@@ -37,11 +37,11 @@ export interface JfCtx {
  * Server-wide data (sessions, activity log, users) uses the optional
  * Jellyfin API key when present, otherwise the signed-in user's token.
  */
-function serverToken(ctx: JfCtx) {
+export function serverToken(ctx: JfCtx) {
   return serverApiKey() ?? ctx.token;
 }
 
-function jf<T>(path: string, token: string, deviceId: string, query?: Record<string, string | number | boolean | undefined>) {
+export function jf<T>(path: string, token: string, deviceId: string, query?: Record<string, string | number | boolean | undefined>) {
   return requestJson<T>(buildUrl(base(), path, query), {
     headers: authHeader(token, deviceId),
     service: 'jellyfin',
@@ -326,6 +326,8 @@ function normaliseSession(s: JfSession) {
       resolution: resolutionLabel(video?.Width, video?.Height),
       hdr: video?.VideoRangeType && video.VideoRangeType !== 'SDR' ? video.VideoRangeType : undefined,
       videoCodec: video?.Codec,
+      /** Source video bitrate in bits/s, when Jellyfin reports it. */
+      bitrate: video?.BitRate,
       audio: audio?.DisplayTitle ?? audio?.Codec,
       ...artworkFor(item),
     },
@@ -646,6 +648,27 @@ export async function serverNowPlaying() {
 }
 
 export const hasServerKey = () => !!serverApiKey();
+
+/** Every Jellyfin user, via the server API key (for single sign-on). */
+export async function serverUsers() {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', undefined, 'jellyfin');
+  return jf<JfUser[]>('/Users', key, 'streamforge-server');
+}
+
+/** One Jellyfin user by id, via the server API key. */
+export async function serverUser(id: string) {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', 401, 'jellyfin');
+  return jf<JfUser>(`/Users/${id}`, key, 'streamforge-server');
+}
+
+/** Controls a session with the server API key (for background features). */
+export async function controlSessionAsServer(sessionId: string, command: SessionCommand, text?: string) {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', undefined, 'jellyfin');
+  await controlSession({ token: key, deviceId: 'streamforge-server', userId: '' }, sessionId, command, text);
+}
 
 /** Raw playback entries from the activity log, for stats without a recorder. */
 export async function playbackEntries(ctx: JfCtx, since: Date) {

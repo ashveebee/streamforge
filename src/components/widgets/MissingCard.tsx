@@ -10,7 +10,7 @@ import { FadeImage } from '@/components/ui/Image';
 import { EmptyState, SkeletonRows } from '@/components/ui/States';
 
 /** Monitored items that aren't downloaded yet, with search buttons. */
-export function MissingCard({ kind, instance }: { kind: ArrKind; instance?: string }) {
+export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 'readarr'; instance?: string }) {
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const q = useMissing(kind, instance, page);
@@ -19,7 +19,7 @@ export function MissingCard({ kind, instance }: { kind: ArrKind; instance?: stri
   const [all, setAll] = useState(false);
   const d = q.data;
   const pages = d ? Math.max(1, Math.ceil(d.total / d.pageSize)) : 1;
-  const noun = kind === 'sonarr' ? 'episode' : 'movie';
+  const noun = { sonarr: 'episode', radarr: 'movie', lidarr: 'album', readarr: 'book' }[kind];
 
   const one = (id: number) =>
     search.mutate({ instance, ids: [id] }, { onSuccess: () => setSearched((s) => new Set(s).add(id)) });

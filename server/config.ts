@@ -44,6 +44,12 @@ const schema = z.object({
   PROWLARR_API_KEY: optionalString,
   SEERR_URL: optionalUrl,
   SEERR_API_KEY: optionalString,
+  BAZARR_URL: optionalUrl,
+  BAZARR_API_KEY: optionalString,
+  LIDARR_URL: optionalUrl,
+  LIDARR_API_KEY: optionalString,
+  READARR_URL: optionalUrl,
+  READARR_API_KEY: optionalString,
 
   INFINIDISK_URL: optionalUrl,
   INFINIDISK_API_KEY: optionalString,
@@ -95,6 +101,9 @@ export const config = {
     radarr: { url: env.RADARR_URL, apiKey: env.RADARR_API_KEY },
     prowlarr: { url: env.PROWLARR_URL, apiKey: env.PROWLARR_API_KEY },
     seerr: { url: env.SEERR_URL, apiKey: env.SEERR_API_KEY },
+    bazarr: { url: env.BAZARR_URL, apiKey: env.BAZARR_API_KEY },
+    lidarr: { url: env.LIDARR_URL, apiKey: env.LIDARR_API_KEY },
+    readarr: { url: env.READARR_URL, apiKey: env.READARR_API_KEY },
     infinidisk: {
       url: env.INFINIDISK_URL,
       apiKey: env.INFINIDISK_API_KEY,

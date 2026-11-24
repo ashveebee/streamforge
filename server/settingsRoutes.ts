@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
 import { AREAS, memberAccess, setMemberAccess } from './access.js';
 import { Router } from 'express';
+import { readPref } from './lib/db.js';
+import { audit } from './lib/audit.js';
 import { z } from 'zod';
 import { createClient, UpstreamError } from './lib/http.js';
 import { sessions } from './lib/sessions.js';
@@ -9,6 +11,7 @@ import * as jellyfin from './services/jellyfin.js';
 import { arrProbe } from './services/arr.js';
 import { seerrClient, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe, infinidiskTarget } from './services/infinidisk.js';
+import { bazarrClient, bazarrProbe } from './services/bazarr.js';
 import {
   addPushSubscription,
   CHANNEL_TYPES,
@@ -23,6 +26,11 @@ import {
   setPublicUrl,
   testChannel,
 } from './services/notify.js';
+import { describeOidc, discover, updateOidc } from './services/oidc.js';
+import { disable as disableMfa, mfaUsers } from './services/mfa.js';
+import { hasServerKey } from './services/jellyfin.js';
+import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
+import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
@@ -122,7 +130,11 @@ export async function testSettings(id: ServiceId, s: ServiceSettings): Promise<H
     case 'sonarr':
     case 'radarr':
     case 'prowlarr':
-      return arrProbe(createClient(id, url, { 'X-Api-Key': apiKey }), id === 'prowlarr' ? 'v1' : 'v3');
+    case 'lidarr':
+    case 'readarr':
+      return arrProbe(createClient(id, url, { 'X-Api-Key': apiKey }), id === 'sonarr' || id === 'radarr' ? 'v3' : 'v1');
+    case 'bazarr':
+      return bazarrProbe(bazarrClient(url, apiKey));
     case 'seerr':
       return seerrProbe(seerrClient(url, apiKey));
     case 'infinidisk':
@@ -210,7 +222,7 @@ settingsRouter.put('/services/:id', (req, res) => {
   // Sessions belong to the old Jellyfin server; they mean nothing on a new one.
   const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(s.url);
   if (signedOut) sessions.clear();
-  console.log(`[settings] ${SERVICE_NAMES[id]} updated by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} updated`);
   res.json({ service: describe(id), signedOut });
 });
 
@@ -228,7 +240,7 @@ settingsRouter.delete('/services/:id', (req, res) => {
   resetSettings(id);
   const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(resolve(id).settings.url);
   if (signedOut) sessions.clear();
-  console.log(`[settings] ${SERVICE_NAMES[id]} reset to environment by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} reset to environment`);
   res.json({ service: describe(id), signedOut });
 });
 
@@ -245,7 +257,7 @@ settingsRouter.put('/services/:id/enabled', (req, res) => {
     return;
   }
   setEnabled(id, parsed.data.enabled);
-  console.log(`[settings] ${SERVICE_NAMES[id]} ${parsed.data.enabled ? 'enabled' : 'disabled'} by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} ${parsed.data.enabled ? 'enabled' : 'disabled'}`);
   res.json({ service: describe(id), signedOut: false });
 });
 
@@ -293,7 +305,7 @@ settingsRouter.post('/instances', (req, res) => {
   if (!url) return badRequest(res, 'Enter the server address', 'url');
   if (!apiKey) return badRequest(res, 'Enter the API key', 'apiKey');
   const inst = addInstance({ kind, name, url, apiKey });
-  console.log(`[settings] ${SERVICE_NAMES[kind]} instance "${name}" added by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[kind]} instance "${name}" added`);
   res.json({ instance: describeInstances().find((i) => i.id === inst.id) });
 });
 
@@ -309,14 +321,100 @@ settingsRouter.put('/instances/:id', (req, res) => {
     return badRequest(res, 'Re-enter the API key when changing the server address.', 'apiKey');
   }
   updateInstance(id, { name: b.name, url: b.url, apiKey: b.apiKey || undefined, enabled: b.enabled });
-  console.log(`[settings] instance ${id} updated by ${req.session!.userName}`);
+  audit(req, `[settings] instance ${id} updated`);
   res.json({ instance: describeInstances().find((i) => i.id === id) });
 });
 
 settingsRouter.delete('/instances/:id', (req, res) => {
   const id = String(req.params.id);
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
-  console.log(`[settings] instance ${id} removed by ${req.session!.userName}`);
+  audit(req, `[settings] instance ${id} removed`);
+  res.json({ ok: true });
+});
+
+/* ---------------------------- download clients ---------------------------- */
+
+const clientBody = z
+  .object({
+    type: z.enum(CLIENT_TYPES).optional(),
+    name: z.string().trim().min(1, 'Give the client a name').max(40).optional(),
+    url: urlField.optional(),
+    username: z.string().trim().max(256).optional(),
+    /** Omitted or empty = keep the saved one. */
+    password: z.string().max(1024).optional(),
+    apiKey: z.string().trim().max(1024).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+settingsRouter.get('/clients', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ clients: describeClients(), types: CLIENT_TYPES.map((t) => ({ id: t, name: CLIENT_NAMES[t], fields: CLIENT_FIELDS[t] })) });
+});
+
+/** Tests candidate details; reuses saved secrets when `id` is given and they aren't. */
+settingsRouter.post('/clients/test', async (req, res) => {
+  const parsed = clientBody.extend({ id: z.string().max(64).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  const saved = b.id ? getClient(b.id) : undefined;
+  const type = b.type ?? saved?.type;
+  const url = b.url ?? saved?.url;
+  if (!type || !url) return res.json({ ok: false, message: 'Enter the server address.' });
+  if (saved && !(b.password || b.apiKey) && origin(url) !== origin(saved.url) && (saved.password || saved.apiKey)) {
+    return res.json({ ok: false, message: 'Re-enter the password or API key when changing the server address.' });
+  }
+  const started = performance.now();
+  try {
+    const version = await adapterFor({
+      id: `test-${Date.now()}`,
+      type,
+      name: 'test',
+      url,
+      username: b.username ?? saved?.username,
+      password: b.password || saved?.password,
+      apiKey: b.apiKey || saved?.apiKey,
+      enabled: true,
+      createdAt: '',
+    }).version();
+    res.json({ ok: true, version, latencyMs: Math.round(performance.now() - started), issues: [] });
+  } catch (err) {
+    res.json({ ok: false, message: (err as Error).message });
+  }
+});
+
+settingsRouter.post('/clients', (req, res) => {
+  const parsed = clientBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const { type, name, url, username, password, apiKey } = parsed.data;
+  if (!type) return badRequest(res, 'Pick a client type', 'type');
+  if (!name) return badRequest(res, 'Give the client a name', 'name');
+  if (!url) return badRequest(res, 'Enter the server address', 'url');
+  if (type === 'sabnzbd' && !apiKey) return badRequest(res, 'Enter the API key', 'apiKey');
+  const c = addClient({ type, name, url, username: username || undefined, password: password || undefined, apiKey: apiKey || undefined });
+  audit(req, `[settings] download client "${name}" (${CLIENT_NAMES[type]}) added`);
+  res.json({ client: describeClients().find((x) => x.id === c.id) });
+});
+
+settingsRouter.put('/clients/:id', (req, res) => {
+  const id = String(req.params.id);
+  const cur = getClient(id);
+  if (!cur) return res.status(404).json({ error: 'not_found', message: 'Unknown download client' });
+  const parsed = clientBody.omit({ type: true }).safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  // Never send saved credentials to a different server unless they were re-entered.
+  if (b.url && origin(b.url) !== origin(cur.url) && !(b.password || b.apiKey) && (cur.password || cur.apiKey)) {
+    return badRequest(res, 'Re-enter the password or API key when changing the server address.', cur.apiKey ? 'apiKey' : 'password');
+  }
+  updateClient(id, { name: b.name, url: b.url, username: b.username, password: b.password || undefined, apiKey: b.apiKey || undefined, enabled: b.enabled });
+  audit(req, `[settings] download client "${b.name ?? cur.name}" updated`);
+  res.json({ client: describeClients().find((x) => x.id === id) });
+});
+
+settingsRouter.delete('/clients/:id', (req, res) => {
+  const cur = getClient(String(req.params.id));
+  if (!cur || !removeClient(cur.id)) return res.status(404).json({ error: 'not_found', message: 'Unknown download client' });
+  audit(req, `[settings] download client "${cur.name}" removed`);
   res.json({ ok: true });
 });
 
@@ -345,6 +443,7 @@ settingsRouter.put('/notifications/public-url', (req, res) => {
   const parsed = z.object({ url: urlField }).strict().safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', 'publicUrl');
   setPublicUrl(parsed.data.url);
+  audit(req, `[settings] public address set to ${parsed.data.url || '(none)'}`);
   res.json(notificationsStatus());
 });
 
@@ -353,7 +452,7 @@ settingsRouter.post('/notifications/channels', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   try {
     const ch = saveChannel(parsed.data);
-    console.log(`[notify] channel "${ch.name}" (${ch.type}) added by ${req.session!.userName}`);
+    audit(req, `[notify] channel "${ch.name}" (${ch.type}) added`);
     res.json({ channel: describeChannel(ch) });
   } catch (err) {
     channelError(res, err);
@@ -365,6 +464,7 @@ settingsRouter.put('/notifications/channels/:id', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   try {
     const ch = saveChannel({ ...parsed.data, id: String(req.params.id) });
+    audit(req, `[notify] channel "${ch.name}" (${ch.type}) updated`);
     res.json({ channel: describeChannel(ch) });
   } catch (err) {
     channelError(res, err);
@@ -373,6 +473,7 @@ settingsRouter.put('/notifications/channels/:id', (req, res) => {
 
 settingsRouter.delete('/notifications/channels/:id', (req, res) => {
   if (!removeChannel(String(req.params.id))) return res.status(404).json({ error: 'not_found', message: 'Unknown channel' });
+  audit(req, `[notify] channel ${String(req.params.id)} removed`);
   res.json({ ok: true });
 });
 
@@ -422,6 +523,83 @@ settingsRouter.put('/members', (req, res) => {
   const parsed = z.object({ signIn: z.boolean().optional(), areas: z.array(z.enum(AREAS)).max(AREAS.length).optional() }).strict().safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid');
   const next = setMemberAccess(parsed.data);
-  console.log(`[settings] member access changed by ${req.session!.userName}: ${JSON.stringify(next)}`);
+  audit(req, `[settings] member access changed: ${JSON.stringify(next)}`);
   res.json({ ...next, available: AREAS });
+});
+
+/* ---------------------------- backup & restore ---------------------------- */
+
+const passphrase = z.string().min(8, 'Use a passphrase of at least 8 characters').max(1024);
+
+settingsRouter.post('/backup', async (req, res) => {
+  const parsed = z.object({ passphrase, history: z.boolean().default(false) }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', 'passphrase');
+  const file = await createBackup(parsed.data.passphrase, parsed.data.history);
+  audit(req, `[settings] backup downloaded${parsed.data.history ? ' (with history)' : ''}`);
+  const name = `streamforge-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  res.set({ 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name}"` }).json(file);
+});
+
+settingsRouter.post('/backup/restore', async (req, res) => {
+  const parsed = z.object({ passphrase, file: z.record(z.string(), z.unknown()) }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path[0] === 'passphrase' ? 'passphrase' : 'file');
+  try {
+    const r = await restoreBackup(parsed.data.file, parsed.data.passphrase);
+    audit(req, `[settings] backup from ${r.createdAt ?? 'an unknown date'} restored (${Object.entries(r.counts).map(([t, n]) => `${t}: ${n}`).join(', ')})`);
+    const restarting = canSelfRestart();
+    res.json({ ok: true, ...r, restarting });
+    if (restarting) restartSoon();
+  } catch (err) {
+    if (err instanceof BackupError) return badRequest(res, err.message, 'file');
+    throw err;
+  }
+});
+
+/* ------------------------- single sign-on & 2FA ------------------------- */
+
+settingsRouter.get('/sso', (req, res) => {
+  const base = (readPref<string | null>('publicUrl', null) || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  res.set('Cache-Control', 'no-store').json({ ...describeOidc(), redirectUri: `${base}/api/auth/oidc/callback`, hasApiKey: hasServerKey(), mfaUsers: mfaUsers() });
+});
+
+const ssoBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    issuer: urlField.optional(),
+    clientId: z.string().trim().max(512).optional(),
+    clientSecret: z.string().trim().max(2048).optional(),
+    label: z.string().trim().min(1).max(40).optional(),
+    claim: z.string().trim().regex(/^[\w.:-]{1,64}$/, 'Use a claim name like preferred_username').optional(),
+    hidePassword: z.boolean().optional(),
+  })
+  .strict();
+
+settingsRouter.put('/sso', (req, res) => {
+  const parsed = ssoBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  if (b.enabled && !hasServerKey()) return badRequest(res, 'Single sign-on needs a Jellyfin API key. Add one on the Jellyfin card first.');
+  // Blank keeps the saved secret.
+  updateOidc({ ...b, clientSecret: b.clientSecret || undefined });
+  audit(req, `[settings] single sign-on ${b.enabled === undefined ? 'updated' : b.enabled ? 'turned on' : 'turned off'}`);
+  res.json(describeOidc());
+});
+
+settingsRouter.post('/sso/test', async (req, res) => {
+  const issuer = urlField.safeParse((req.body as { issuer?: unknown } | undefined)?.issuer ?? '');
+  if (!issuer.success || !issuer.data) return res.json({ ok: false, message: 'Enter the issuer URL.' });
+  try {
+    const d = await discover(issuer.data);
+    res.json({ ok: true, issuer: d.issuer, matches: d.issuer.replace(/\/+$/, '') === issuer.data.replace(/\/+$/, '') });
+  } catch (err) {
+    res.json({ ok: false, message: (err as Error).message });
+  }
+});
+
+settingsRouter.delete('/mfa/:userId', (req, res) => {
+  const id = String(req.params.userId);
+  const who = mfaUsers().find((u) => u.userId === id);
+  if (!who || !disableMfa(id)) return res.status(404).json({ error: 'not_found', message: 'That user doesn’t use two-factor sign-in.' });
+  audit(req, `[auth] two-factor sign-in reset for ${who.userName}`);
+  res.json({ ok: true });
 });

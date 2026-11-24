@@ -7,9 +7,12 @@ import { NowPlayingHero } from '@/components/widgets/NowPlayingHero';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { Card } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/Stat';
+import { useAuth } from '@/hooks/useAuth';
+import { PlaybackGuardCard } from '@/components/widgets/PlaybackGuardCard';
 
 export default function NowPlayingPage() {
   const q = useNowPlaying();
+  const { user } = useAuth();
   const streams = q.data ?? [];
   const transcodes = streams.filter((s) => s.state.playMethod === 'Transcode').length;
   const users = new Set(streams.map((s) => s.user.name)).size;
@@ -37,6 +40,7 @@ export default function NowPlayingPage() {
           </AnimatePresence>
         </div>
       )}
+      {user?.isAdmin && <div className="mt-5"><PlaybackGuardCard /></div>}
     </>
   );
 }

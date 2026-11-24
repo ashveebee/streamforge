@@ -16,6 +16,11 @@ const LABEL: Record<Area, string> = {
   prowlarr: 'Prowlarr',
   seerr: 'Seerr requests',
   infinidisk: 'Infinidisk',
+  bazarr: 'Bazarr',
+  lidarr: 'Lidarr',
+  readarr: 'Readarr',
+  downloads: 'Download clients',
+  requests: 'Request & search',
 };
 
 /** Whether non-admin Jellyfin users can sign in, and which pages they see. */

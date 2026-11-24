@@ -2,7 +2,7 @@ import type { ArtworkRef } from './api';
 
 /* Client-side view of the StreamForge API. Mirrors server/ responses. */
 
-export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk';
+export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr';
 export type ServiceStatus = 'healthy' | 'degraded' | 'offline' | 'unconfigured';
 
 export interface User {
@@ -77,6 +77,8 @@ export interface DownloadSnapshot {
   itemSpeeds: Record<string, number>;
   /** `instance:id` → when the item last made progress (only items stuck 30+ min). */
   stalled?: Record<string, string>;
+  /** Real speeds from download clients, when any are set up. */
+  clients?: { down: number; up: number };
   sampleIntervalMs: number;
 }
 
@@ -417,7 +419,7 @@ export interface ServiceSettingsView {
 export type ArrKind = 'sonarr' | 'radarr';
 
 /** Parts of the app a member can be given access to. */
-export type Area = 'now-playing' | 'stats' | 'library' | 'system' | ServiceId;
+export type Area = 'now-playing' | 'stats' | 'library' | 'system' | 'downloads' | 'requests' | ServiceId;
 
 export interface MemberAccess {
   signIn: boolean;
@@ -502,7 +504,7 @@ export interface AutoImportStatus {
 
 /* ------------------------------ notifications ----------------------------- */
 
-export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending';
+export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending' | 'playback_alert' | 'weekly_digest' | 'rule';
 export type ChannelType = 'discord' | 'ntfy' | 'pushover' | 'webhook' | 'webpush';
 
 export interface NotifyChannel {

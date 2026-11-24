@@ -47,7 +47,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/auth/login')) unauthListeners.forEach((fn) => fn());
+    if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/mfa')) unauthListeners.forEach((fn) => fn());
     throw new ApiError(data.message ?? res.statusText, res.status, data.error, data.field);
   }
   return data as T;

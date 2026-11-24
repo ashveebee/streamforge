@@ -124,9 +124,11 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <div className="text-3xl font-semibold tracking-tight tabular">
-                  <AnimatedNumber value={dl.data?.current ?? 0} format={(n) => speed(n)} />
+                  <AnimatedNumber value={dl.data?.clients?.down ?? dl.data?.current ?? 0} format={(n) => speed(n)} />
                 </div>
-                <div className="mt-0.5 text-xs text-ink-3">Combined throughput · peak {speed(dl.data?.peak)}</div>
+                <div className="mt-0.5 text-xs text-ink-3">
+                  {dl.data?.clients ? `Download clients · ↑ ${speed(dl.data.clients.up)}` : `Combined throughput · peak ${speed(dl.data?.peak)}`}
+                </div>
               </div>
               <Legend
                 items={[
