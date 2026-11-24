@@ -19,7 +19,7 @@ import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
-import { arrTitleSearch, jellyfinMedia, mediaDetails } from './services/media.js';
+import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails } from './services/media.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
@@ -313,7 +313,16 @@ api.get(
   handle('jellyfin', async (req) => {
     const id = String(req.params.id);
     if (!jellyfin.isValidId(id)) throw new HttpError(400, 'Invalid id');
-    return jellyfinMedia(ctxOf(req.session!), id);
+    return jellyfinMedia(ctxOf(req.session!), id, !!req.session!.isAdmin);
+  }),
+);
+api.get(
+  '/media/jellyfin/:id/seasons/:season/episodes',
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    const season = String(req.params.season);
+    if (!jellyfin.isValidId(id) || !jellyfin.isValidId(season)) throw new HttpError(400, 'Invalid id');
+    return jellyfinEpisodes(ctxOf(req.session!), id, season, !!req.session!.isAdmin);
   }),
 );
 api.get(

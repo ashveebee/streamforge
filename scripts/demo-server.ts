@@ -1111,6 +1111,31 @@ app.get('/api/media/jellyfin/:id', (req, res) => {
   if (!t) return res.status(404).json({ error: 'not_found', message: 'Not in the demo library' });
   res.json({ redirect: { type: t.kind === 'movie' ? 'movie' : 'tv', tmdbId: tmdbOf(t.title) } });
 });
+const EP_NAMES = ['Arrival', 'The Long Dark', 'Signal Fires', 'Old Debts', 'Crossing', 'Low Tide', 'Glass Houses', 'The Keeper', 'Undertow', 'Homecoming', 'Static', 'First Light'];
+const demoEpisodes = (title: string, season: number, count: number, watchedUpTo: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `${slug(title)}-s${season}e${i + 1}`,
+    season,
+    number: i + 1,
+    name: EP_NAMES[(i + season) % EP_NAMES.length]!,
+    overview: 'The crew picks up a faint signal from the far side of the station, and not everyone agrees on whether to answer it.',
+    airDate: iso((40 - season * 10 - i) * 7 * DAY),
+    runtimeMin: 44 + (i % 5),
+    still: backdropUrl(title),
+    resolution: '1080p',
+    size: 1.6 * GB + i * 0.05 * GB,
+    path: `/media/tv/${title}/Season ${season}/${title} - S${String(season).padStart(2, '0')}E${String(i + 1).padStart(2, '0')}.mkv`,
+    missing: false,
+    watch: { played: i < watchedUpTo, playCount: i < watchedUpTo ? 1 : 0, favorite: false, progress: i === watchedUpTo ? 42 : undefined, remainingMin: i === watchedUpTo ? 26 : undefined },
+    url: 'https://jellyfin.example.com/web/#/details?id=demo',
+  }));
+app.get('/api/media/jellyfin/:id/seasons/:season/episodes', (req, res) => {
+  const m = /^(.*)-season-(\d+)$/.exec(String(req.params.season));
+  const t = m && byTitle.get(m[1]!);
+  if (!t) return res.status(404).json({ error: 'not_found', message: 'Unknown season' });
+  const n = Number(m[2]);
+  res.json({ episodes: demoEpisodes(t.title, n, 8 + ((n * 3) % 5), n === 1 ? 99 : 3) });
+});
 app.get('/api/media/:type/:id', (req, res) => {
   const t = ALL[Number(req.params.id) - 1000];
   if (!t) return res.status(404).json({ error: 'not_found', message: 'Unknown title' });
@@ -1123,7 +1148,15 @@ app.get('/api/media/:type/:id', (req, res) => {
         return Array.from({ length: count }, (_, i) => {
           const episodes = 8 + Math.floor(r() * 5);
           const files = i === count - 1 ? Math.floor(episodes * 0.6) : episodes;
-          return { number: i + 1, name: `Season ${i + 1}`, episodes, files, airDate: iso((count - i) * 300 * DAY), status: files >= episodes ? 'available' : 'partial' };
+          return {
+            number: i + 1,
+            name: `Season ${i + 1}`,
+            episodes,
+            files,
+            airDate: iso((count - i) * 300 * DAY),
+            status: files >= episodes ? 'available' : 'partial',
+            jellyfin: inLib ? { id: `${slug(t.title)}-season-${i + 1}`, episodes: files, unplayed: i === 0 ? 0 : files - 3 } : undefined,
+          };
         });
       })()
     : undefined;
@@ -1149,6 +1182,68 @@ app.get('/api/media/:type/:id', (req, res) => {
     seasons,
     availability: !inLib ? (pending.length ? 'requested' : 'none') : tv && seasons!.some((x) => x.status !== 'available') ? 'partial' : 'available',
     jellyfin: inLib ? { itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' } : undefined,
+    library: inLib
+      ? {
+          itemId: slug(t.title),
+          kind: tv ? 'Series' : 'Movie',
+          url: 'https://jellyfin.example.com/web/#/details?id=demo',
+          added: iso(Math.floor(r() * 200) * DAY),
+          premiered: `${t.year}-03-14T00:00:00Z`,
+          seriesStatus: tv ? 'Continuing' : undefined,
+          communityRating: t.rating,
+          criticRating: 70 + Math.floor(r() * 28),
+          path: tv ? `/media/tv/${t.title}` : `/media/movies/${t.title} (${t.year})/${t.title} (${t.year}).mkv`,
+          directors: ['Lena Marsh'],
+          writers: ['Pavel Grieg', 'Amara Osei'],
+          producers: tv ? [] : ['Noor Hassan'],
+          studios: [t.network ?? 'Lumen Pictures'],
+          tags: ['space', 'found family', 'slow burn'],
+          links: [
+            { label: 'IMDb', url: 'https://www.imdb.com/' },
+            { label: 'TMDB', url: 'https://www.themoviedb.org/' },
+          ],
+          watch: tv
+            ? { played: false, playCount: 0, favorite: true, unplayed: seasons!.slice(1).reduce((n, x) => n + x.files - 3, 0) }
+            : { played: false, playCount: 1, lastPlayed: iso(3 * DAY), favorite: false, progress: 38, remainingMin: 64 },
+          files: tv
+            ? []
+            : [
+                {
+                  id: 'f1',
+                  name: '2160p',
+                  container: 'mkv',
+                  size: 38 * GB,
+                  bitrate: 52_000_000,
+                  path: `/media/movies/${t.title} (${t.year})/${t.title} (${t.year}) - 2160p.mkv`,
+                  video: { codec: 'HEVC', resolution: '4K', width: 3840, height: 1608, range: 'DOVI', bitDepth: 10, fps: 23.98 },
+                  audio: [
+                    { language: 'eng', codec: 'TRUEHD', channels: '7.1', isDefault: true },
+                    { language: 'eng', codec: 'AC3', channels: '5.1', isDefault: false },
+                    { language: 'fra', codec: 'AC3', channels: '5.1', isDefault: false },
+                  ],
+                  subtitles: [
+                    { language: 'eng', codec: 'PGSSUB', forced: false, external: false, sdh: false, isDefault: false },
+                    { language: 'eng', codec: 'SUBRIP', forced: false, external: true, sdh: true, isDefault: false },
+                    { language: 'spa', codec: 'PGSSUB', forced: false, external: false, sdh: false, isDefault: false },
+                    { language: 'fra', codec: 'PGSSUB', forced: true, external: false, sdh: false, isDefault: false },
+                  ],
+                },
+                {
+                  id: 'f2',
+                  name: '1080p',
+                  container: 'mp4',
+                  size: 9 * GB,
+                  bitrate: 12_000_000,
+                  video: { codec: 'H264', resolution: '1080p', width: 1920, height: 804, fps: 23.98 },
+                  audio: [{ language: 'eng', codec: 'AAC', channels: '5.1', isDefault: true }],
+                  subtitles: [],
+                },
+              ],
+          episodeCount: tv ? seasons!.reduce((n, x) => n + x.files, 0) : undefined,
+          seasonCount: tv ? seasons!.length : undefined,
+          nextUp: tv ? demoEpisodes(t.title, 2, 10, 3)[3] : undefined,
+        }
+      : undefined,
     arr: inLib
       ? [
           {

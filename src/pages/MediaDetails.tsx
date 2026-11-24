@@ -1,15 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
+  AudioLines,
+  Captions,
   Check,
+  ChevronDown,
   CircleAlert,
+  CircleCheck,
   Clapperboard,
   Clock,
   ExternalLink,
+  FileVideo,
   HardDrive,
+  Heart,
   Inbox,
+  Info,
+  Library,
   LoaderCircle,
   Play,
   Plus,
@@ -20,15 +28,31 @@ import {
   X,
 } from 'lucide-react';
 import { useDecideRequest } from '@/hooks/queries';
-import { useInvalidateMedia, useJellyfinMedia, useMediaDetails, useTitleSearch, type Availability, type CastMember, type MediaDetails as Details, type MediaType } from '@/hooks/useMedia';
+import {
+  useInvalidateMedia,
+  useJellyfinEpisodes,
+  useJellyfinMedia,
+  useMediaDetails,
+  useTitleSearch,
+  type Availability,
+  type CastMember,
+  type Episode,
+  type LibraryInfo,
+  type MediaDetails as Details,
+  type MediaFile,
+  type MediaType,
+  type Season,
+  type WatchState,
+} from '@/hooks/useMedia';
 import { useAddMedia, useRequestMedia } from '@/hooks/useSearch';
-import { bytes, dayLabel, relative } from '@/lib/format';
+import { bitrate, bytes, dayLabel, relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
+import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
 import { SERVICES } from '@/components/ui/ServiceIcon';
 
@@ -60,18 +84,24 @@ function Hero({ title, year, tagline, poster, backdrop, facts, children }: { tit
         <div className="absolute inset-0 bg-gradient-to-t from-[#07080c] via-[#07080c]/80 to-[#07080c]/30" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#07080c]/90 via-[#07080c]/40 to-transparent" />
       </div>
-      <div className="relative flex flex-col gap-6 p-5 pt-24 sm:flex-row sm:items-end sm:p-8 sm:pt-40">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-32 shrink-0 sm:w-48">
+      {/* Phones: poster beside the title, facts and buttons full width below.
+          Wider: poster on the left, everything else stacked beside it. */}
+      <div className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 p-4 pt-20 sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-[1fr_auto_auto] sm:gap-x-6 sm:p-8 sm:pt-40">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="self-end sm:row-span-3">
           <FadeImage src={poster} alt="" eager className="aspect-[2/3] rounded-xl shadow-2xl ring-1 ring-white/15" fallback={<div className="grid size-full place-items-center bg-surface-3"><Clapperboard className="size-8 text-ink-4" /></div>} />
         </motion.div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+        <div className="min-w-0 self-end">
+          <h1 className="text-2xl leading-tight font-semibold tracking-tight break-words text-white sm:text-4xl">
             {title} {year ? <span className="font-normal text-white/50">({year})</span> : null}
           </h1>
-          {tagline && <p className="mt-1 text-sm text-white/60 italic">{tagline}</p>}
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/70">{facts}</div>
-          {children && <div className="mt-5 flex flex-wrap items-center gap-2">{children}</div>}
+          {tagline && <p className="mt-1 text-[13px] text-white/60 italic sm:text-sm">{tagline}</p>}
         </div>
+        <div className="col-span-2 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/70 sm:col-span-1 sm:col-start-2 sm:mt-3">{facts}</div>
+        {children && (
+          <div className="col-span-2 mt-4 grid grid-cols-2 gap-2 sm:col-span-1 sm:col-start-2 sm:mt-5 sm:flex sm:flex-wrap sm:items-center max-sm:[&>*]:justify-center max-sm:[&>:first-child:nth-last-child(odd)]:col-span-2 max-sm:[&>p]:col-span-2">
+            {children}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -106,11 +136,7 @@ function Actions({ d }: { d: Details }) {
   const partial = d.type === 'tv' && (d.availability === 'partial' || d.seasons?.some((s) => s.status === 'available'));
   return (
     <>
-      {d.jellyfin?.url && (
-        <a href={d.jellyfin.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90">
-          <Play className="size-4 fill-current" /> Play in Jellyfin
-        </a>
-      )}
+      {d.jellyfin?.url && <PlayButton url={d.jellyfin.url} library={d.library} />}
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -130,6 +156,312 @@ function Actions({ d }: { d: Details }) {
       )}
       {err && <p role="alert" className="basis-full text-xs text-bad">{err.message}</p>}
     </>
+  );
+}
+
+function PlayButton({ url, library }: { url: string; library?: LibraryInfo }) {
+  const next = library?.nextUp;
+  const resume = library?.watch?.progress;
+  const label = next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : 'Play in Jellyfin';
+  return (
+    <a href={next?.url ?? url} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90">
+      <Play className="size-4 fill-current" /> {label}
+    </a>
+  );
+}
+
+const episodeLabel = (e: Pick<Episode, 'season' | 'number'>) => [e.season !== undefined && `S${e.season}`, e.number !== undefined && `E${e.number}`].filter(Boolean).join(' ');
+const bits = (bps?: number) => (bps ? bitrate(bps / 8) : undefined);
+const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
+const langName = (code?: string) => {
+  if (!code || code === 'und') return undefined;
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
+
+/** "Watched", "34% watched", "3 unwatched"… for the hero. */
+function watchLabel(w: WatchState | undefined, tv: boolean) {
+  if (!w) return undefined;
+  if (w.progress) return `${w.progress}% watched${w.remainingMin ? ` · ${w.remainingMin} min left` : ''}`;
+  if (tv && w.unplayed) return `${w.unplayed} unwatched episode${w.unplayed === 1 ? '' : 's'}`;
+  if (w.played) return 'Watched';
+  return undefined;
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  if (children === undefined || children === null || children === false || children === '') return null;
+  return (
+    <div className="flex items-baseline gap-3 py-2">
+      <dt className="w-24 shrink-0 text-[11px] tracking-wide text-ink-4 uppercase">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[13px] break-words text-ink-2">{children}</dd>
+    </div>
+  );
+}
+
+/** Your copy in Jellyfin: watch state, when it was added, ratings, location. */
+function YourLibrary({ lib }: { lib: LibraryInfo }) {
+  const w = lib.watch;
+  const tv = lib.kind === 'Series';
+  const watched = tv && lib.episodeCount && w?.unplayed !== undefined ? lib.episodeCount - w.unplayed : undefined;
+  return (
+    <Card>
+      <CardHeader
+        icon={Library}
+        accent="var(--color-jellyfin)"
+        title="In your library"
+        subtitle="Jellyfin"
+        action={w?.favorite ? <Heart className="size-4 fill-current text-pink-400" aria-label="Favourite" /> : undefined}
+      />
+      <CardBody>
+        {tv && lib.episodeCount ? (
+          <div className="mb-3">
+            <div className="mb-1.5 flex justify-between text-[12px]">
+              <span className="text-ink-2">{watched ?? 0} of {lib.episodeCount} episodes watched</span>
+              <span className="text-ink-4">{lib.seasonCount} season{lib.seasonCount === 1 ? '' : 's'}</span>
+            </div>
+            <ProgressBar value={(watched ?? 0) / lib.episodeCount} glow={false} label="Episodes watched" />
+          </div>
+        ) : w?.progress ? (
+          <div className="mb-3">
+            <div className="mb-1.5 flex justify-between text-[12px]">
+              <span className="text-ink-2">{w.progress}% watched</span>
+              {w.remainingMin && <span className="text-ink-4">{w.remainingMin} min left</span>}
+            </div>
+            <ProgressBar value={w.progress / 100} glow={false} label="Watched" />
+          </div>
+        ) : null}
+        <dl className="divide-y divide-line">
+          {!tv && <Row label="Watched">{w?.played ? <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> Yes</span> : 'Not yet'}</Row>}
+          <Row label="Plays">{w?.playCount ? `${w.playCount}` : undefined}</Row>
+          <Row label="Last played">{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Row>
+          <Row label="Added">{lib.added ? `${longDate(lib.added)} · ${relative(lib.added)}` : undefined}</Row>
+          <Row label={tv ? 'First aired' : 'Released'}>{longDate(lib.premiered)}</Row>
+          <Row label="Ended">{longDate(lib.ended)}</Row>
+          <Row label="Status">{lib.seriesStatus}</Row>
+          <Row label="Ratings">
+            {lib.communityRating || lib.criticRating ? (
+              <span className="inline-flex flex-wrap gap-x-3">
+                {lib.communityRating ? <span><Star className="mr-1 inline size-3 fill-current text-warn" />{lib.communityRating.toFixed(1)}</span> : null}
+                {lib.criticRating ? <span>🍅 {lib.criticRating}%</span> : null}
+              </span>
+            ) : undefined}
+          </Row>
+          <Row label="Location">{lib.path ? <span className="font-mono text-[11px] text-ink-3">{lib.path}</span> : undefined}</Row>
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+function People({ label, names }: { label: string; names: string[] }) {
+  return names.length ? <Row label={label}>{names.join(', ')}</Row> : null;
+}
+
+/** Crew, studios, tags and links to the title on other sites. */
+function TitleInfo({ lib }: { lib: LibraryInfo }) {
+  const any = lib.directors.length || lib.writers.length || lib.producers.length || lib.studios.length || lib.tags.length || lib.links.length || lib.originalTitle;
+  if (!any) return null;
+  return (
+    <Card>
+      <CardHeader icon={Info} accent="var(--color-jellyfin)" title="Details" />
+      <CardBody>
+        <dl className="divide-y divide-line">
+          <Row label="Original title">{lib.originalTitle}</Row>
+          <People label={lib.directors.length > 1 ? 'Directors' : 'Director'} names={lib.directors} />
+          <People label={lib.writers.length > 1 ? 'Writers' : 'Writer'} names={lib.writers} />
+          <People label={lib.producers.length > 1 ? 'Producers' : 'Producer'} names={lib.producers} />
+          <People label={lib.studios.length > 1 ? 'Studios' : 'Studio'} names={lib.studios} />
+          {lib.tags.length > 0 && (
+            <Row label="Tags">
+              <span className="flex flex-wrap gap-1">
+                {lib.tags.map((t) => (
+                  <span key={t} className="rounded-md border border-line bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-ink-3">{t}</span>
+                ))}
+              </span>
+            </Row>
+          )}
+          {lib.links.length > 0 && (
+            <Row label="Links">
+              <span className="flex flex-wrap gap-x-3 gap-y-1">
+                {lib.links.map((l) => (
+                  <a key={l.label} href={l.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-brand hover:underline">
+                    {l.label} <ExternalLink className="size-3" />
+                  </a>
+                ))}
+              </span>
+            </Row>
+          )}
+        </dl>
+      </CardBody>
+    </Card>
+  );
+}
+
+function Chip({ children, tone }: { children: React.ReactNode; tone?: 'brand' }) {
+  return <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', tone === 'brand' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-line bg-white/[0.04] text-ink-2')}>{children}</span>;
+}
+
+function Track({ title, sub, flags }: { title: string; sub?: string; flags: string[] }) {
+  return (
+    <li className="flex items-center gap-2 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] text-ink-2" title={title}>{title}</div>
+        {sub && <div className="truncate text-[11px] text-ink-4">{sub}</div>}
+      </div>
+      {flags.map((f) => (
+        <span key={f} className="shrink-0 rounded border border-line px-1 text-[10px] text-ink-3">{f}</span>
+      ))}
+    </li>
+  );
+}
+
+/** The file(s) Jellyfin plays: video, audio and subtitle tracks. */
+function MediaInfo({ files }: { files: MediaFile[] }) {
+  const [open, setOpen] = useState(0);
+  if (!files.length) return null;
+  const f = files[Math.min(open, files.length - 1)]!;
+  const v = f.video;
+  return (
+    <Card>
+      <CardHeader icon={FileVideo} accent="var(--color-jellyfin)" title="Media info" subtitle={files.length > 1 ? `${files.length} versions` : f.container?.toUpperCase()} />
+      <CardBody className="space-y-4">
+        {files.length > 1 && (
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 no-scrollbar">
+            {files.map((x, i) => (
+              <button
+                key={x.id}
+                onClick={() => setOpen(i)}
+                className={cn('shrink-0 rounded-lg border px-2.5 py-1 text-[12px] transition', i === open ? 'border-brand/50 bg-brand/10 text-ink' : 'border-line text-ink-3 hover:text-ink')}
+              >
+                {x.name || x.video?.resolution || `Version ${i + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          {v?.resolution && <Chip tone="brand">{v.resolution}</Chip>}
+          {v?.range && <Chip tone="brand">{v.range}</Chip>}
+          {v?.codec && <Chip>{v.codec}</Chip>}
+          {v?.bitDepth && v.bitDepth > 8 ? <Chip>{v.bitDepth}-bit</Chip> : null}
+          {f.audio[0]?.codec && <Chip>{[f.audio[0].codec, f.audio[0].channels].filter(Boolean).join(' ')}</Chip>}
+          {f.container && <Chip>{f.container.toUpperCase()}</Chip>}
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+          {[
+            ['Size', f.size ? bytes(f.size) : undefined],
+            ['Bitrate', bits(f.bitrate)],
+            ['Resolution', v?.width && v.height ? `${v.width}×${v.height}` : undefined],
+            ['Frame rate', v?.fps ? `${v.fps} fps` : undefined],
+          ]
+            .filter(([, x]) => x)
+            .map(([k, x]) => (
+              <div key={k} className="min-w-0">
+                <dt className="text-[10.5px] tracking-wide text-ink-4 uppercase">{k}</dt>
+                <dd className="truncate text-[13px] text-ink-2 tabular-nums">{x}</dd>
+              </div>
+            ))}
+        </dl>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="min-w-0">
+            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><AudioLines className="size-3.5" /> Audio · {f.audio.length}</h3>
+            {f.audio.length ? (
+              <ul className="divide-y divide-line">
+                {f.audio.map((a, i) => (
+                  <Track key={i} title={langName(a.language) ?? a.title ?? `Track ${i + 1}`} sub={[a.codec, a.channels].filter(Boolean).join(' · ') || a.title} flags={a.isDefault ? ['Default'] : []} />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[12px] text-ink-4">No audio tracks</p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Captions className="size-3.5" /> Subtitles · {f.subtitles.length}</h3>
+            {f.subtitles.length ? (
+              <ul className="max-h-60 divide-y divide-line overflow-y-auto">
+                {f.subtitles.map((t, i) => (
+                  <Track
+                    key={i}
+                    title={langName(t.language) ?? t.title ?? `Track ${i + 1}`}
+                    sub={t.codec}
+                    flags={[t.forced && 'Forced', t.sdh && 'SDH', t.external && 'External', t.isDefault && 'Default'].filter((x): x is string => !!x)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[12px] text-ink-4">No subtitles</p>
+            )}
+          </div>
+        </div>
+        {f.path && <p className="truncate font-mono text-[10.5px] text-ink-4" title={f.path}>{f.path}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+function EpisodeRow({ e }: { e: Episode }) {
+  const w = e.watch;
+  const body = (
+    <>
+      <div className="relative w-28 shrink-0 sm:w-36">
+        <FadeImage src={e.still} alt="" className="aspect-video rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3"><Play className="size-4 text-ink-4" /></div>} />
+        {w?.played && (
+          <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label="Watched">
+            <Check className="size-3" strokeWidth={3} />
+          </span>
+        )}
+        {w?.progress ? <ProgressBar value={w.progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label="Watched" /> : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-medium">
+          {e.number !== undefined && <span className="text-ink-4">{e.number}. </span>}
+          {e.name}
+        </div>
+        <div className="truncate text-[11px] text-ink-4">{[e.airDate && longDate(e.airDate), e.runtimeMin && `${e.runtimeMin} min`, e.resolution, e.size && bytes(e.size)].filter(Boolean).join(' · ')}</div>
+        {e.overview && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-ink-3">{e.overview}</p>}
+      </div>
+    </>
+  );
+  return (
+    <li>
+      {e.url ? (
+        <a href={e.url} target="_blank" rel="noreferrer noopener" className="-mx-2 flex gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]">
+          {body}
+        </a>
+      ) : (
+        <div className="-mx-2 flex gap-3 p-2">{body}</div>
+      )}
+    </li>
+  );
+}
+
+function Episodes({ seriesId, seasonId }: { seriesId: string; seasonId: string }) {
+  const q = useJellyfinEpisodes(seriesId, seasonId);
+  if (q.isPending) return <div className="flex items-center gap-2 px-3 py-4 text-[12px] text-ink-4"><LoaderCircle className="size-3.5 animate-spin" /> Loading episodes…</div>;
+  if (q.isError) return <p className="px-3 py-4 text-[12px] text-bad">{(q.error as Error).message}</p>;
+  if (!q.data.episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">Jellyfin has no episodes for this season.</p>;
+  return (
+    <ul className="space-y-1 px-3 pt-1 pb-3">
+      {q.data.episodes.map((e) => (
+        <EpisodeRow key={e.id} e={e} />
+      ))}
+    </ul>
+  );
+}
+
+/** What's next for you in a series, from Jellyfin. */
+function UpNext({ e }: { e: Episode }) {
+  return (
+    <Card>
+      <CardHeader icon={Play} accent="var(--color-jellyfin)" title={e.watch?.progress ? 'Continue watching' : 'Up next'} subtitle={episodeLabel(e)} />
+      <CardBody>
+        <ul>
+          <EpisodeRow e={e} />
+        </ul>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -218,32 +550,69 @@ function Requests({ d }: { d: Details }) {
   );
 }
 
-function Seasons({ d }: { d: Details }) {
-  if (!d.seasons?.length) return null;
-  const tone: Record<Availability, string> = {
-    available: 'bg-ok',
-    partial: 'bg-brand',
-    processing: 'bg-brand',
-    requested: 'bg-seerr',
-    missing: 'bg-warn',
-    none: 'bg-white/15',
-  };
+const SEASON_TONE: Record<Availability, string> = {
+  available: 'bg-ok',
+  partial: 'bg-brand',
+  processing: 'bg-brand',
+  requested: 'bg-seerr',
+  missing: 'bg-warn',
+  none: 'bg-white/15',
+};
+
+function SeasonRow({ s, seriesId }: { s: Season; seriesId?: string }) {
+  const [open, setOpen] = useState(false);
+  const jf = seriesId ? s.jellyfin : undefined;
+  const watched = jf && jf.unplayed === 0 && jf.episodes > 0;
+  const head = (
+    <>
+      <span className={cn('size-2 shrink-0 rounded-full', SEASON_TONE[s.status])} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-medium">{s.name}</div>
+        <div className="truncate text-[11px] text-ink-4">
+          {[
+            s.episodes !== undefined ? (s.files !== undefined ? `${s.files}/${s.episodes} episodes` : `${s.episodes} episodes`) : s.files !== undefined ? `${s.files} episodes` : undefined,
+            s.airDate ? dayLabel(s.airDate) : undefined,
+            jf && (watched ? 'watched' : jf.unplayed ? `${jf.unplayed} unwatched` : undefined),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </div>
+      </div>
+      {watched ? <CircleCheck className="size-4 shrink-0 text-ok" aria-label="Watched" /> : <span className="shrink-0 text-[11px] text-ink-3">{AVAILABILITY[s.status].label}</span>}
+    </>
+  );
+  return (
+    <li className="overflow-hidden rounded-xl border border-line bg-white/[0.02]">
+      {jf ? (
+        <>
+          <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/[0.03]">
+            {head}
+            <ChevronDown className={cn('size-4 shrink-0 text-ink-4 transition-transform', open && 'rotate-180')} />
+          </button>
+          {open && <Episodes seriesId={seriesId!} seasonId={jf.id} />}
+        </>
+      ) : (
+        <div className="flex items-center gap-3 px-3 py-2.5">{head}</div>
+      )}
+    </li>
+  );
+}
+
+function Seasons({ seasons, seriesId }: { seasons?: Season[]; seriesId?: string }) {
+  if (!seasons?.length) return null;
+  const browsable = seriesId && seasons.some((x) => x.jellyfin);
   return (
     <Card>
-      <CardHeader icon={Clapperboard} accent="var(--color-sonarr)" title="Seasons" subtitle={`${d.seasons.length} season${d.seasons.length === 1 ? '' : 's'}`} />
+      <CardHeader
+        icon={Clapperboard}
+        accent="var(--color-sonarr)"
+        title="Seasons"
+        subtitle={`${seasons.length} season${seasons.length === 1 ? '' : 's'}${browsable ? ' · tap a season for its episodes' : ''}`}
+      />
       <CardBody>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {d.seasons.map((s) => (
-            <li key={s.number} className="flex items-center gap-3 rounded-xl border border-line bg-white/[0.02] px-3 py-2.5">
-              <span className={cn('size-2 shrink-0 rounded-full', tone[s.status])} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium">{s.name}</div>
-                <div className="text-[11px] text-ink-4">
-                  {[s.episodes !== undefined ? (s.files !== undefined ? `${s.files}/${s.episodes} episodes` : `${s.episodes} episodes`) : undefined, s.airDate ? dayLabel(s.airDate) : undefined].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-              <span className="text-[11px] text-ink-3">{AVAILABILITY[s.status].label}</span>
-            </li>
+        <ul className="space-y-2">
+          {seasons.map((x) => (
+            <SeasonRow key={x.number} s={x} seriesId={seriesId} />
           ))}
         </ul>
       </CardBody>
@@ -278,6 +647,13 @@ function DetailsView({ d }: { d: Details }) {
             items={[
               <Pill key="a" tone={a.tone}>{a.label}</Pill>,
               <span key="t">{d.type === 'tv' ? 'Series' : 'Movie'}</span>,
+              watchLabel(d.library?.watch, d.type === 'tv') && (
+                <span key="w" className="text-white">
+                  {d.library?.watch?.played && <CircleCheck className="mr-1 inline size-3 text-ok" />}
+                  {watchLabel(d.library?.watch, d.type === 'tv')}
+                </span>
+              ),
+              d.library?.files[0]?.video?.resolution && <span key="q" className="rounded border border-white/25 px-1 text-[10px]">{[d.library.files[0].video.resolution, d.library.files[0].video.range].filter(Boolean).join(' ')}</span>,
               d.certification && <span key="c" className="rounded border border-white/25 px-1 text-[10px]">{d.certification}</span>,
               d.runtimeMin && <span key="r"><Clock className="mr-1 inline size-3" />{d.runtimeMin} min</span>,
               d.rating && <span key="s"><Star className="mr-1 inline size-3 fill-current text-warn" />{d.rating.toFixed(1)}</span>,
@@ -290,8 +666,10 @@ function DetailsView({ d }: { d: Details }) {
       >
         <Actions d={d} />
       </Hero>
-      <div className="grid items-start gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
+      {/* min-w-0 keeps wide rows (cast, tracks) scrolling inside their card
+          instead of stretching the page past the screen on phones. */}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-3">
+        <div className="min-w-0 space-y-5 xl:col-span-2">
           {d.overview && (
             <Card>
               <CardBody className="pt-5">
@@ -299,10 +677,14 @@ function DetailsView({ d }: { d: Details }) {
               </CardBody>
             </Card>
           )}
-          <Seasons d={d} />
+          {d.library?.nextUp && <UpNext e={d.library.nextUp} />}
+          <Seasons seasons={d.seasons} seriesId={d.library?.itemId} />
+          {d.library && <MediaInfo files={d.library.files} />}
           <Cast cast={d.cast} />
         </div>
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
+          {d.library && <YourLibrary lib={d.library} />}
+          {d.library && <TitleInfo lib={d.library} />}
           <InYourApps d={d} />
           <Requests d={d} />
           {!d.sources.seerr && (
@@ -352,19 +734,25 @@ export function JellyfinMediaPage() {
           <Hero
             title={j.title}
             year={j.year}
+            tagline={j.tagline}
             poster={j.poster}
             backdrop={j.backdrop}
-            facts={<Facts items={[<Pill key="a" tone="ok">In Jellyfin</Pill>, j.kind, j.certification, j.runtimeMin && `${j.runtimeMin} min`, j.rating && `★ ${j.rating.toFixed(1)}`, j.genres.slice(0, 4).join(', ')]} />}
+            facts={<Facts items={[<Pill key="a" tone="ok">In Jellyfin</Pill>, j.kind, watchLabel(j.library.watch, j.kind === 'Series'), j.certification, j.runtimeMin && `${j.runtimeMin} min`, j.rating && `★ ${j.rating.toFixed(1)}`, j.genres.slice(0, 4).join(', ')]} />}
           >
-            {j.url && (
-              <a href={j.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90">
-                <Play className="size-4 fill-current" /> Play in Jellyfin <ExternalLink className="size-3.5" />
-              </a>
-            )}
+            {j.url && <PlayButton url={j.url} library={j.library} />}
           </Hero>
-          <div className="space-y-5">
-            {j.overview && <Card><CardBody className="pt-5"><p className="text-[14px] leading-relaxed text-ink-2">{j.overview}</p></CardBody></Card>}
-            <Cast cast={j.cast} />
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-3">
+            <div className="min-w-0 space-y-5 xl:col-span-2">
+              {j.overview && <Card><CardBody className="pt-5"><p className="text-[14px] leading-relaxed text-ink-2">{j.overview}</p></CardBody></Card>}
+              {j.library.nextUp && <UpNext e={j.library.nextUp} />}
+              <Seasons seasons={j.seasons.filter((x) => x.number > 0).map((x) => ({ number: x.number, name: x.name, files: x.episodes, status: 'available', jellyfin: x }))} seriesId={j.itemId} />
+              <MediaInfo files={j.library.files} />
+              <Cast cast={j.cast} />
+            </div>
+            <div className="min-w-0 space-y-5">
+              <YourLibrary lib={j.library} />
+              <TitleInfo lib={j.library} />
+            </div>
           </div>
         </>
       ) : q.isError ? (

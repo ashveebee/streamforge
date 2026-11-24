@@ -10,6 +10,86 @@ export interface CastMember {
   image?: string;
 }
 
+export interface WatchState {
+  played: boolean;
+  playCount: number;
+  lastPlayed?: string;
+  favorite: boolean;
+  /** Percent watched, when part way through. */
+  progress?: number;
+  remainingMin?: number;
+  /** Series and seasons: episodes not watched yet. */
+  unplayed?: number;
+}
+
+export interface MediaFile {
+  id: string;
+  name?: string;
+  container?: string;
+  size?: number;
+  /** Bits per second. */
+  bitrate?: number;
+  path?: string;
+  video?: { codec?: string; resolution?: string; width?: number; height?: number; range?: string; bitDepth?: number; fps?: number; bitrate?: number };
+  audio: { title?: string; language?: string; codec?: string; channels?: string; isDefault: boolean }[];
+  subtitles: { title?: string; language?: string; codec?: string; forced: boolean; external: boolean; sdh: boolean; isDefault: boolean }[];
+}
+
+export interface Episode {
+  id: string;
+  season?: number;
+  number?: number;
+  name: string;
+  overview?: string;
+  airDate?: string;
+  runtimeMin?: number;
+  rating?: number;
+  still?: string;
+  resolution?: string;
+  size?: number;
+  path?: string;
+  missing: boolean;
+  watch?: WatchState;
+  url?: string;
+}
+
+/** What Jellyfin knows about a title in your library. */
+export interface LibraryInfo {
+  itemId: string;
+  kind: string;
+  url?: string;
+  originalTitle?: string;
+  added?: string;
+  premiered?: string;
+  ended?: string;
+  seriesStatus?: string;
+  communityRating?: number;
+  criticRating?: number;
+  runtimeMin?: number;
+  path?: string;
+  directors: string[];
+  writers: string[];
+  producers: string[];
+  studios: string[];
+  tags: string[];
+  links: { label: string; url: string }[];
+  watch?: WatchState;
+  files: MediaFile[];
+  episodeCount?: number;
+  seasonCount?: number;
+  nextUp?: Episode;
+}
+
+export interface Season {
+  number: number;
+  name: string;
+  episodes?: number;
+  files?: number;
+  airDate?: string;
+  status: Availability;
+  jellyfin?: { id: string; episodes: number; unplayed?: number };
+}
+
 export interface MediaDetails {
   type: MediaType;
   tmdbId: number;
@@ -28,9 +108,10 @@ export interface MediaDetails {
   backdrop?: string;
   trailer?: string;
   cast: CastMember[];
-  seasons?: { number: number; name: string; episodes?: number; files?: number; airDate?: string; status: Availability }[];
+  seasons?: Season[];
   availability: Availability;
   jellyfin?: { itemId: string; url?: string };
+  library?: LibraryInfo;
   arr: {
     kind: 'radarr' | 'sonarr';
     instance: string;
@@ -55,6 +136,7 @@ export interface JellyfinOnly {
   title: string;
   kind: string;
   year?: number;
+  tagline?: string;
   overview?: string;
   genres: string[];
   runtimeMin?: number;
@@ -64,6 +146,8 @@ export interface JellyfinOnly {
   backdrop?: string;
   cast: CastMember[];
   url?: string;
+  seasons: { id: string; number: number; name: string; episodes: number; unplayed?: number }[];
+  library: LibraryInfo;
 }
 
 export const useMediaDetails = (type: MediaType, tmdbId: number) =>
@@ -74,6 +158,15 @@ export const useJellyfinMedia = (itemId: string) =>
     queryKey: ['media', 'jellyfin', itemId],
     queryFn: ({ signal }) => api<{ redirect?: { type: MediaType; tmdbId: number }; jellyfinOnly?: JellyfinOnly }>(`/media/jellyfin/${itemId}`, { signal }),
     staleTime: 5 * 60_000,
+  });
+
+/** One season's episodes from Jellyfin, loaded when the season is opened. */
+export const useJellyfinEpisodes = (seriesId: string | undefined, seasonId: string | undefined) =>
+  useQuery({
+    queryKey: ['media', 'jellyfin', seriesId, 'season', seasonId],
+    queryFn: ({ signal }) => api<{ episodes: Episode[] }>(`/media/jellyfin/${seriesId}/seasons/${seasonId}/episodes`, { signal }),
+    enabled: !!seriesId && !!seasonId,
+    staleTime: 60_000,
   });
 
 export function useTitleSearch() {
