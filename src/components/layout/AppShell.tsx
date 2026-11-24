@@ -48,7 +48,10 @@ export function AppShell() {
         </div>
       ) : (
         <>
-          <header className="glass sticky top-0 z-30 flex h-14 items-center gap-3 border-x-0 border-t-0 px-4">
+          {/* The installed app draws under the iPhone status bar
+              (black-translucent), so pad the header past it or iOS
+              swallows taps on the menu and search buttons. */}
+          <header className="glass sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-x-0 border-t-0 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
             <button
               onClick={() => setDrawer(true)}
               className="-ml-1.5 grid size-9 place-items-center rounded-lg text-ink-2 hover:bg-white/5"
@@ -95,7 +98,7 @@ export function AppShell() {
         className="transition-[padding] duration-300 ease-out-expo"
         style={{ paddingLeft: isDesktop ? (collapsed ? 92 : 272) : 0 }}
       >
-        <div className="mx-auto w-full max-w-[1680px] px-4 pt-5 pb-16 sm:px-6 lg:px-8 lg:pt-8">
+        <div className="mx-auto w-full max-w-[1680px] px-[max(1rem,env(safe-area-inset-left))] pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pt-8">
           {/* No exit animation: the new page shows at once, so a slow or
               suspended page can never leave the screen blank between routes. */}
           <motion.div

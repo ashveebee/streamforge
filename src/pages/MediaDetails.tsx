@@ -140,7 +140,16 @@ function Actions({ d }: { d: Details }) {
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
-          {request.isSuccess ? 'Requested' : partial ? 'Request missing seasons' : 'Request'}
+          {request.isSuccess ? (
+            'Requested'
+          ) : partial ? (
+            <>
+              <span className="sm:hidden">Request the rest</span>
+              <span className="max-sm:hidden">Request missing seasons</span>
+            </>
+          ) : (
+            'Request'
+          )}
         </Button>
       )}
       {d.can.add && (

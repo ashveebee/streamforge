@@ -167,7 +167,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
+    <div className="relative grid min-h-dvh place-items-center overflow-hidden px-4 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <Ambient />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_50%_0%,rgb(139_92_246/0.18),transparent)]" />
       <div
