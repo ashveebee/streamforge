@@ -91,14 +91,14 @@ export function SonarrPage() {
               <StatTile label="Missing" value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint="Monitored, not downloaded" />
               <StatTile label="Size on disk" value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
             </div>
-            <div className="grid gap-5 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <div className="xl:col-span-2"><QueueCard items={d.queue.items} total={d.queue.total} accent="var(--color-sonarr)" /></div>
               <Card className="h-full">
                 <CardHeader icon={CalendarDays} accent="var(--color-sonarr)" title="Airing soon" subtitle="Next 14 days" />
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
-            <div className="grid items-start gap-5 xl:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
               <AutoImportCard kind="sonarr" queue={d.queue.items} />
               <MissingCard kind="sonarr" instance={instance} />
             </div>
@@ -130,14 +130,14 @@ export function RadarrPage() {
               <StatTile label="Missing" value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint={`${d.stats.unreleased} not yet released`} />
               <StatTile label="Size on disk" value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
             </div>
-            <div className="grid gap-5 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <div className="xl:col-span-2"><QueueCard items={d.queue.items} total={d.queue.total} accent="var(--color-radarr)" /></div>
               <Card className="h-full">
                 <CardHeader icon={CalendarDays} accent="var(--color-radarr)" title="Upcoming releases" subtitle="Next 30 days" />
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
-            <div className="grid gap-5 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <Card className="xl:col-span-2">
                 <CardHeader icon={Layers} title="Recently added movies" />
                 <PosterStrip kind="radarr" items={d.recent.map((r) => ({ ...r, caption: r.hasFile ? `${r.year ?? ''} · On disk` : `${r.year ?? ''} · Missing` }))} />
@@ -165,7 +165,7 @@ export function RadarrPage() {
                 </CardBody>
               </Card>
             </div>
-            <div className="grid items-start gap-5 xl:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
               <AutoImportCard kind="radarr" queue={d.queue.items} />
               <MissingCard kind="radarr" instance={instance} />
             </div>
