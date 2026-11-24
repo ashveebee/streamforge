@@ -18,6 +18,7 @@ import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
+import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
@@ -379,6 +380,76 @@ api.post(
     const r = await addToArr(b.data.kind, b.data, b.data.instance);
     audit(req, `[search] added ${r.title} to ${r.instance}`);
     return r;
+  }),
+);
+
+/* --------------------------------- rules -------------------------------- */
+
+const ruleBody = z
+  .object({
+    name: z.string().trim().max(80).default(''),
+    enabled: z.boolean().default(true),
+    condition: z.enum(CONDITION_TYPES as [string, ...string[]]),
+    value: z.number(),
+    actions: z.array(z.enum(ACTION_TYPES as [string, ...string[]])).max(ACTION_TYPES.length),
+    cooldownHours: z.number().int().min(0).max(24 * 30).default(24),
+  })
+  .strict();
+const ruleError = (err: unknown) => {
+  if (err instanceof RuleError) throw new HttpError(400, err.message);
+  throw err;
+};
+api.get('/rules', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(rulesStatus()));
+api.post(
+  '/rules',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = ruleBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid rule');
+    try {
+      const r = saveRule(b.data as Parameters<typeof saveRule>[0]);
+      audit(req, `[rules] rule “${r.name}” added`);
+      return rulesStatus();
+    } catch (err) {
+      return ruleError(err);
+    }
+  }),
+);
+api.put(
+  '/rules/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = ruleBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid rule');
+    try {
+      const r = saveRule({ ...(b.data as Parameters<typeof saveRule>[0]), id: String(req.params.id) });
+      audit(req, `[rules] rule “${r.name}” updated`);
+      return rulesStatus();
+    } catch (err) {
+      return ruleError(err);
+    }
+  }),
+);
+api.delete(
+  '/rules/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    if (!removeRule(String(req.params.id))) throw new HttpError(404, 'Unknown rule', 'not_found');
+    audit(req, `[rules] rule ${String(req.params.id)} removed`);
+    return rulesStatus();
+  }),
+);
+api.post(
+  '/rules/:id/run',
+  requireAdmin,
+  handle(null, async (req) => {
+    const fire = (req.body as { fire?: unknown } | undefined)?.fire === true;
+    try {
+      const r = await runRule(String(req.params.id), fire);
+      return { ...r, status: rulesStatus() };
+    } catch (err) {
+      return ruleError(err);
+    }
   }),
 );
 
