@@ -16,6 +16,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { addToArr, requestMedia, search } from './services/search.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
@@ -249,6 +250,45 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
     }),
   );
 }
+
+/* -------------------------------- search -------------------------------- */
+
+api.get(
+  '/search',
+  handle(null, async (req) => {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    if (q.length < 2) return { library: [], managed: [], discover: [], canRequest: false, canAdd: false };
+    return search(ctxOf(req.session!), q, (a) => canSee(req, a as never), !!req.session!.isAdmin);
+  }),
+);
+
+const requestBody = z.object({ mediaType: z.enum(['movie', 'tv']), tmdbId: z.number().int().positive(), title: z.string().max(200).optional() }).strict();
+api.post(
+  '/search/request',
+  handle('seerr', async (req) => {
+    if (!req.session!.isAdmin && !canSee(req, 'requests')) throw new HttpError(403, 'Your account can’t make requests here.', 'forbidden');
+    const b = requestBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const r = await requestMedia(req.session!.userId, b.data.mediaType, b.data.tmdbId);
+    audit(req, `[seerr] requested ${b.data.title ?? `${b.data.mediaType} ${b.data.tmdbId}`}`);
+    return r;
+  }),
+);
+
+const addBody = z
+  .object({ kind: z.enum(['sonarr', 'radarr']), tmdbId: z.number().int().positive().optional(), tvdbId: z.number().int().positive().optional(), instance: z.string().max(64).optional(), title: z.string().max(200).optional() })
+  .strict();
+api.post(
+  '/search/add',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = addBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const r = await addToArr(b.data.kind, b.data, b.data.instance);
+    audit(req, `[search] added ${r.title} to ${r.instance}`);
+    return r;
+  }),
+);
 
 /* --------------------------------- audit -------------------------------- */
 

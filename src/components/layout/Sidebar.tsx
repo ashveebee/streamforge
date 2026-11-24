@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, Download, LayoutDashboard, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Settings } from 'lucide-react';
+import { Activity, BarChart3, Download, LayoutDashboard, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
@@ -72,7 +72,9 @@ export function Sidebar({
   onToggle,
   onNavigate,
   mobile,
+  onSearch,
 }: {
+  onSearch?: () => void;
   collapsed: boolean;
   onToggle?: () => void;
   onNavigate?: () => void;
@@ -105,6 +107,26 @@ export function Sidebar({
           </div>
         )}
       </div>
+
+      {onSearch && (
+        <button
+          onClick={() => {
+            onNavigate?.();
+            onSearch();
+          }}
+          title={collapsed ? 'Search (⌘K)' : undefined}
+          aria-label="Search"
+          className={cn('mt-4 flex h-9 items-center gap-2.5 rounded-xl border border-line bg-white/[0.02] px-2.5 text-[13px] text-ink-4 transition hover:bg-white/[0.05] hover:text-ink-2', collapsed && 'justify-center px-0')}
+        >
+          <Search className="size-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">Search</span>
+              <kbd className="rounded border border-line px-1 text-[10px]">⌘K</kbd>
+            </>
+          )}
+        </button>
+      )}
 
       <nav className="mt-5 flex flex-1 flex-col gap-0.5 overflow-y-auto no-scrollbar" aria-label="Main">
         <NavItem to="/" icon={LayoutDashboard} label="Overview" collapsed={collapsed} onNavigate={onNavigate} />

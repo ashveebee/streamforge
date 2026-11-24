@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import { useLocalState } from '@/hooks/useLocalState';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,6 +9,7 @@ import { jfUserImage } from '@/lib/api';
 import { Avatar } from '../ui/Image';
 import { Sidebar } from './Sidebar';
 import { LogoMark } from './Logo';
+import { CommandPalette, useCommandPaletteHotkey } from './CommandPalette';
 
 export function Ambient() {
   return (
@@ -27,6 +28,9 @@ export function AppShell() {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const [searching, setSearching] = useState(false);
+  const openSearch = useCallback(() => setSearching(true), []);
+  useCommandPaletteHotkey(openSearch);
 
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {
@@ -39,7 +43,7 @@ export function AppShell() {
 
       {isDesktop ? (
         <div className="fixed inset-y-0 left-0 z-30 p-3">
-          <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+          <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} onSearch={openSearch} />
         </div>
       ) : (
         <>
@@ -54,6 +58,9 @@ export function AppShell() {
             <LogoMark size={26} />
             <span className="text-[15px] font-semibold tracking-tight">StreamForge</span>
             <div className="flex-1" />
+            <button onClick={openSearch} className="grid size-9 place-items-center rounded-lg text-ink-2 hover:bg-white/5" aria-label="Search">
+              <Search className="size-5" />
+            </button>
             {user && <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={30} />}
           </header>
           <AnimatePresence>
@@ -73,13 +80,15 @@ export function AppShell() {
                   exit={{ x: -300 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 38 }}
                 >
-                  <Sidebar collapsed={false} mobile onNavigate={() => setDrawer(false)} />
+                  <Sidebar collapsed={false} mobile onNavigate={() => setDrawer(false)} onSearch={openSearch} />
                 </motion.div>
               </>
             )}
           </AnimatePresence>
         </>
       )}
+
+      <CommandPalette open={searching} onClose={() => setSearching(false)} />
 
       <main
         className="transition-[padding] duration-300 ease-out-expo"
