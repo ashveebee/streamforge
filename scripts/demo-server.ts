@@ -1099,6 +1099,8 @@ app.get('/api/settings/sso', json(() => ({
   hasApiKey: true,
   mfaUsers: [{ userId: 'u-sam', userName: 'Sam', enabledAt: iso(30 * DAY) }],
 })));
+app.post('/api/search/request', (_req, res) => res.json({ ok: true, asSelf: true }));
+app.post('/api/search/add', (_req, res) => res.json({ ok: true, title: 'Demo', instance: 'Radarr' }));
 app.get('/api/search', (req, res) => {
   const q = String(req.query.q ?? '').toLowerCase();
   const hits = ALL.filter((t) => t.title.toLowerCase().includes(q));

@@ -362,7 +362,7 @@ api.post(
     if (!req.session!.isAdmin && !canSee(req, 'requests')) throw new HttpError(403, 'Your account can’t make requests here.', 'forbidden');
     const b = requestBody.safeParse(req.body ?? {});
     if (!b.success) throw new HttpError(400, 'Invalid request');
-    const r = await requestMedia(req.session!.userId, b.data.mediaType, b.data.tmdbId);
+    const r = await requestMedia(req.session!.userId, !!req.session!.isAdmin, b.data.mediaType, b.data.tmdbId);
     audit(req, `[seerr] requested ${b.data.title ?? `${b.data.mediaType} ${b.data.tmdbId}`}`);
     return r;
   }),

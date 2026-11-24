@@ -48,7 +48,8 @@ interface JfItem {
 }
 
 async function jellyfinHits(ctx: JfCtx, q: string): Promise<SearchHit[]> {
-  const res = await jf<{ Items: JfItem[] }>(`/Users/${ctx.userId}/Items`, ctx.token, ctx.deviceId, {
+  const res = await jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, {
+    userId: ctx.userId,
     searchTerm: q,
     Recursive: true,
     Limit: PER_SOURCE * 2,
@@ -56,14 +57,14 @@ async function jellyfinHits(ctx: JfCtx, q: string): Promise<SearchHit[]> {
     Fields: 'PrimaryImageAspectRatio',
     EnableTotalRecordCount: false,
   });
-  return res.Items.slice(0, PER_SOURCE * 2).map((i) => {
+  return (res.Items ?? []).slice(0, PER_SOURCE * 2).map((i) => {
     const imgId = i.ImageTags?.Primary ? i.Id : i.SeriesId;
     const tag = i.ImageTags?.Primary ?? i.SeriesPrimaryImageTag;
     return {
       key: `jf:${i.Id}`,
       source: 'jellyfin',
       title: i.Name,
-      subtitle: [i.Type === 'Episode' ? i.SeriesName : i.AlbumArtist, i.Type.replace(/([a-z])([A-Z])/g, '$1 $2')].filter(Boolean).join(' · '),
+      subtitle: [i.Type === 'Episode' ? i.SeriesName : i.AlbumArtist, (i.Type ?? '').replace(/([a-z])([A-Z])/g, '$1 $2')].filter(Boolean).join(' · '),
       year: i.ProductionYear,
       image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}` : undefined,
       status: 'available',
@@ -95,7 +96,7 @@ async function arrHits(inst: ArrInstance, q: string): Promise<SearchHit[]> {
   const isTv = inst.kind === 'sonarr';
   const rows = await cache.get(`${inst.id}:${isTv ? 'series' : 'movies'}`, 60_000, () => inst.client.get<ArrRow[]>(isTv ? '/api/v3/series' : '/api/v3/movie'));
   return rows
-    .map((r) => ({ r, s: score(r.title, q) }))
+    .map((r) => ({ r, s: score(r.title ?? '', q) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, PER_SOURCE)
@@ -138,8 +139,9 @@ interface SeerrResult {
 const SEERR_STATUS: Record<number, string> = { 2: 'requested', 3: 'processing', 4: 'partial', 5: 'available' };
 
 async function seerrHits(q: string): Promise<SearchHit[]> {
-  const res = await seerr()!.get<{ results: SeerrResult[] }>('/api/v1/search', { query: q, page: 1, language: 'en' });
-  return res.results
+  // Seerr's validator wants %20 rather than + for spaces, so build the query by hand.
+  const res = await seerr()!.get<{ results?: SeerrResult[] }>(`/api/v1/search?query=${encodeURIComponent(q)}&page=1`);
+  return (res.results ?? [])
     .filter((r) => r.mediaType === 'movie' || r.mediaType === 'tv')
     .slice(0, PER_SOURCE * 2)
     .map((r) => {
@@ -186,18 +188,25 @@ async function lookupHits(inst: ArrInstance, q: string): Promise<SearchHit[]> {
 }
 
 export async function search(ctx: JfCtx, q: string, can: (area: string) => boolean, isAdmin: boolean) {
-  const settle = async (p: Promise<SearchHit[]>) => p.catch(() => [] as SearchHit[]);
+  // A failing service drops out of the results, but the palette says which one and why.
+  const errors: Record<string, string> = {};
+  const settle = (name: string) => async (p: Promise<SearchHit[]>) =>
+    p.catch((err: unknown) => {
+      errors[name] = (err as Error).message;
+      console.warn(`[search] ${name}: ${(err as Error).message}`);
+      return [] as SearchHit[];
+    });
   const jobs: Record<string, Promise<SearchHit[]>> = {};
-  if (isConfigured('jellyfin')) jobs.library = settle(jellyfinHits(ctx, q));
+  if (isConfigured('jellyfin')) jobs.library = settle('Jellyfin')(jellyfinHits(ctx, q));
   const managed: Promise<SearchHit[]>[] = [];
-  for (const inst of arrInstances()) if (can(inst.kind)) managed.push(settle(arrHits(inst, q)));
-  for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(musicHits(k, q)));
+  for (const inst of arrInstances()) if (can(inst.kind)) managed.push(settle(inst.primary ? inst.name : `${inst.kind} ${inst.name}`)(arrHits(inst, q)));
+  for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(k === 'lidarr' ? 'Lidarr' : 'Readarr')(musicHits(k, q)));
   jobs.managed = Promise.all(managed).then((l) => l.flat());
   const canRequest = isAdmin || can('requests');
-  if (isConfigured('seerr') && (canRequest || can('seerr'))) jobs.discover = settle(seerrHits(q));
+  if (isConfigured('seerr') && (canRequest || can('seerr'))) jobs.discover = settle('Seerr')(seerrHits(q));
   else if (isAdmin) {
     const inst = [arrInstance('radarr'), arrInstance('sonarr')].filter(Boolean) as ArrInstance[];
-    jobs.discover = Promise.all(inst.map((i) => settle(lookupHits(i, q)))).then((l) => l.flat());
+    jobs.discover = Promise.all(inst.map((i) => settle(`${i.name} lookup`)(lookupHits(i, q)))).then((l) => l.flat());
   }
   const out = Object.fromEntries(await Promise.all(Object.entries(jobs).map(async ([k, p]) => [k, await p] as const))) as Record<'library' | 'managed' | 'discover', SearchHit[] | undefined>;
   return {
@@ -206,20 +215,48 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
     discover: (out.discover ?? []).filter((d) => d.status !== 'in-library'),
     canRequest: canRequest && isConfigured('seerr'),
     canAdd: isAdmin && arrInstances().length > 0,
+    errors,
   };
 }
 
 /* -------------------------------- actions -------------------------------- */
 
 
-export async function requestMedia(jellyfinUserId: string, mediaType: 'movie' | 'tv', tmdbId: number) {
+interface SeerrTv {
+  seasons?: { seasonNumber: number }[];
+  mediaInfo?: { seasons?: { seasonNumber: number; status: number }[]; requests?: { status: number; seasons?: { seasonNumber: number }[] }[] };
+}
+
+/**
+ * Requests a movie or series through Seerr in the user's own name. For series
+ * it asks for every season that isn't already available or requested, which
+ * works on every Seerr/Overseerr/Jellyseerr version (unlike `seasons: 'all'`).
+ * Admins whose Jellyfin account isn't linked in Seerr request as Seerr's admin.
+ */
+export async function requestMedia(jellyfinUserId: string, isAdmin: boolean, mediaType: 'movie' | 'tv', tmdbId: number) {
   const c = seerr();
   if (!c) throw new HttpError(404, 'Seerr is not configured', 'not_configured');
   const user = await seerrUserFor(jellyfinUserId).catch(() => undefined);
-  if (!user) throw new HttpError(403, 'Your Jellyfin account isn’t linked to a Seerr user yet. Sign in to Seerr once with Jellyfin, then try again.');
-  const res = await c.post<{ id: number; status: number }>('/api/v1/request', { mediaType, mediaId: tmdbId, ...(mediaType === 'tv' ? { seasons: 'all' } : {}), userId: user.id });
-  cache.delete('seerr:');
-  return { ok: true, requestId: res?.id, status: res?.status };
+  if (!user && !isAdmin) throw new HttpError(403, 'Your Jellyfin account isn’t linked to a Seerr user yet. Sign in to Seerr once with Jellyfin, then try again.');
+  const body: Record<string, unknown> = { mediaType, mediaId: tmdbId, ...(user ? { userId: user.id } : {}) };
+  if (mediaType === 'tv') {
+    const tv = await c.get<SeerrTv>(`/api/v1/tv/${tmdbId}`);
+    const taken = new Set<number>();
+    for (const s of tv.mediaInfo?.seasons ?? []) if (s.status >= 2) taken.add(s.seasonNumber);
+    for (const r of tv.mediaInfo?.requests ?? []) if (r.status !== 3) for (const s of r.seasons ?? []) taken.add(s.seasonNumber);
+    const seasons = (tv.seasons ?? []).map((s) => s.seasonNumber).filter((n) => n > 0 && !taken.has(n));
+    if (!seasons.length) throw new HttpError(409, 'Every season is already available or requested.');
+    body.seasons = seasons;
+  }
+  try {
+    const res = await c.post<{ id: number; status: number }>('/api/v1/request', body);
+    cache.delete('seerr:');
+    return { ok: true, requestId: res?.id, status: res?.status, asSelf: !!user };
+  } catch (err) {
+    // Seerr explains refusals (quota, already requested, …) in its JSON body.
+    const m = (err as Error).message.match(/"message"\s*:\s*"([^"]+)"/);
+    throw new HttpError(400, m ? `Seerr: ${m[1]}` : (err as Error).message);
+  }
 }
 
 /** Adds a title straight to Sonarr/Radarr (default profile and root folder) and searches for it. */
