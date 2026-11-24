@@ -9,7 +9,8 @@ import { FadeImage } from '@/components/ui/Image';
 import { Select } from '@/components/ui/Input';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { Switch } from '@/components/ui/Switch';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -58,7 +59,7 @@ export default function DigestPage() {
   return (
     <>
       <PageHeader eyebrow="This week" title="Weekly digest" description="What’s new in the library and what everyone’s been watching over the last seven days." />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Putting this week together" hint="Collecting what was added and watched…" />}>
         {(d) => {
           const nothing = !d.added.movies.length && !d.added.shows.length && !d.added.other.length;
           return (

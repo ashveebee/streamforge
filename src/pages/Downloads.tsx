@@ -14,7 +14,8 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 
 const STATE: Record<ItemState, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
   downloading: { label: 'Downloading', tone: 'brand' },
@@ -178,7 +179,7 @@ export default function DownloadsPage() {
       {!has ? (
         <Card><EmptyState icon={Download} title="No download clients connected" description="Add qBittorrent, Transmission, SABnzbd or NZBGet in Settings to see real transfer speeds and manage downloads here." /></Card>
       ) : (
-        <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+        <QueryState query={q} skeleton={<PageLoader label="Connecting to your download clients" hint="Reading speeds and queues…" />}>
           {(d) => {
             const online = d.clients.filter((c) => c.online);
             const down = online.reduce((n, c) => n + (c.downSpeed ?? 0), 0);

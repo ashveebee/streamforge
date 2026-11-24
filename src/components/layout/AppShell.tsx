@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router';
+import { useLocation, useOutlet } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Menu, Search } from 'lucide-react';
 import { useLocalState } from '@/hooks/useLocalState';
@@ -28,6 +28,7 @@ export function AppShell() {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const outlet = useOutlet();
   const [searching, setSearching] = useState(false);
   const openSearch = useCallback(() => setSearching(true), []);
   useCommandPaletteHotkey(openSearch);
@@ -95,17 +96,16 @@ export function AppShell() {
         style={{ paddingLeft: isDesktop ? (collapsed ? 92 : 272) : 0 }}
       >
         <div className="mx-auto w-full max-w-[1680px] px-4 pt-5 pb-16 sm:px-6 lg:px-8 lg:pt-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          {/* No exit animation: the new page shows at once, so a slow or
+              suspended page can never leave the screen blank between routes. */}
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {outlet}
+          </motion.div>
         </div>
       </main>
     </div>

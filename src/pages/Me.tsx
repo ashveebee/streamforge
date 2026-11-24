@@ -11,7 +11,8 @@ import { Avatar, FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton, SkeletonRows } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState, SkeletonRows } from '@/components/ui/States';
 import { REQUEST_TONE } from '@/components/widgets/RequestsWidget';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 
@@ -85,7 +86,7 @@ export default function MePage() {
         title={user?.name ?? 'Me'}
         description="What you’re watching, what you’ve asked for, and where you’re signed in."
       />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading your activity" hint="Fetching what you’re watching…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

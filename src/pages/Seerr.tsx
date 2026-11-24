@@ -7,7 +7,8 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { ChartTooltip, Legend } from '@/components/ui/Chart';
 import { FadeImage } from '@/components/ui/Image';
 import { StatTile } from '@/components/ui/Stat';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { RequestDecision, RequestRow } from '@/components/widgets/RequestsWidget';
 
 // Two-slice categorical split; validated pair.
@@ -21,7 +22,7 @@ export default function SeerrPage() {
   return (
     <>
       <ServiceHeader id="seerr" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading requests" hint="Asking Seerr for the latest requests…" />}>
         {(d) => {
           const split = SPLIT.map((s) => ({ name: s.label, value: d.counts[s.key], color: s.color }));
           return (

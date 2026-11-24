@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { Switch } from '@/components/ui/Switch';
 
 const TEMPLATES: (RuleInput & { hint: string })[] = [
@@ -148,7 +149,7 @@ export default function RulesPage() {
         description="If something happens, StreamForge does something about it. Rules never delete anything."
         actions={!adding && <Button variant="primary" size="sm" onClick={() => setAdding({ name: '', enabled: true, condition: 'disk_usage', value: 90, actions: ['notify'], cooldownHours: 24 })}><Plus className="size-3.5" /> New rule</Button>}
       />
-      <QueryState query={q} skeleton={<Skeleton className="h-64 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading rules" />}>
         {(d) => (
           <div className="space-y-5">
             {(d.rules.length > 0 || adding) && (

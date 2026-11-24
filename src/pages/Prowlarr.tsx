@@ -6,7 +6,8 @@ import { ServiceHeader } from '@/components/layout/ServiceHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { INDEXER_TONE } from '@/components/widgets/IndexersWidget';
 
 export default function ProwlarrPage() {
@@ -14,7 +15,7 @@ export default function ProwlarrPage() {
   return (
     <>
       <ServiceHeader id="prowlarr" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading indexers" hint="Asking Prowlarr for indexer stats…" />}>
         {(d) => {
           const maxMs = Math.max(1, ...d.indexers.map((i) => i.stats.avgResponseMs));
           return (

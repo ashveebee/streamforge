@@ -34,7 +34,8 @@ import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
-import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
+import { EmptyState, ErrorState } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
 
 /** Where each service keeps its API key, and an example address. */
 const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptional?: boolean }> = {
@@ -427,9 +428,7 @@ export default function SettingsPage() {
       {q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
       ) : !q.data ? (
-        <div className="space-y-4">
-          {ORDER.map((id) => <Skeleton key={id} className="h-56 rounded-[1.25rem]" />)}
-        </div>
+        <PageLoader label="Loading settings" />
       ) : (
         <ul className="space-y-4">
           {ORDER.map((id, i) => {

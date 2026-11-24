@@ -9,7 +9,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { axisProps, ChartTooltip, gridProps, Legend, SERIES } from '@/components/ui/Chart';
 import { StatTile } from '@/components/ui/Stat';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 
 const RANGES = [7, 30, 90, 365] as const;
 // Validated two-series pair (same as Sonarr/Radarr elsewhere).
@@ -162,7 +163,7 @@ export default function StatsPage() {
           </div>
         }
       />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Crunching playback stats" hint="Adding up plays and watch time…" />}>
         {(d) => {
           const hours = d.totals.hours !== undefined;
           return (

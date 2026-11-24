@@ -10,7 +10,8 @@ import { axisProps, ChartTooltip, gridProps } from '@/components/ui/Chart';
 import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { EmptyState, QueryState } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
 import { AutoImportCard } from '@/components/widgets/AutoImportCard';
 import { MissingCard } from '@/components/widgets/MissingCard';
 import { QueueRow } from '@/components/widgets/DownloadsWidget';
@@ -71,12 +72,7 @@ function PosterStrip({ items }: { items: { id: number; title: string; year?: num
   );
 }
 
-const pageSkeleton = (
-  <div className="space-y-5">
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
-    <Skeleton className="h-80 rounded-[1.25rem]" />
-  </div>
-);
+const pageSkeleton = <PageLoader label="Loading" hint="Fetching the queue, calendar and library…" />;
 
 export function SonarrPage() {
   const instance = useSelectedInstance('sonarr');
