@@ -1,4 +1,4 @@
-import { Clapperboard, Film, HardDrive, Inbox, Radar, Tv } from 'lucide-react';
+import { BookOpen, Captions, Clapperboard, Film, HardDrive, Inbox, Music, Radar, Tv } from 'lucide-react';
 import type { ServiceId } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -9,6 +9,9 @@ export const SERVICES: Record<ServiceId, { name: string; color: string; icon: ty
   prowlarr: { name: 'Prowlarr', color: 'var(--color-prowlarr)', icon: Radar, tagline: 'Indexers', path: '/prowlarr' },
   seerr: { name: 'Seerr', color: 'var(--color-seerr)', icon: Inbox, tagline: 'Requests', path: '/seerr' },
   infinidisk: { name: 'Infinidisk', color: 'var(--color-infinidisk)', icon: HardDrive, tagline: 'Storage', path: '/infinidisk' },
+  bazarr: { name: 'Bazarr', color: 'var(--color-bazarr)', icon: Captions, tagline: 'Subtitles', path: '/bazarr' },
+  lidarr: { name: 'Lidarr', color: 'var(--color-lidarr)', icon: Music, tagline: 'Music', path: '/lidarr' },
+  readarr: { name: 'Readarr', color: 'var(--color-readarr)', icon: BookOpen, tagline: 'Books', path: '/readarr' },
 };
 
 export function ServiceIcon({ id, size = 36, className }: { id: ServiceId; size?: number; className?: string }) {

@@ -19,6 +19,8 @@ import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
 import { infinidiskOverview } from './services/infinidisk.js';
+import { bazarrOverview, bazarrSearch } from './services/bazarr.js';
+import { musicMissing, musicOverview, musicQueueRemove, musicSearch, type BookOrMusic } from './services/music.js';
 
 export const api = Router();
 api.use(requireAuth);
@@ -169,6 +171,51 @@ api.post(
   }),
 );
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));
+
+/* --------------------------- bazarr, lidarr, readarr --------------------------- */
+
+api.get('/bazarr/overview', handle('bazarr', () => bazarrOverview()));
+const bazarrSearchBody = z
+  .object({ seriesId: z.number().int().positive().optional(), movieId: z.number().int().positive().optional(), all: z.enum(['episodes', 'movies']).optional() })
+  .strict()
+  .refine((b) => [b.seriesId, b.movieId, b.all].filter((x) => x !== undefined).length === 1, 'Pick one thing to search for');
+api.post(
+  '/bazarr/search',
+  requireAdmin,
+  handle('bazarr', async (req) => {
+    const b = bazarrSearchBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid request');
+    audit(req, `[bazarr] subtitle search: ${b.data.all ? `all missing ${b.data.all}` : b.data.seriesId ? `series ${b.data.seriesId}` : `movie ${b.data.movieId}`}`);
+    return bazarrSearch(b.data);
+  }),
+);
+
+for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
+  api.get(`/${kind}/overview`, handle(kind, () => musicOverview(kind)));
+  api.get(`/${kind}/missing`, handle(kind, (req) => musicMissing(kind, Math.max(1, Math.min(10_000, Number(req.query.page) || 1)))));
+  api.post(
+    `/${kind}/search`,
+    requireAdmin,
+    handle(kind, async (req) => {
+      const b = z.object({ ids: z.array(z.number().int().positive()).max(100).default([]) }).strict().safeParse(req.body ?? {});
+      if (!b.success) throw new HttpError(400, 'Invalid request');
+      audit(req, `[search] ${kind}: ${b.data.ids.length ? `${b.data.ids.length} item(s)` : 'all missing'}`);
+      return musicSearch(kind, b.data.ids);
+    }),
+  );
+  api.post(
+    `/${kind}/queue/:id/remove`,
+    requireAdmin,
+    handle(kind, async (req) => {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'Invalid queue id');
+      const blocklist = (req.body as { blocklist?: unknown } | undefined)?.blocklist === true;
+      await musicQueueRemove(kind, id, blocklist);
+      audit(req, `[queue] ${kind} #${id}: remove${blocklist ? ' + blocklist' : ''}`);
+      return { ok: true };
+    }),
+  );
+}
 
 /* --------------------------------- audit -------------------------------- */
 

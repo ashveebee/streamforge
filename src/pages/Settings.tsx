@@ -44,6 +44,9 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptiona
   radarr: { placeholder: 'https://radarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   prowlarr: { placeholder: 'https://prowlarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   seerr: { placeholder: 'https://seerr.example.com', keyHelp: 'Settings → General → API Key' },
+  bazarr: { placeholder: 'https://bazarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
+  lidarr: { placeholder: 'https://lidarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
+  readarr: { placeholder: 'https://readarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
   infinidisk: {
     placeholder: 'https://infinidisk.example.com',
     keyHelp: 'Optional if the status endpoint is public.',
@@ -51,7 +54,7 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptiona
   },
 };
 
-const ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'];
+const ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 /* -------------------------------- inputs -------------------------------- */
 

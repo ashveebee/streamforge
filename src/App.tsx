@@ -18,6 +18,9 @@ const Sonarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.Sonarr
 const Radarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
 const Prowlarr = lazy(() => import('@/pages/Prowlarr'));
 const Seerr = lazy(() => import('@/pages/Seerr'));
+const Bazarr = lazy(() => import('@/pages/Bazarr'));
+const Lidarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.LidarrPage })));
+const Readarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.ReadarrPage })));
 const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
 const System = lazy(() => import('@/pages/System'));
 const Stats = lazy(() => import('@/pages/Stats'));
@@ -88,6 +91,9 @@ const router = createBrowserRouter([
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },
       { path: '/seerr', element: page(<Seerr />, 'seerr') },
       { path: '/infinidisk', element: page(<Infinidisk />, 'infinidisk') },
+      { path: '/bazarr', element: page(<Bazarr />, 'bazarr') },
+      { path: '/lidarr', element: page(<Lidarr />, 'lidarr') },
+      { path: '/readarr', element: page(<Readarr />, 'readarr') },
       { path: '*', element: page(<NotFound />) },
     ],
   },

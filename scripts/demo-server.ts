@@ -379,8 +379,11 @@ const VERSIONS: Record<ServiceId, string> = {
   prowlarr: '2.1.5.5216',
   seerr: '3.0.1',
   infinidisk: '2.0.0',
+  bazarr: '1.5.3',
+  lidarr: '2.13.3.4711',
+  readarr: '0.4.18.2805',
 };
-const BASE_MS: Record<ServiceId, number> = { jellyfin: 38, sonarr: 64, radarr: 71, prowlarr: 112, seerr: 55, infinidisk: 22 };
+const BASE_MS: Record<ServiceId, number> = { jellyfin: 38, sonarr: 64, radarr: 71, prowlarr: 112, seerr: 55, infinidisk: 22, bazarr: 48, lidarr: 69, readarr: 83 };
 
 function health(): HealthSnapshot {
   const now = Date.now();
@@ -786,7 +789,7 @@ const autoImport: AutoImportStatus = {
 };
 
 function settings(): ServiceSettingsView[] {
-  const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined };
+  const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined, bazarr: '••••c55e', lidarr: '••••12fd', readarr: '••••e771' };
   return (Object.keys(VERSIONS) as ServiceId[]).map((id) => ({
     id,
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),

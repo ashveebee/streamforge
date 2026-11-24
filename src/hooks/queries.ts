@@ -324,7 +324,7 @@ export const useSavePublicUrl = () =>
 
 /* --------------------------------- missing -------------------------------- */
 
-export function useMissing(kind: ArrKind, instance: string | undefined, page: number) {
+export function useMissing(kind: ArrKind | 'lidarr' | 'readarr', instance: string | undefined, page: number) {
   return useQuery({
     queryKey: [kind, instance ?? 'none', 'missing', page],
     queryFn: ({ signal }) => api<MissingPage>(`/${kind}/missing?instance=${encodeURIComponent(instance ?? kind)}&page=${page}`, { signal }),
@@ -334,7 +334,7 @@ export function useMissing(kind: ArrKind, instance: string | undefined, page: nu
   });
 }
 
-export function useSearch(kind: ArrKind) {
+export function useSearch(kind: ArrKind | 'lidarr' | 'readarr') {
   return useMutation({
     mutationFn: ({ instance, ids }: { instance?: string; ids: number[] }) =>
       api<{ ok: boolean }>(`/${kind}/search`, { method: 'POST', body: { instance, ids } }),

@@ -5,6 +5,8 @@ import { arrInstances, onInstancesChange } from './services/instances.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
+import { bazarr, bazarrProbe } from './services/bazarr.js';
+import { lidarr, readarr } from './services/music.js';
 import { onQueueSample } from './services/queueWatch.js';
 import { stalledMap } from './services/cleanup.js';
 import { emit } from './services/notify.js';
@@ -60,6 +62,12 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
       return seerr() && (() => seerrProbe());
     case 'infinidisk':
       return () => infinidiskProbe();
+    case 'bazarr':
+      return bazarr() && (() => bazarrProbe());
+    case 'lidarr':
+      return arr(lidarr(), 'v1');
+    case 'readarr':
+      return arr(readarr(), 'v1');
   }
 }
 

@@ -2,7 +2,7 @@ import type { ArtworkRef } from './api';
 
 /* Client-side view of the StreamForge API. Mirrors server/ responses. */
 
-export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk';
+export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr';
 export type ServiceStatus = 'healthy' | 'degraded' | 'offline' | 'unconfigured';
 
 export interface User {
@@ -417,7 +417,7 @@ export interface ServiceSettingsView {
 export type ArrKind = 'sonarr' | 'radarr';
 
 /** Parts of the app a member can be given access to. */
-export type Area = 'now-playing' | 'stats' | 'library' | 'system' | ServiceId;
+export type Area = 'now-playing' | 'stats' | 'library' | 'system' | 'downloads' | 'requests' | ServiceId;
 
 export interface MemberAccess {
   signIn: boolean;
