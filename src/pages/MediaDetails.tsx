@@ -3,8 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
-  AudioLines,
-  Captions,
   Check,
   ChevronDown,
   CircleAlert,
@@ -12,7 +10,6 @@ import {
   Clapperboard,
   Clock,
   ExternalLink,
-  FileVideo,
   HardDrive,
   Heart,
   Inbox,
@@ -30,7 +27,6 @@ import {
 import { useDecideRequest } from '@/hooks/queries';
 import {
   useInvalidateMedia,
-  useJellyfinEpisodes,
   useJellyfinMedia,
   useMediaDetails,
   useTitleSearch,
@@ -39,19 +35,21 @@ import {
   type Episode,
   type LibraryInfo,
   type MediaDetails as Details,
-  type MediaFile,
   type MediaType,
   type Season,
   type WatchState,
 } from '@/hooks/useMedia';
 import { useAddMedia, useRequestMedia } from '@/hooks/useSearch';
-import { bitrate, bytes, dayLabel, relative } from '@/lib/format';
+import { bytes, dayLabel, relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
+import { JellyfinEpisodeList, SeasonEpisodeList } from '@/components/media/Episodes';
+import { WatchLink } from '@/components/media/WatchLink';
+import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts';
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
 import { SERVICES } from '@/components/ui/ServiceIcon';
@@ -136,7 +134,7 @@ function Actions({ d }: { d: Details }) {
   const partial = d.type === 'tv' && (d.availability === 'partial' || d.seasons?.some((s) => s.status === 'available'));
   return (
     <>
-      {d.jellyfin?.url && <PlayButton url={d.jellyfin.url} library={d.library} />}
+      {d.jellyfin && <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />}
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -168,28 +166,25 @@ function Actions({ d }: { d: Details }) {
   );
 }
 
-function PlayButton({ url, library }: { url: string; library?: LibraryInfo }) {
+function PlayButton({ itemId, url, library }: { itemId: string; url?: string; library?: LibraryInfo }) {
   const next = library?.nextUp;
   const resume = library?.watch?.progress;
-  const label = next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : 'Play in Jellyfin';
   return (
-    <a href={next?.url ?? url} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90">
-      <Play className="size-4 fill-current" /> {label}
-    </a>
+    <WatchLink
+      itemId={next?.id ?? itemId}
+      jellyfinUrl={next?.url ?? url}
+      play={!!(next || resume)}
+      chooser
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
+    >
+      {(app) => (
+        <>
+          <Play className="size-4 fill-current" /> {next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : `Play in ${app}`}
+        </>
+      )}
+    </WatchLink>
   );
 }
-
-const episodeLabel = (e: Pick<Episode, 'season' | 'number'>) => [e.season !== undefined && `S${e.season}`, e.number !== undefined && `E${e.number}`].filter(Boolean).join(' ');
-const bits = (bps?: number) => (bps ? bitrate(bps / 8) : undefined);
-const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
-const langName = (code?: string) => {
-  if (!code || code === 'und') return undefined;
-  try {
-    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code;
-  } catch {
-    return code;
-  }
-};
 
 /** "Watched", "34% watched", "3 unwatched"… for the hero. */
 function watchLabel(w: WatchState | undefined, tv: boolean) {
@@ -198,16 +193,6 @@ function watchLabel(w: WatchState | undefined, tv: boolean) {
   if (tv && w.unplayed) return `${w.unplayed} unwatched episode${w.unplayed === 1 ? '' : 's'}`;
   if (w.played) return 'Watched';
   return undefined;
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  if (children === undefined || children === null || children === false || children === '') return null;
-  return (
-    <div className="flex items-baseline gap-3 py-2">
-      <dt className="w-24 shrink-0 text-[11px] tracking-wide text-ink-4 uppercase">{label}</dt>
-      <dd className="min-w-0 flex-1 text-[13px] break-words text-ink-2">{children}</dd>
-    </div>
-  );
 }
 
 /** Your copy in Jellyfin: watch state, when it was added, ratings, location. */
@@ -309,107 +294,6 @@ function TitleInfo({ lib }: { lib: LibraryInfo }) {
   );
 }
 
-function Chip({ children, tone }: { children: React.ReactNode; tone?: 'brand' }) {
-  return <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', tone === 'brand' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-line bg-white/[0.04] text-ink-2')}>{children}</span>;
-}
-
-function Track({ title, sub, flags }: { title: string; sub?: string; flags: string[] }) {
-  return (
-    <li className="flex items-center gap-2 py-1.5">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] text-ink-2" title={title}>{title}</div>
-        {sub && <div className="truncate text-[11px] text-ink-4">{sub}</div>}
-      </div>
-      {flags.map((f) => (
-        <span key={f} className="shrink-0 rounded border border-line px-1 text-[10px] text-ink-3">{f}</span>
-      ))}
-    </li>
-  );
-}
-
-/** The file(s) Jellyfin plays: video, audio and subtitle tracks. */
-function MediaInfo({ files }: { files: MediaFile[] }) {
-  const [open, setOpen] = useState(0);
-  if (!files.length) return null;
-  const f = files[Math.min(open, files.length - 1)]!;
-  const v = f.video;
-  return (
-    <Card>
-      <CardHeader icon={FileVideo} accent="var(--color-jellyfin)" title="Media info" subtitle={files.length > 1 ? `${files.length} versions` : f.container?.toUpperCase()} />
-      <CardBody className="space-y-4">
-        {files.length > 1 && (
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 no-scrollbar">
-            {files.map((x, i) => (
-              <button
-                key={x.id}
-                onClick={() => setOpen(i)}
-                className={cn('shrink-0 rounded-lg border px-2.5 py-1 text-[12px] transition', i === open ? 'border-brand/50 bg-brand/10 text-ink' : 'border-line text-ink-3 hover:text-ink')}
-              >
-                {x.name || x.video?.resolution || `Version ${i + 1}`}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          {v?.resolution && <Chip tone="brand">{v.resolution}</Chip>}
-          {v?.range && <Chip tone="brand">{v.range}</Chip>}
-          {v?.codec && <Chip>{v.codec}</Chip>}
-          {v?.bitDepth && v.bitDepth > 8 ? <Chip>{v.bitDepth}-bit</Chip> : null}
-          {f.audio[0]?.codec && <Chip>{[f.audio[0].codec, f.audio[0].channels].filter(Boolean).join(' ')}</Chip>}
-          {f.container && <Chip>{f.container.toUpperCase()}</Chip>}
-        </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-          {[
-            ['Size', f.size ? bytes(f.size) : undefined],
-            ['Bitrate', bits(f.bitrate)],
-            ['Resolution', v?.width && v.height ? `${v.width}×${v.height}` : undefined],
-            ['Frame rate', v?.fps ? `${v.fps} fps` : undefined],
-          ]
-            .filter(([, x]) => x)
-            .map(([k, x]) => (
-              <div key={k} className="min-w-0">
-                <dt className="text-[10.5px] tracking-wide text-ink-4 uppercase">{k}</dt>
-                <dd className="truncate text-[13px] text-ink-2 tabular-nums">{x}</dd>
-              </div>
-            ))}
-        </dl>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="min-w-0">
-            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><AudioLines className="size-3.5" /> Audio · {f.audio.length}</h3>
-            {f.audio.length ? (
-              <ul className="divide-y divide-line">
-                {f.audio.map((a, i) => (
-                  <Track key={i} title={langName(a.language) ?? a.title ?? `Track ${i + 1}`} sub={[a.codec, a.channels].filter(Boolean).join(' · ') || a.title} flags={a.isDefault ? ['Default'] : []} />
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[12px] text-ink-4">No audio tracks</p>
-            )}
-          </div>
-          <div className="min-w-0">
-            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Captions className="size-3.5" /> Subtitles · {f.subtitles.length}</h3>
-            {f.subtitles.length ? (
-              <ul className="max-h-60 divide-y divide-line overflow-y-auto">
-                {f.subtitles.map((t, i) => (
-                  <Track
-                    key={i}
-                    title={langName(t.language) ?? t.title ?? `Track ${i + 1}`}
-                    sub={t.codec}
-                    flags={[t.forced && 'Forced', t.sdh && 'SDH', t.external && 'External', t.isDefault && 'Default'].filter((x): x is string => !!x)}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[12px] text-ink-4">No subtitles</p>
-            )}
-          </div>
-        </div>
-        {f.path && <p className="truncate font-mono text-[10.5px] text-ink-4" title={f.path}>{f.path}</p>}
-      </CardBody>
-    </Card>
-  );
-}
-
 function EpisodeRow({ e }: { e: Episode }) {
   const w = e.watch;
   const body = (
@@ -435,28 +319,10 @@ function EpisodeRow({ e }: { e: Episode }) {
   );
   return (
     <li>
-      {e.url ? (
-        <a href={e.url} target="_blank" rel="noreferrer noopener" className="-mx-2 flex gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]">
-          {body}
-        </a>
-      ) : (
-        <div className="-mx-2 flex gap-3 p-2">{body}</div>
-      )}
+      <WatchLink itemId={e.id} jellyfinUrl={e.url} play className="-mx-2 flex w-[calc(100%+1rem)] gap-3 rounded-xl p-2 text-left transition hover:bg-white/[0.04]">
+        {body}
+      </WatchLink>
     </li>
-  );
-}
-
-function Episodes({ seriesId, seasonId }: { seriesId: string; seasonId: string }) {
-  const q = useJellyfinEpisodes(seriesId, seasonId);
-  if (q.isPending) return <div className="flex items-center gap-2 px-3 py-4 text-[12px] text-ink-4"><LoaderCircle className="size-3.5 animate-spin" /> Loading episodes…</div>;
-  if (q.isError) return <p className="px-3 py-4 text-[12px] text-bad">{(q.error as Error).message}</p>;
-  if (!q.data.episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">Jellyfin has no episodes for this season.</p>;
-  return (
-    <ul className="space-y-1 px-3 pt-1 pb-3">
-      {q.data.episodes.map((e) => (
-        <EpisodeRow key={e.id} e={e} />
-      ))}
-    </ul>
   );
 }
 
@@ -568,10 +434,12 @@ const SEASON_TONE: Record<Availability, string> = {
   none: 'bg-white/15',
 };
 
-function SeasonRow({ s, seriesId }: { s: Season; seriesId?: string }) {
+function SeasonRow({ s, tmdbId, seriesId }: { s: Season; tmdbId?: number; seriesId?: string }) {
   const [open, setOpen] = useState(false);
   const jf = seriesId ? s.jellyfin : undefined;
   const watched = jf && jf.unplayed === 0 && jf.episodes > 0;
+  const missing = s.episodes !== undefined && s.files !== undefined && s.status !== 'none' ? Math.max(0, s.episodes - s.files) : 0;
+  const browsable = !!tmdbId || !!jf;
   const head = (
     <>
       <span className={cn('size-2 shrink-0 rounded-full', SEASON_TONE[s.status])} />
@@ -580,6 +448,7 @@ function SeasonRow({ s, seriesId }: { s: Season; seriesId?: string }) {
         <div className="truncate text-[11px] text-ink-4">
           {[
             s.episodes !== undefined ? (s.files !== undefined ? `${s.files}/${s.episodes} episodes` : `${s.episodes} episodes`) : s.files !== undefined ? `${s.files} episodes` : undefined,
+            missing ? `${missing} not in library` : undefined,
             s.airDate ? dayLabel(s.airDate) : undefined,
             jf && (watched ? 'watched' : jf.unplayed ? `${jf.unplayed} unwatched` : undefined),
           ]
@@ -592,13 +461,13 @@ function SeasonRow({ s, seriesId }: { s: Season; seriesId?: string }) {
   );
   return (
     <li className="overflow-hidden rounded-xl border border-line bg-white/[0.02]">
-      {jf ? (
+      {browsable ? (
         <>
           <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/[0.03]">
             {head}
             <ChevronDown className={cn('size-4 shrink-0 text-ink-4 transition-transform', open && 'rotate-180')} />
           </button>
-          {open && <Episodes seriesId={seriesId!} seasonId={jf.id} />}
+          {open && (tmdbId ? <SeasonEpisodeList tmdbId={tmdbId} season={s.number} /> : <JellyfinEpisodeList seriesId={seriesId!} seasonId={jf!.id} />)}
         </>
       ) : (
         <div className="flex items-center gap-3 px-3 py-2.5">{head}</div>
@@ -607,21 +476,21 @@ function SeasonRow({ s, seriesId }: { s: Season; seriesId?: string }) {
   );
 }
 
-function Seasons({ seasons, seriesId }: { seasons?: Season[]; seriesId?: string }) {
+function Seasons({ seasons, tmdbId, seriesId }: { seasons?: Season[]; tmdbId?: number; seriesId?: string }) {
   if (!seasons?.length) return null;
-  const browsable = seriesId && seasons.some((x) => x.jellyfin);
+  const browsable = !!tmdbId || (seriesId && seasons.some((x) => x.jellyfin));
   return (
     <Card>
       <CardHeader
         icon={Clapperboard}
         accent="var(--color-sonarr)"
         title="Seasons"
-        subtitle={`${seasons.length} season${seasons.length === 1 ? '' : 's'}${browsable ? ' · tap a season for its episodes' : ''}`}
+        subtitle={`${seasons.length} season${seasons.length === 1 ? '' : 's'}${browsable ? ' · open one for every episode' : ''}`}
       />
-      <CardBody>
+      <CardBody className="max-sm:px-3">
         <ul className="space-y-2">
           {seasons.map((x) => (
-            <SeasonRow key={x.number} s={x} seriesId={seriesId} />
+            <SeasonRow key={x.number} s={x} tmdbId={tmdbId} seriesId={seriesId} />
           ))}
         </ul>
       </CardBody>
@@ -687,7 +556,7 @@ function DetailsView({ d }: { d: Details }) {
             </Card>
           )}
           {d.library?.nextUp && <UpNext e={d.library.nextUp} />}
-          <Seasons seasons={d.seasons} seriesId={d.library?.itemId} />
+          <Seasons seasons={d.seasons} tmdbId={d.type === 'tv' ? d.tmdbId : undefined} seriesId={d.library?.itemId} />
           {d.library && <MediaInfo files={d.library.files} />}
           <Cast cast={d.cast} />
         </div>
@@ -748,7 +617,7 @@ export function JellyfinMediaPage() {
             backdrop={j.backdrop}
             facts={<Facts items={[<Pill key="a" tone="ok">In Jellyfin</Pill>, j.kind, watchLabel(j.library.watch, j.kind === 'Series'), j.certification, j.runtimeMin && `${j.runtimeMin} min`, j.rating && `★ ${j.rating.toFixed(1)}`, j.genres.slice(0, 4).join(', ')]} />}
           >
-            {j.url && <PlayButton url={j.url} library={j.library} />}
+            <PlayButton itemId={j.itemId} url={j.url} library={j.library} />
           </Hero>
           <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-3">
             <div className="min-w-0 space-y-5 xl:col-span-2">

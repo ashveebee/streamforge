@@ -55,7 +55,7 @@ export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
     queryFn: () =>
-      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; access: Area[] | null; downloadClients?: boolean }>('/config'),
+      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; access: Area[] | null; downloadClients?: boolean; moonfin?: { openIn: 'web' | 'app'; web?: string } }>('/config'),
     staleTime: Infinity,
   });
 
