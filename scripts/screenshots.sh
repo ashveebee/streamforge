@@ -24,10 +24,10 @@ mkdir -p "$OUT"
 PROFILE="$(mktemp -d)"
 trap 'rm -rf "$PROFILE"' EXIT
 
-shot() { # name path width,height
+shot() { # name path width,height [scale]
   # shellcheck disable=SC2086
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$PROFILE" ${CHROME_FLAGS:-} \
-    --window-size="$3" --force-device-scale-factor=2 --force-prefers-reduced-motion \
+    --window-size="$3" --force-device-scale-factor="${4:-2}" --force-prefers-reduced-motion \
     --virtual-time-budget=20000 --screenshot="$PROFILE/$1.png" "$URL$2" >/dev/null 2>&1
   if command -v sips >/dev/null; then
     sips -s format jpeg -s formatOptions 82 "$PROFILE/$1.png" --out "$OUT/$1.jpg" >/dev/null
@@ -56,4 +56,10 @@ shot digest      /digest      1440,1100
 shot rules       /rules       1440,900
 shot audit       /audit       1440,900
 shot bazarr      /bazarr      1440,1100
+shot title       /media/movie/1000 1440,1300
+shot title-tv    /media/tv/1013    1440,1300
+# Phone-sized, for the website's "in your pocket" section.
+shot phone-dashboard   /                 390,844 3
+shot phone-now-playing /now-playing      390,844 3
+shot phone-title       /media/tv/1013    390,844 3
 echo "Saved to $OUT"
