@@ -5,10 +5,12 @@ import { z } from 'zod';
 import { handle, HttpError, pipeImage } from './lib/handle.js';
 import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup, type CleanupAction } from './services/cleanup.js';
 import { arrRouter } from './arrRoutes.js';
+import { clientRouter } from './clientRoutes.js';
 import { ctxOf, requireAdmin, requireAuth } from './auth.js';
 import { allowedAreas, canSee, requireArea } from './access.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
+import { hasClients } from './services/clients/index.js';
 import { settingsRouter } from './settingsRoutes.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
@@ -41,6 +43,7 @@ api.get('/config', (req, res) => {
       .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
+    downloadClients: hasClients() && canSee(req, 'downloads'),
   });
 });
 api.get('/health', (req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot((kind) => canSee(req, kind))));
@@ -156,6 +159,7 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
 /* ---------------------------------- arr --------------------------------- */
 
 api.use(arrRouter);
+api.use(clientRouter);
 api.get('/prowlarr/overview', handle('prowlarr', () => prowlarrOverview()));
 api.get('/seerr/overview', handle('seerr', () => seerrOverview()));
 api.post(

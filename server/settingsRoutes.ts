@@ -25,6 +25,7 @@ import {
   setPublicUrl,
   testChannel,
 } from './services/notify.js';
+import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
@@ -323,6 +324,92 @@ settingsRouter.delete('/instances/:id', (req, res) => {
   const id = String(req.params.id);
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
   audit(req, `[settings] instance ${id} removed`);
+  res.json({ ok: true });
+});
+
+/* ---------------------------- download clients ---------------------------- */
+
+const clientBody = z
+  .object({
+    type: z.enum(CLIENT_TYPES).optional(),
+    name: z.string().trim().min(1, 'Give the client a name').max(40).optional(),
+    url: urlField.optional(),
+    username: z.string().trim().max(256).optional(),
+    /** Omitted or empty = keep the saved one. */
+    password: z.string().max(1024).optional(),
+    apiKey: z.string().trim().max(1024).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+settingsRouter.get('/clients', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ clients: describeClients(), types: CLIENT_TYPES.map((t) => ({ id: t, name: CLIENT_NAMES[t], fields: CLIENT_FIELDS[t] })) });
+});
+
+/** Tests candidate details; reuses saved secrets when `id` is given and they aren't. */
+settingsRouter.post('/clients/test', async (req, res) => {
+  const parsed = clientBody.extend({ id: z.string().max(64).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  const saved = b.id ? getClient(b.id) : undefined;
+  const type = b.type ?? saved?.type;
+  const url = b.url ?? saved?.url;
+  if (!type || !url) return res.json({ ok: false, message: 'Enter the server address.' });
+  if (saved && !(b.password || b.apiKey) && origin(url) !== origin(saved.url) && (saved.password || saved.apiKey)) {
+    return res.json({ ok: false, message: 'Re-enter the password or API key when changing the server address.' });
+  }
+  const started = performance.now();
+  try {
+    const version = await adapterFor({
+      id: `test-${Date.now()}`,
+      type,
+      name: 'test',
+      url,
+      username: b.username ?? saved?.username,
+      password: b.password || saved?.password,
+      apiKey: b.apiKey || saved?.apiKey,
+      enabled: true,
+      createdAt: '',
+    }).version();
+    res.json({ ok: true, version, latencyMs: Math.round(performance.now() - started), issues: [] });
+  } catch (err) {
+    res.json({ ok: false, message: (err as Error).message });
+  }
+});
+
+settingsRouter.post('/clients', (req, res) => {
+  const parsed = clientBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const { type, name, url, username, password, apiKey } = parsed.data;
+  if (!type) return badRequest(res, 'Pick a client type', 'type');
+  if (!name) return badRequest(res, 'Give the client a name', 'name');
+  if (!url) return badRequest(res, 'Enter the server address', 'url');
+  if (type === 'sabnzbd' && !apiKey) return badRequest(res, 'Enter the API key', 'apiKey');
+  const c = addClient({ type, name, url, username: username || undefined, password: password || undefined, apiKey: apiKey || undefined });
+  audit(req, `[settings] download client "${name}" (${CLIENT_NAMES[type]}) added`);
+  res.json({ client: describeClients().find((x) => x.id === c.id) });
+});
+
+settingsRouter.put('/clients/:id', (req, res) => {
+  const id = String(req.params.id);
+  const cur = getClient(id);
+  if (!cur) return res.status(404).json({ error: 'not_found', message: 'Unknown download client' });
+  const parsed = clientBody.omit({ type: true }).safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  // Never send saved credentials to a different server unless they were re-entered.
+  if (b.url && origin(b.url) !== origin(cur.url) && !(b.password || b.apiKey) && (cur.password || cur.apiKey)) {
+    return badRequest(res, 'Re-enter the password or API key when changing the server address.', cur.apiKey ? 'apiKey' : 'password');
+  }
+  updateClient(id, { name: b.name, url: b.url, username: b.username, password: b.password || undefined, apiKey: b.apiKey || undefined, enabled: b.enabled });
+  audit(req, `[settings] download client "${b.name ?? cur.name}" updated`);
+  res.json({ client: describeClients().find((x) => x.id === id) });
+});
+
+settingsRouter.delete('/clients/:id', (req, res) => {
+  const cur = getClient(String(req.params.id));
+  if (!cur || !removeClient(cur.id)) return res.status(404).json({ error: 'not_found', message: 'Unknown download client' });
+  audit(req, `[settings] download client "${cur.name}" removed`);
   res.json({ ok: true });
 });
 

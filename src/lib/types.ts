@@ -77,6 +77,8 @@ export interface DownloadSnapshot {
   itemSpeeds: Record<string, number>;
   /** `instance:id` → when the item last made progress (only items stuck 30+ min). */
   stalled?: Record<string, string>;
+  /** Real speeds from download clients, when any are set up. */
+  clients?: { down: number; up: number };
   sampleIntervalMs: number;
 }
 

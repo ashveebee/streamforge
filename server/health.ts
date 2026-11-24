@@ -9,6 +9,7 @@ import { bazarr, bazarrProbe } from './services/bazarr.js';
 import { lidarr, readarr } from './services/music.js';
 import { onQueueSample } from './services/queueWatch.js';
 import { stalledMap } from './services/cleanup.js';
+import { clientTotals } from './services/clients/index.js';
 import { emit } from './services/notify.js';
 import { isConfigured, isEnabled, onSettingsChange, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
 import type { ServiceClient } from './lib/http.js';
@@ -283,6 +284,8 @@ export function downloadSnapshot() {
     history: speedHistory,
     itemSpeeds: Object.fromEntries(itemSpeeds),
     stalled: stalledMap(),
+    /** Real speeds reported by download clients, when any are set up. */
+    clients: clientTotals(),
     sampleIntervalMs: DL_INTERVAL,
   };
 }
