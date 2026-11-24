@@ -160,6 +160,45 @@ export const useJellyfinMedia = (itemId: string) =>
     staleTime: 5 * 60_000,
   });
 
+export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
+
+/** One episode of a season, whether or not you have it. */
+export interface SeasonEpisode {
+  number: number;
+  season: number;
+  name: string;
+  overview?: string;
+  airDate?: string;
+  runtimeMin?: number;
+  rating?: number;
+  still?: string;
+  status: EpisodeStatus;
+  monitored?: boolean;
+  quality?: string;
+  size?: number;
+  path?: string;
+  file?: Omit<MediaFile, 'audio' | 'subtitles'> & { audio: Partial<MediaFile['audio'][number]>[]; subtitles: Partial<MediaFile['subtitles'][number]>[] };
+  jellyfin?: { id: string; url?: string; watch?: WatchState };
+  sonarr?: { instance: string; episodeId: number };
+}
+
+export interface SeasonEpisodes {
+  season: number;
+  episodes: SeasonEpisode[];
+  counts: { total: number; available: number; missing: number; unaired: number };
+  sources: { tmdb: boolean; sonarr: boolean; jellyfin: boolean };
+  sonarr?: { instance: string; seriesId: number };
+}
+
+/** Every episode of a season (merged from Seerr, Sonarr and Jellyfin), loaded when it's opened. */
+export const useSeasonEpisodes = (tmdbId: number | undefined, season: number | undefined) =>
+  useQuery({
+    queryKey: ['media', 'tv', tmdbId, 'season', season],
+    queryFn: ({ signal }) => api<SeasonEpisodes>(`/media/tv/${tmdbId}/seasons/${season}`, { signal }),
+    enabled: !!tmdbId && season !== undefined,
+    staleTime: 30_000,
+  });
+
 /** One season's episodes from Jellyfin, loaded when the season is opened. */
 export const useJellyfinEpisodes = (seriesId: string | undefined, seasonId: string | undefined) =>
   useQuery({
@@ -170,7 +209,7 @@ export const useJellyfinEpisodes = (seriesId: string | undefined, seasonId: stri
   });
 
 export function useTitleSearch() {
-  return useMutation({ mutationFn: (b: { kind: 'radarr' | 'sonarr'; instance: string; id: number; title: string }) => api<{ ok: boolean; instance: string }>('/media/search', { method: 'POST', body: b }) });
+  return useMutation({ mutationFn: (b: { kind: 'radarr' | 'sonarr'; instance: string; id: number; title: string; season?: number; episodeIds?: number[] }) => api<{ ok: boolean; instance: string }>('/media/search', { method: 'POST', body: b }) });
 }
 
 /** Refreshes a title after requesting, adding or approving. */

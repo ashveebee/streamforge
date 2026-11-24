@@ -171,7 +171,7 @@ export default function SystemPage() {
         </div>
       </Card>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
         <SystemResourcesWidget detailed />
         {/* Wrappers give the cards an auto height so they stack instead of stretching. */}
         <div className="flex flex-col gap-5">
@@ -180,7 +180,7 @@ export default function SystemPage() {
         </div>
       </div>
 
-      <div className="mt-5 grid items-start gap-5 xl:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
         <StorageForecastCard />
         <CleanupCard />
       </div>

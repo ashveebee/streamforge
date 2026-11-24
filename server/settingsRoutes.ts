@@ -27,6 +27,8 @@ import {
   testChannel,
 } from './services/notify.js';
 import { describeOidc, discover, updateOidc } from './services/oidc.js';
+import { moonfinSettings, moonfinStatus, moonfinWebUrl, saveMoonfin } from './services/moonfin.js';
+import { ctxOf } from './auth.js';
 import { disable as disableMfa, mfaUsers } from './services/mfa.js';
 import { hasServerKey } from './services/jellyfin.js';
 import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
@@ -527,6 +529,21 @@ settingsRouter.put('/members', (req, res) => {
   const next = setMemberAccess(parsed.data);
   audit(req, `[settings] member access changed: ${JSON.stringify(next)}`);
   res.json({ ...next, available: AREAS });
+});
+
+/* -------------------------------- moonfin -------------------------------- */
+
+settingsRouter.get('/moonfin', async (req, res) => {
+  const status = await moonfinStatus(ctxOf(req.session!));
+  res.set('Cache-Control', 'no-store').json({ ...moonfinSettings(), webUrl: moonfinWebUrl(), status });
+});
+
+settingsRouter.put('/moonfin', (req, res) => {
+  const parsed = z.object({ enabled: z.boolean().optional(), openIn: z.enum(['web', 'app']).optional() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid');
+  const next = saveMoonfin(parsed.data);
+  audit(req, `[settings] Moonfin ${next.enabled ? `on, opens in the ${next.openIn === 'app' ? 'app' : 'web app'}` : 'off'}`);
+  res.json({ ...next, webUrl: moonfinWebUrl() });
 });
 
 /* ---------------------------- backup & restore ---------------------------- */

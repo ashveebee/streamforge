@@ -837,7 +837,14 @@ app.get('/api/config', json(() => ({
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
   access: null,
   downloadClients: true,
+  moonfin: moonfin.enabled ? { openIn: moonfin.openIn, web: 'https://jellyfin.example.com/Moonfin/Web/' } : undefined,
 })));
+const moonfin = { enabled: true, openIn: 'web' as 'web' | 'app' };
+app.get('/api/settings/moonfin', json(() => ({ ...moonfin, webUrl: 'https://jellyfin.example.com/Moonfin/Web/', status: { installed: true, version: '1.6.2' } })));
+app.put('/api/settings/moonfin', (req, res) => {
+  Object.assign(moonfin, req.body);
+  res.json({ ...moonfin, webUrl: 'https://jellyfin.example.com/Moonfin/Web/' });
+});
 const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'downloads', 'requests', 'jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'] };
 app.get('/api/settings/members', json(() => members));
 app.put('/api/settings/members', (req, res) => {
@@ -1137,6 +1144,63 @@ app.get('/api/media/jellyfin/:id/seasons/:season/episodes', (req, res) => {
   if (!t) return res.status(404).json({ error: 'not_found', message: 'Unknown season' });
   const n = Number(m[2]);
   res.json({ episodes: demoEpisodes(t.title, n, 8 + ((n * 3) % 5), n === 1 ? 99 : 3) });
+});
+app.get('/api/media/tv/:id/seasons/:season', (req, res) => {
+  const t = ALL[Number(req.params.id) - 1000];
+  if (!t || t.kind !== 'series') return res.status(404).json({ error: 'not_found', message: 'Unknown series' });
+  const n = Number(req.params.season);
+  const r = rng(`details-${t.title}`);
+  const count = 2 + Math.floor(r() * 3);
+  const sizes = Array.from({ length: count }, () => 8 + Math.floor(r() * 5));
+  const total = sizes[n - 1];
+  if (!total) return res.json({ season: n, episodes: [], counts: { total: 0, available: 0, missing: 0, unaired: 0 }, sources: { tmdb: true, sonarr: true, jellyfin: true } });
+  const last = n === count;
+  const have = last ? Math.floor(total * 0.6) : total;
+  const unaired = last ? 2 : 0;
+  const jf = demoEpisodes(t.title, n, total, n === 1 ? 99 : 3);
+  const episodes = jf.map((e, i) => {
+    const status = i < have ? 'available' : i >= total - unaired ? 'unaired' : 'missing';
+    const airDate = status === 'unaired' ? new Date(Date.now() + (i - total + unaired + 1) * 7 * DAY).toISOString() : e.airDate;
+    return {
+      number: e.number,
+      season: n,
+      name: e.name,
+      overview: e.overview,
+      airDate,
+      runtimeMin: e.runtimeMin,
+      rating: 7 + ((i * 3) % 20) / 10,
+      still: e.still,
+      status,
+      monitored: true,
+      quality: status === 'available' ? 'WEBDL-1080p' : undefined,
+      size: status === 'available' ? e.size : undefined,
+      path: status === 'available' ? e.path : undefined,
+      file:
+        status === 'available'
+          ? {
+              id: e.id,
+              container: 'mkv',
+              size: e.size,
+              bitrate: 6_400_000,
+              video: { codec: 'H264', resolution: '1080p', width: 1920, height: 1080, fps: 23.98 },
+              audio: [{ language: 'eng', codec: 'EAC3', channels: '5.1', isDefault: true }],
+              subtitles: [
+                { language: 'eng', codec: 'SUBRIP', forced: false, external: false, sdh: false, isDefault: false },
+                { language: 'spa', codec: 'SUBRIP', forced: false, external: false, sdh: false, isDefault: false },
+              ],
+            }
+          : undefined,
+      jellyfin: status === 'available' ? { id: e.id, url: e.url, watch: e.watch } : undefined,
+      sonarr: { instance: 'sonarr', episodeId: n * 100 + i },
+    };
+  });
+  res.json({
+    season: n,
+    episodes,
+    counts: { total, available: have, missing: total - have - unaired, unaired },
+    sources: { tmdb: true, sonarr: true, jellyfin: true },
+    sonarr: { instance: 'sonarr', seriesId: 7 },
+  });
 });
 app.get('/api/media/:type/:id', (req, res) => {
   const t = ALL[Number(req.params.id) - 1000];

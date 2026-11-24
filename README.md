@@ -281,6 +281,15 @@ address** on a service in Settings (or `JELLYFIN_PUBLIC_URL`,
 for example `https://jellyfin.example.com`. Links such as **Play in
 Jellyfin** and **Open in Sonarr** then use it.
 
+### Moonfin
+
+If you use [Moonfin](https://github.com/Moonfin-Client), switch it on in
+**Settings → Moonfin**. Play buttons then offer to open titles in the Moonfin
+app (`moonfin://` links) or the Moonfin web app that its Jellyfin plugin serves
+at `/Moonfin/Web/`. Each device asks once and can remember the answer, and the
+arrow next to Play lets anyone pick again. The web app uses Jellyfin's public
+address.
+
 ### Optional: configure with environment variables
 
 Everything can also be set with environment variables, which is handy for

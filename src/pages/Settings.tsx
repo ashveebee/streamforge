@@ -34,6 +34,7 @@ import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
+import { MoonfinSection } from '@/components/settings/MoonfinSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
 
@@ -465,6 +466,7 @@ export default function SettingsPage() {
           })}
         </ul>
       )}
+      {q.data && <MoonfinSection />}
       {q.data && <ClientsSection />}
       {q.data && <NotificationsSection />}
       {q.data && <MembersSection />}

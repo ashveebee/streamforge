@@ -1,5 +1,5 @@
 import { ExternalLink, Timer } from 'lucide-react';
-import { useHealth } from '@/hooks/queries';
+import { useHealth, useServiceConfig } from '@/hooks/queries';
 import { relative } from '@/lib/format';
 import type { ServiceId } from '@/lib/types';
 import { SERVICES, ServiceIcon } from '../ui/ServiceIcon';
@@ -10,6 +10,11 @@ export function ServiceHeader({ id, instance, description, actions }: { id: Serv
   const health = useHealth();
   const s = health.data?.services.find((x) => x.id === (instance ?? id)) ?? health.data?.services.find((x) => x.id === id);
   const meta = SERVICES[id];
+  const moonfinWeb = useServiceConfig().data?.moonfin?.web;
+  const linkCls =
+    'inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink';
+  const openService = s?.publicUrl && /^https?:\/\//.test(s.publicUrl) ? s.publicUrl : undefined;
+  const openMoonfin = id === 'jellyfin' ? moonfinWeb : undefined;
   return (
     <>
       <PageHeader
@@ -28,21 +33,21 @@ export function ServiceHeader({ id, instance, description, actions }: { id: Serv
           </span>
         }
         actions={
-          s?.publicUrl && /^https?:\/\//.test(s.publicUrl) ? (
+          actions || openService || openMoonfin ? (
             <>
               {actions}
-              <a
-                href={s.publicUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink"
-              >
-                Open {meta.name} <ExternalLink className="size-3.5" />
-              </a>
+              {openService && (
+                <a href={openService} target="_blank" rel="noreferrer noopener" className={linkCls}>
+                  Open {meta.name} <ExternalLink className="size-3.5" />
+                </a>
+              )}
+              {openMoonfin && (
+                <a href={openMoonfin} target="_blank" rel="noreferrer noopener" className={linkCls}>
+                  Open Moonfin <ExternalLink className="size-3.5" />
+                </a>
+              )}
             </>
-          ) : (
-            actions
-          )
+          ) : undefined
         }
       />
       {s && s.issues.length > 0 && (
