@@ -147,7 +147,10 @@ function jellyfinUrl(itemId: string) {
 export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, opts: { isAdmin: boolean; can: (area: string) => boolean }) {
   const [s, lib] = await Promise.all([seerrDetails(type, tmdbId), libraryItems(ctx).catch(() => [])]);
   const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === (type === 'movie' ? 'Movie' : 'Series'));
-  const arr = await arrEntries(type, tmdbId, s?.externalIds?.tvdbId, opts.can);
+  const [arr, library] = await Promise.all([
+    arrEntries(type, tmdbId, s?.externalIds?.tvdbId, opts.can),
+    jfItem ? jellyfinLibrary(ctx, jfItem.id, opts.isAdmin).catch(() => undefined) : undefined,
+  ]);
   const look = s ? undefined : await arrLookup(type, tmdbId);
   const firstArr = arr[0]?.movie ?? arr[0]?.series;
   const meta = (look ?? firstArr) as (ArrMovie & ArrSeries) | undefined;
@@ -159,7 +162,12 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
 
   // Season-by-season availability: Sonarr's files win, then Seerr's status.
   const sonarr = arr.find((a) => a.series)?.series;
-  const seasonNumbers = new Set<number>([...(s?.seasons ?? []).map((x) => x.seasonNumber), ...(sonarr?.seasons ?? []).map((x) => x.seasonNumber)]);
+  const jfSeasons = library?.seasons ?? [];
+  const seasonNumbers = new Set<number>([
+    ...(s?.seasons ?? []).map((x) => x.seasonNumber),
+    ...(sonarr?.seasons ?? []).map((x) => x.seasonNumber),
+    ...jfSeasons.map((x) => x.number),
+  ]);
   const requestedSeasons = new Set<number>();
   for (const r of s?.mediaInfo?.requests ?? []) if (r.status === 1 || r.status === 2) for (const x of r.seasons ?? []) requestedSeasons.add(x.seasonNumber);
   const seasons =
@@ -171,17 +179,21 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
             const sd = s?.seasons?.find((x) => x.seasonNumber === n);
             const st = sonarr?.seasons?.find((x) => x.seasonNumber === n)?.statistics;
             const ms = s?.mediaInfo?.seasons?.find((x) => x.seasonNumber === n)?.status;
+            const js = jfSeasons.find((x) => x.number === n);
+            const episodes = sd?.episodeCount ?? st?.totalEpisodeCount;
             let status: Availability = 'none';
             if (st && st.episodeCount > 0) status = st.episodeFileCount >= st.episodeCount ? 'available' : st.episodeFileCount > 0 ? 'partial' : 'missing';
             else if (ms && MEDIA_STATUS[ms]) status = MEDIA_STATUS[ms]!;
+            else if (js?.episodes) status = episodes && js.episodes < episodes ? 'partial' : 'available';
             if ((status === 'none' || status === 'missing') && requestedSeasons.has(n)) status = 'requested';
             return {
               number: n,
               name: sd?.name ?? `Season ${n}`,
-              episodes: sd?.episodeCount ?? st?.totalEpisodeCount,
-              files: st?.episodeFileCount,
+              episodes,
+              files: st?.episodeFileCount ?? js?.episodes,
               airDate: sd?.airDate,
               status,
+              jellyfin: js ? { id: js.id, episodes: js.episodes, unplayed: js.unplayed } : undefined,
             };
           })
       : undefined;
@@ -218,22 +230,25 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     tmdbId,
     title: s?.title ?? s?.name ?? meta?.title ?? jfItem?.name ?? 'Unknown title',
     year: date ? Number(date.slice(0, 4)) || undefined : (meta?.year ?? jfItem?.year),
-    tagline: s?.tagline || undefined,
-    overview: s?.overview ?? meta?.overview,
-    genres: s?.genres?.map((g) => g.name) ?? meta?.genres ?? [],
+    tagline: s?.tagline || library?.tagline,
+    overview: s?.overview || meta?.overview || library?.overview,
+    genres: s?.genres?.map((g) => g.name) ?? meta?.genres ?? library?.genres ?? [],
     runtimeMin: runtime || undefined,
     rating: s?.voteAverage ? Math.round(s.voteAverage * 10) / 10 : (meta?.ratings?.tmdb?.value ?? meta?.ratings?.value),
-    certification: meta?.certification,
+    certification: meta?.certification ?? library?.certification,
     status: s?.status ?? meta?.status,
     network: s?.networks?.[0]?.name ?? s?.productionCompanies?.[0]?.name ?? meta?.network ?? meta?.studio,
     releaseDate: date,
     poster: s?.posterPath ? `${TMDB}/w500${s.posterPath}` : (remote(meta?.images, 'poster') ?? (jfItem ? `/api/jellyfin/image/items/${jfItem.id}/Primary?w=500` : undefined)),
     backdrop: s?.backdropPath ? `${TMDB}/w1280${s.backdropPath}` : (remote(meta?.images, 'fanart') ?? (jfItem ? `/api/jellyfin/image/items/${jfItem.id}/Backdrop?w=1600` : undefined)),
     trailer: trailer ? `https://www.youtube.com/watch?v=${encodeURIComponent(trailer.key!)}` : meta?.youTubeTrailerId ? `https://www.youtube.com/watch?v=${encodeURIComponent(meta.youTubeTrailerId)}` : undefined,
-    cast: (s?.credits?.cast ?? []).slice(0, 16).map((c) => ({ name: c.name, character: c.character, image: c.profilePath ? `${TMDB}/w185${c.profilePath}` : undefined })),
+    cast: s?.credits?.cast?.length
+      ? s.credits.cast.slice(0, 20).map((c) => ({ name: c.name, character: c.character, image: c.profilePath ? `${TMDB}/w185${c.profilePath}` : undefined }))
+      : (library?.cast ?? []),
     seasons,
     availability,
     jellyfin: jfItem ? { itemId: jfItem.id, url: jellyfinUrl(jfItem.id) } : undefined,
+    library: library ? { ...library, seasons: undefined, cast: undefined, overview: undefined, tagline: undefined, genres: undefined, certification: undefined } : undefined,
     arr: arr.map(({ inst, movie, series }) => ({
       kind: inst.kind,
       instance: inst.id,
@@ -262,22 +277,247 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
 
 /* ------------------------- Jellyfin item → details ------------------------- */
 
+const ticksToMin = (t?: number) => (t ? Math.round(t / TICKS_PER_MS / 60_000) : undefined);
+const jfImage = (id: string, type: string, tag: string | undefined, w: number) => (tag ? `/api/jellyfin/image/items/${id}/${type}?w=${w}&tag=${tag}` : undefined);
+
+interface JfStream {
+  Type: string;
+  Codec?: string;
+  Language?: string;
+  DisplayTitle?: string;
+  Title?: string;
+  Width?: number;
+  Height?: number;
+  BitRate?: number;
+  BitDepth?: number;
+  Channels?: number;
+  ChannelLayout?: string;
+  RealFrameRate?: number;
+  AverageFrameRate?: number;
+  VideoRange?: string;
+  VideoRangeType?: string;
+  IsDefault?: boolean;
+  IsForced?: boolean;
+  IsExternal?: boolean;
+  IsHearingImpaired?: boolean;
+}
+interface JfSource {
+  Id: string;
+  Name?: string;
+  Path?: string;
+  Container?: string;
+  Size?: number;
+  Bitrate?: number;
+  RunTimeTicks?: number;
+  MediaStreams?: JfStream[];
+}
+interface JfUserData {
+  Played?: boolean;
+  PlayCount?: number;
+  PlaybackPositionTicks?: number;
+  PlayedPercentage?: number;
+  LastPlayedDate?: string;
+  IsFavorite?: boolean;
+  UnplayedItemCount?: number;
+}
 interface JfItem {
   Id: string;
   Name: string;
+  OriginalTitle?: string;
   Type: string;
   SeriesId?: string;
   SeriesName?: string;
+  IndexNumber?: number;
+  ParentIndexNumber?: number;
   ProductionYear?: number;
+  PremiereDate?: string;
+  EndDate?: string;
+  DateCreated?: string;
   Overview?: string;
+  Taglines?: string[];
   Genres?: string[];
+  Tags?: string[];
+  Studios?: { Name: string }[];
   RunTimeTicks?: number;
   CommunityRating?: number;
+  CriticRating?: number;
   OfficialRating?: string;
+  Status?: string;
+  ChildCount?: number;
+  RecursiveItemCount?: number;
+  Path?: string;
   ProviderIds?: Record<string, string>;
-  ImageTags?: { Primary?: string };
+  ImageTags?: { Primary?: string; Thumb?: string; Logo?: string };
   BackdropImageTags?: string[];
   People?: { Name: string; Role?: string; Type?: string; Id: string; PrimaryImageTag?: string }[];
+  MediaSources?: JfSource[];
+  UserData?: JfUserData;
+  LocationType?: string;
+}
+
+const FIELDS = 'ProviderIds,Overview,Genres,Tags,Studios,People,OfficialRating,Taglines,DateCreated,Path,MediaSources,ChildCount,RecursiveItemCount,CriticRating,OriginalTitle,Status,EndDate';
+
+const getItem = (ctx: JfCtx, id: string) =>
+  jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, { userId: ctx.userId, ids: id, Fields: FIELDS }).then((r) => r.Items?.[0]);
+
+function resolution(w?: number, h?: number) {
+  if (!w || !h) return undefined;
+  if (w >= 3800 || h >= 2100) return '4K';
+  if (w >= 2500 || h >= 1400) return '1440p';
+  if (w >= 1900 || h >= 1000) return '1080p';
+  if (w >= 1200 || h >= 700) return '720p';
+  if (h >= 560) return '576p';
+  return `${h}p`;
+}
+
+const channelLabel = (c?: number, layout?: string) => layout ?? (c === 8 ? '7.1' : c === 6 ? '5.1' : c === 2 ? 'Stereo' : c === 1 ? 'Mono' : c ? `${c} ch` : undefined);
+
+/** One file (a "version" in Jellyfin): container, size and its streams. */
+function fileInfo(src: JfSource, isAdmin: boolean) {
+  const streams = src.MediaStreams ?? [];
+  const v = streams.find((x) => x.Type === 'Video');
+  const range = v?.VideoRangeType && v.VideoRangeType !== 'SDR' ? v.VideoRangeType : v?.VideoRange && v.VideoRange !== 'SDR' ? v.VideoRange : undefined;
+  return {
+    id: src.Id,
+    name: src.Name,
+    container: src.Container,
+    size: src.Size,
+    bitrate: src.Bitrate,
+    path: isAdmin ? src.Path : undefined,
+    video: v
+      ? {
+          codec: v.Codec?.toUpperCase(),
+          resolution: resolution(v.Width, v.Height),
+          width: v.Width,
+          height: v.Height,
+          range,
+          bitDepth: v.BitDepth,
+          fps: v.RealFrameRate ?? v.AverageFrameRate ? Math.round((v.RealFrameRate ?? v.AverageFrameRate)! * 100) / 100 : undefined,
+          bitrate: v.BitRate,
+        }
+      : undefined,
+    audio: streams
+      .filter((x) => x.Type === 'Audio')
+      .map((a) => ({ title: a.DisplayTitle ?? a.Title, language: a.Language, codec: a.Codec?.toUpperCase(), channels: channelLabel(a.Channels, a.ChannelLayout), isDefault: !!a.IsDefault })),
+    subtitles: streams
+      .filter((x) => x.Type === 'Subtitle')
+      .map((t) => ({ title: t.DisplayTitle ?? t.Title, language: t.Language, codec: t.Codec?.toUpperCase(), forced: !!t.IsForced, external: !!t.IsExternal, sdh: !!t.IsHearingImpaired, isDefault: !!t.IsDefault })),
+  };
+}
+
+function watchState(u: JfUserData | undefined, runtimeTicks?: number) {
+  if (!u) return undefined;
+  const progress = u.PlayedPercentage ?? (u.PlaybackPositionTicks && runtimeTicks ? (u.PlaybackPositionTicks / runtimeTicks) * 100 : undefined);
+  return {
+    played: !!u.Played,
+    playCount: u.PlayCount ?? 0,
+    lastPlayed: u.LastPlayedDate,
+    favorite: !!u.IsFavorite,
+    progress: progress && progress > 0 && progress < 100 ? Math.round(progress) : undefined,
+    remainingMin: u.PlaybackPositionTicks && runtimeTicks ? ticksToMin(runtimeTicks - u.PlaybackPositionTicks) : undefined,
+    unplayed: u.UnplayedItemCount,
+  };
+}
+
+const PROVIDER_LINKS: [key: string, label: string, url: (id: string, tv: boolean) => string][] = [
+  ['Imdb', 'IMDb', (id) => `https://www.imdb.com/title/${id}`],
+  ['Tmdb', 'TMDB', (id, tv) => `https://www.themoviedb.org/${tv ? 'tv' : 'movie'}/${id}`],
+  ['Tvdb', 'TheTVDB', (id, tv) => `https://www.thetvdb.com/dereferrer/${tv ? 'series' : 'movie'}/${id}`],
+  ['Trakt', 'Trakt', (id, tv) => `https://trakt.tv/${tv ? 'shows' : 'movies'}/${id}`],
+];
+
+function episodeOf(e: JfItem, isAdmin: boolean) {
+  const src = e.MediaSources?.[0];
+  const v = src?.MediaStreams?.find((x) => x.Type === 'Video');
+  return {
+    id: e.Id,
+    season: e.ParentIndexNumber,
+    number: e.IndexNumber,
+    name: e.Name,
+    overview: e.Overview,
+    airDate: e.PremiereDate,
+    runtimeMin: ticksToMin(e.RunTimeTicks),
+    rating: e.CommunityRating ? Math.round(e.CommunityRating * 10) / 10 : undefined,
+    still: jfImage(e.Id, 'Primary', e.ImageTags?.Primary, 400),
+    resolution: resolution(v?.Width, v?.Height),
+    size: src?.Size,
+    path: isAdmin ? (src?.Path ?? e.Path) : undefined,
+    missing: e.LocationType === 'Virtual',
+    watch: watchState(e.UserData, e.RunTimeTicks),
+    url: jellyfinUrl(e.Id),
+  };
+}
+
+/**
+ * What Jellyfin itself knows about a movie or series in the library: files
+ * and streams, the signed-in user's watch state, crew, studios, tags,
+ * external links and, for series, the seasons it has and what's next up.
+ */
+export async function jellyfinLibrary(ctx: JfCtx, itemId: string, isAdmin: boolean, preloaded?: JfItem) {
+  return cache.get(`jf:library:${ctx.userId}:${itemId}:${isAdmin ? 1 : 0}`, 30_000, async () => {
+    const item = preloaded ?? (await getItem(ctx, itemId));
+    if (!item) throw new HttpError(404, 'Jellyfin doesn’t have this item (or you can’t see it).', 'not_found');
+    const tv = item.Type === 'Series';
+    const [seasons, nextUp] = tv
+      ? await Promise.all([
+          jf<{ Items: JfItem[] }>(`/Shows/${item.Id}/Seasons`, ctx.token, ctx.deviceId, { userId: ctx.userId, Fields: 'ChildCount', isMissing: false }).then((r) => r.Items ?? []).catch(() => [] as JfItem[]),
+          jf<{ Items: JfItem[] }>('/Shows/NextUp', ctx.token, ctx.deviceId, { userId: ctx.userId, seriesId: item.Id, Fields: 'MediaSources,Overview', limit: 1 }).then((r) => r.Items?.[0]).catch(() => undefined),
+        ])
+      : [[] as JfItem[], undefined];
+    const people = item.People ?? [];
+    const crew = (type: string) => [...new Set(people.filter((p) => p.Type === type).map((p) => p.Name))].slice(0, 6);
+    const ids = item.ProviderIds ?? {};
+    const providerIds = Object.fromEntries(Object.entries(ids).map(([k, v]) => [k.toLowerCase(), v]));
+    return {
+      itemId: item.Id,
+      kind: item.Type,
+      url: jellyfinUrl(item.Id),
+      originalTitle: item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : undefined,
+      overview: item.Overview,
+      tagline: item.Taglines?.[0],
+      genres: item.Genres,
+      certification: item.OfficialRating,
+      added: item.DateCreated,
+      premiered: item.PremiereDate,
+      ended: tv && item.Status === 'Ended' ? item.EndDate : undefined,
+      seriesStatus: tv ? item.Status : undefined,
+      communityRating: item.CommunityRating ? Math.round(item.CommunityRating * 10) / 10 : undefined,
+      criticRating: item.CriticRating,
+      runtimeMin: ticksToMin(item.RunTimeTicks),
+      path: isAdmin ? item.Path : undefined,
+      directors: crew('Director'),
+      writers: crew('Writer'),
+      producers: crew('Producer'),
+      studios: (item.Studios ?? []).map((x) => x.Name).slice(0, 6),
+      tags: (item.Tags ?? []).slice(0, 12),
+      links: PROVIDER_LINKS.filter(([k]) => providerIds[k.toLowerCase()]).map(([k, label, url]) => ({ label, url: url(providerIds[k.toLowerCase()]!, tv) })),
+      watch: watchState(item.UserData, item.RunTimeTicks),
+      files: (item.MediaSources ?? []).map((src) => fileInfo(src, isAdmin)),
+      episodeCount: tv ? item.RecursiveItemCount : undefined,
+      seasonCount: tv ? seasons.length : undefined,
+      seasons: seasons
+        .filter((x) => typeof x.IndexNumber === 'number')
+        .map((x) => ({ id: x.Id, number: x.IndexNumber!, name: x.Name, episodes: x.ChildCount ?? 0, unplayed: x.UserData?.UnplayedItemCount })),
+      nextUp: nextUp ? episodeOf(nextUp, isAdmin) : undefined,
+      cast: people
+        .filter((p) => p.Type === 'Actor' || p.Type === 'GuestStar')
+        .slice(0, 20)
+        .map((p) => ({ name: p.Name, character: p.Role, image: jfImage(p.Id, 'Primary', p.PrimaryImageTag, 185) })),
+    };
+  });
+}
+
+export type JellyfinLibrary = Awaited<ReturnType<typeof jellyfinLibrary>>;
+
+/** The episodes Jellyfin has for one season of a series. */
+export async function jellyfinEpisodes(ctx: JfCtx, seriesId: string, seasonId: string, isAdmin: boolean) {
+  const res = await jf<{ Items: JfItem[] }>(`/Shows/${seriesId}/Episodes`, ctx.token, ctx.deviceId, {
+    userId: ctx.userId,
+    seasonId,
+    Fields: 'Overview,MediaSources,Path',
+    isMissing: false,
+  });
+  return { episodes: (res.Items ?? []).map((e) => episodeOf(e, isAdmin)) };
 }
 
 /**
@@ -285,33 +525,32 @@ interface JfItem {
  * With a TMDB id the page switches to the full details; otherwise (home
  * videos, unidentified items) it shows what Jellyfin knows.
  */
-export async function jellyfinMedia(ctx: JfCtx, itemId: string) {
-  const get = (id: string) =>
-    jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, { userId: ctx.userId, ids: id, Fields: 'ProviderIds,Overview,Genres,People,OfficialRating' }).then((r) => r.Items?.[0]);
-  let item = await get(itemId);
+export async function jellyfinMedia(ctx: JfCtx, itemId: string, isAdmin: boolean) {
+  let item = await getItem(ctx, itemId);
   if (!item) throw new HttpError(404, 'Jellyfin doesn’t have this item (or you can’t see it).', 'not_found');
-  if ((item.Type === 'Episode' || item.Type === 'Season') && item.SeriesId) item = (await get(item.SeriesId)) ?? item;
+  if ((item.Type === 'Episode' || item.Type === 'Season') && item.SeriesId) item = (await getItem(ctx, item.SeriesId)) ?? item;
   const tmdb = Number(item.ProviderIds?.Tmdb ?? item.ProviderIds?.tmdb);
   const type: MediaType | undefined = item.Type === 'Movie' ? 'movie' : item.Type === 'Series' ? 'tv' : undefined;
   if (type && tmdb > 0) return { redirect: { type, tmdbId: tmdb } };
+  const library = await jellyfinLibrary(ctx, item.Id, isAdmin, item);
   return {
     jellyfinOnly: {
       itemId: item.Id,
       title: item.Name,
       kind: item.Type,
       year: item.ProductionYear,
+      tagline: library.tagline,
       overview: item.Overview,
       genres: item.Genres ?? [],
-      runtimeMin: item.RunTimeTicks ? Math.round(item.RunTimeTicks / TICKS_PER_MS / 60_000) : undefined,
+      runtimeMin: ticksToMin(item.RunTimeTicks),
       rating: item.CommunityRating,
       certification: item.OfficialRating,
-      poster: item.ImageTags?.Primary ? `/api/jellyfin/image/items/${item.Id}/Primary?w=500&tag=${item.ImageTags.Primary}` : undefined,
-      backdrop: item.BackdropImageTags?.[0] ? `/api/jellyfin/image/items/${item.Id}/Backdrop?w=1600&tag=${item.BackdropImageTags[0]}` : undefined,
-      cast: (item.People ?? [])
-        .filter((p) => p.Type === 'Actor')
-        .slice(0, 16)
-        .map((p) => ({ name: p.Name, character: p.Role, image: p.PrimaryImageTag ? `/api/jellyfin/image/items/${p.Id}/Primary?w=185&tag=${p.PrimaryImageTag}` : undefined })),
+      poster: jfImage(item.Id, 'Primary', item.ImageTags?.Primary, 500),
+      backdrop: jfImage(item.Id, 'Backdrop', item.BackdropImageTags?.[0], 1600),
+      cast: library.cast,
       url: jellyfinUrl(item.Id),
+      seasons: library.seasons,
+      library: { ...library, seasons: undefined, cast: undefined },
     },
   };
 }
