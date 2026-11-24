@@ -17,6 +17,7 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
+import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
@@ -306,6 +307,41 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
 
 api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!))));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
+
+/* --------------------------------- digest -------------------------------- */
+
+api.get(
+  '/digest',
+  handle('jellyfin', async (req) => {
+    const d = await buildDigest({ token: req.session!.token, deviceId: req.session!.deviceId, userId: req.session!.userId });
+    // What other people watched is Stats information.
+    return canSee(req, 'stats') ? d : { ...d, watched: undefined };
+  }),
+);
+api.get('/digest/settings', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(digestSettings()));
+api.put(
+  '/digest/settings',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ enabled: z.boolean().optional(), day: z.number().int().min(0).max(6).optional(), hour: z.number().int().min(0).max(23).optional() }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid settings');
+    audit(req, `[notify] weekly digest settings changed: ${JSON.stringify(b.data)}`);
+    return updateDigest(b.data);
+  }),
+);
+api.post(
+  '/digest/send',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    try {
+      await sendDigest();
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+    audit(req, '[notify] weekly digest sent now');
+    return digestSettings();
+  }),
+);
 
 /* -------------------------------- search -------------------------------- */
 

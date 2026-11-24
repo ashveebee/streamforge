@@ -9,6 +9,7 @@ import {
   Download,
   LayoutDashboard,
   LoaderCircle,
+  Newspaper,
   Plus,
   PlayCircle,
   ScrollText,
@@ -43,6 +44,7 @@ function usePages(): PageCmd[] {
   return useMemo(() => {
     const out: PageCmd[] = [
       { key: 'p:/', label: 'Overview', path: '/', icon: LayoutDashboard, keywords: 'dashboard home' },
+      { key: 'p:/digest', label: 'Weekly digest', path: '/digest', icon: Newspaper, keywords: 'this week new added newsletter' },
       { key: 'p:/me', label: 'My activity', path: '/me', icon: UserRound, keywords: 'history requests continue watching devices profile' },
     ];
     if (canSee('now-playing')) out.push({ key: 'p:/now-playing', label: 'Now Playing', path: '/now-playing', icon: PlayCircle, keywords: 'streams sessions' });

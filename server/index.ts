@@ -15,6 +15,7 @@ import { startPlaybackRecorder } from './services/playStats.js';
 import { startStorageSampler } from './services/storage.js';
 import { startClientSampler } from './services/clients/index.js';
 import { startPlaybackGuard } from './services/playbackGuard.js';
+import { startDigest } from './services/digest.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -95,4 +96,5 @@ app.listen(config.port, config.host, () => {
   startStorageSampler();
   startClientSampler();
   startPlaybackGuard();
+  startDigest();
 });

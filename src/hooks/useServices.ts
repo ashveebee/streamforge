@@ -159,3 +159,37 @@ export function useSaveGuard() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (b: Partial<GuardSettings>) => api<GuardStatus>('/jellyfin/guard', { method: 'PUT', body: b }), onSuccess: (d) => qc.setQueryData(['jellyfin', 'guard'], d) });
 }
+
+/* --------------------------------- digest --------------------------------- */
+
+export interface Digest {
+  from: string;
+  to: string;
+  added: {
+    movies: { id: string; title: string; year?: number; image?: string }[];
+    shows: { id: string; title: string; episodes: number; image?: string }[];
+    other: { id: string; title: string; kind: string }[];
+    runtimeMs: number;
+  };
+  watched?: { plays: number; watchedMs: number; viewers: number; top: { title: string; plays: number }[] };
+  storage: { used: number; total: number; soonest?: { label: string; daysLeft: number } };
+}
+export interface DigestSettings {
+  enabled: boolean;
+  day: number;
+  hour: number;
+  lastSent: string | null;
+  canSend: boolean;
+}
+
+export const useDigest = () => useQuery({ queryKey: ['digest'], queryFn: ({ signal }) => api<Digest>('/digest', { signal }), staleTime: 5 * 60_000 });
+export const useDigestSettings = (enabled: boolean) =>
+  useQuery({ queryKey: ['digest', 'settings'], queryFn: ({ signal }) => api<DigestSettings>('/digest/settings', { signal }), enabled });
+export function useSaveDigest() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (b: Partial<DigestSettings>) => api<DigestSettings>('/digest/settings', { method: 'PUT', body: b }), onSuccess: (d) => qc.setQueryData(['digest', 'settings'], d) });
+}
+export function useSendDigest() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => api<DigestSettings>('/digest/send', { method: 'POST' }), onSuccess: (d) => qc.setQueryData(['digest', 'settings'], d) });
+}
