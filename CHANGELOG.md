@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.2.1](https://github.com/ashveebee/streamforge/compare/v1.2.0...v1.2.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* search crash, requesting from search, and a loader for slow pages ([c42d186](https://github.com/ashveebee/streamforge/commit/c42d1864169d466d0216fcdaadbf455bf0391012))
+* search crash, requesting from search, and a loader for slow pages ([8a23ee3](https://github.com/ashveebee/streamforge/commit/8a23ee33c62620877dcc6bdb04fdc725f755aa43))
+
+## [1.2.0](https://github.com/ashveebee/streamforge/compare/v1.1.0...v1.2.0) (2026-11-24)
+
+
+### Features
+
+* audit log of changes and sign-ins ([73407e2](https://github.com/ashveebee/streamforge/commit/73407e2bda09101f83900d2b1d2ff9fe9c55ccdc))
+* Bazarr, Lidarr and Readarr integrations ([38e1a03](https://github.com/ashveebee/streamforge/commit/38e1a033b76cadd5ba94279d6ab6fce52f24d0c5))
+* cleanup suggestions for big titles nobody watches ([55f593f](https://github.com/ashveebee/streamforge/commit/55f593f9d1964093124cc979aa85d4ad246b130f))
+* download clients (qBittorrent, Transmission, SABnzbd, NZBGet) ([f15737e](https://github.com/ashveebee/streamforge/commit/f15737ed7a8292e07264a74db7ed20ba872e4fd2))
+* encrypted settings backup and restore ([0725101](https://github.com/ashveebee/streamforge/commit/07251018b36c883c96d5711058b79503d35362f9))
+* global search with request and add actions ([be242b9](https://github.com/ashveebee/streamforge/commit/be242b95021b6ca2c2b842670b7ec950ff0e38ec))
+* Jellyfin scheduled tasks and library scans ([3cf2282](https://github.com/ashveebee/streamforge/commit/3cf228279566021c770e76ae6f294c3236dfb97a))
+* keep sign-in sessions across restarts ([3f99d78](https://github.com/ashveebee/streamforge/commit/3f99d782200c45fb02ce7384eaa00992d85c37bd))
+* keep sign-in sessions across restarts ([8ef3fee](https://github.com/ashveebee/streamforge/commit/8ef3fee72cc558bdd791b70afd5ef82eade0b77e))
+* personal activity page for every user ([5b76ce1](https://github.com/ashveebee/streamforge/commit/5b76ce17af510a8e83a6e2d6af8cf50e2c8c7a40))
+* rules engine for simple automations ([2775738](https://github.com/ashveebee/streamforge/commit/27757386a99b8afa51ee29263bfbaf4b3f03556e))
+* single sign-on (OpenID Connect) and two-factor sign-in ([3b5eec2](https://github.com/ashveebee/streamforge/commit/3b5eec2d0ee96b2b073f0b9382fe7518c063f24c))
+* transcode and bandwidth alerts ([60e0978](https://github.com/ashveebee/streamforge/commit/60e0978407f6551d6881cccdfa6d16faeab39532))
+* weekly digest ([9d46165](https://github.com/ashveebee/streamforge/commit/9d4616581cf37f909c1a2ab9309a9d37f419b134))
+
+
+### Bug Fixes
+
+* demo data for the new pages, and small robustness fixes ([c8099d6](https://github.com/ashveebee/streamforge/commit/c8099d6139a983d2ff2fb0774a709198b3134daf))
+
+
+### Documentation
+
+* describe the new features in the README ([486e0ca](https://github.com/ashveebee/streamforge/commit/486e0ca8d49da3d3b887e15f83a6a1130a32f3e2))
+* new screenshots, and the new features on the website and README ([599f2fa](https://github.com/ashveebee/streamforge/commit/599f2fa9665273aaa34b7c85e1b8eac1bddbcdf1))
+
 ## [1.1.0](https://github.com/ashveebee/streamforge/compare/v1.0.3...v1.1.0) (2026-11-23)
 
 
