@@ -649,6 +649,20 @@ export async function serverNowPlaying() {
 
 export const hasServerKey = () => !!serverApiKey();
 
+/** Every Jellyfin user, via the server API key (for single sign-on). */
+export async function serverUsers() {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', undefined, 'jellyfin');
+  return jf<JfUser[]>('/Users', key, 'streamforge-server');
+}
+
+/** One Jellyfin user by id, via the server API key. */
+export async function serverUser(id: string) {
+  const key = serverApiKey();
+  if (!key) throw new UpstreamError('Needs a Jellyfin API key', 401, 'jellyfin');
+  return jf<JfUser>(`/Users/${id}`, key, 'streamforge-server');
+}
+
 /** Controls a session with the server API key (for background features). */
 export async function controlSessionAsServer(sessionId: string, command: SessionCommand, text?: string) {
   const key = serverApiKey();

@@ -314,7 +314,7 @@ api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
 api.get(
   '/digest',
   handle('jellyfin', async (req) => {
-    const d = await buildDigest({ token: req.session!.token, deviceId: req.session!.deviceId, userId: req.session!.userId });
+    const d = await buildDigest(ctxOf(req.session!));
     // What other people watched is Stats information.
     return canSee(req, 'stats') ? d : { ...d, watched: undefined };
   }),

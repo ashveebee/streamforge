@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
@@ -8,6 +8,9 @@ import { membersCanSignIn } from './access.js';
 import { newDeviceId, sessions, SESSION_COOKIE, type Session } from './lib/sessions.js';
 import { UpstreamError } from './lib/http.js';
 import { audit } from './lib/audit.js';
+import { readPref } from './lib/db.js';
+import { beginSetup, disable as disableMfa, finishSetup, mfaEnabled, mfaInfo, verify as verifyMfa } from './services/mfa.js';
+import { authorizeUrl, finishLogin, oidcReady, oidcSettings } from './services/oidc.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
 import { urlField } from './settingsRoutes.js';
@@ -56,7 +59,8 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export const ctxOf = (s: Session): jellyfin.JfCtx => ({
-  token: s.token,
+  // Single sign-on sessions have no Jellyfin token of their own.
+  token: s.method === 'oidc' ? (jellyfin.serverApiKey() ?? '') : s.token,
   deviceId: s.deviceId,
   userId: s.userId,
 });
@@ -73,7 +77,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   if (Date.now() - session.lastValidatedAt > REVALIDATE_MS) {
     try {
-      const user = await jellyfin.currentUser(session.token, session.deviceId);
+      const user = session.method === 'oidc' ? await jellyfin.serverUser(session.userId) : await jellyfin.currentUser(session.token, session.deviceId);
       session.lastValidatedAt = Date.now();
       session.isAdmin = !!user.Policy?.IsAdministrator;
       session.primaryImageTag = user.PrimaryImageTag;
@@ -121,6 +125,23 @@ const loginLimiter = rateLimit({
   message: { error: 'rate_limited', message: 'Too many sign-in attempts. Try again in a few minutes.' },
 });
 
+/* -------------------------- sessions & challenges -------------------------- */
+
+type SessionData = Parameters<typeof sessions.create>[0];
+
+function startSession(req: Request, res: Response, data: SessionData) {
+  const prev = sessions.get(readCookie(req, SESSION_COOKIE));
+  if (prev) sessions.destroy(prev.id);
+  const session = sessions.create({ ...data, userAgent: req.get('user-agent')?.slice(0, 300) });
+  res.cookie(SESSION_COOKIE, session.id, { ...cookieOptions(req), maxAge: config.sessionTtlMs });
+  return session;
+}
+
+/** Password sign-ins waiting for a two-factor code. */
+const challenges = new Map<string, { data: SessionData; expires: number; attempts: number }>();
+
+const ssoInfo = () => (oidcReady() ? { label: oidcSettings().label, hidePassword: oidcSettings().hidePassword } : undefined);
+
 const loginBody = z.object({
   username: z.string().trim().min(1).max(256),
   password: z.string().max(1024).default(''),
@@ -135,9 +156,9 @@ authRouter.get('/server', async (_req, res) => {
   }
   try {
     const info = await jellyfin.publicInfo();
-    res.json({ name: info.ServerName, version: info.Version, online: true, configured: true });
+    res.json({ name: info.ServerName, version: info.Version, online: true, configured: true, sso: ssoInfo() });
   } catch {
-    res.json({ online: false, configured: true });
+    res.json({ online: false, configured: true, sso: ssoInfo() });
   }
 });
 
@@ -202,9 +223,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       });
       return;
     }
-    const prev = sessions.get(readCookie(req, SESSION_COOKIE));
-    if (prev) sessions.destroy(prev.id);
-    const session = sessions.create({
+    const data = {
       userId: result.User.Id,
       userName: result.User.Name,
       isAdmin,
@@ -212,8 +231,19 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       token: result.AccessToken,
       deviceId,
       serverId: result.ServerId,
-    });
-    res.cookie(SESSION_COOKIE, session.id, { ...cookieOptions(req), maxAge: config.sessionTtlMs });
+      method: 'password' as const,
+    };
+    if (mfaEnabled(data.userId)) {
+      const challenge = randomBytes(24).toString('base64url');
+      for (const [k, c] of challenges) if (c.expires < Date.now()) {
+        challenges.delete(k);
+        void jellyfin.logout(c.data.token, c.data.deviceId);
+      }
+      challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
+      res.json({ mfaRequired: true, challenge });
+      return;
+    }
+    const session = startSession(req, res, data);
     audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in');
     res.json({ user: publicUser(session) });
   } catch (err) {
@@ -231,7 +261,7 @@ authRouter.post('/logout', async (req, res) => {
   const session = sessions.get(readCookie(req, SESSION_COOKIE));
   if (session) {
     sessions.destroy(session.id);
-    await jellyfin.logout(session.token, session.deviceId);
+    if (session.method !== 'oidc') await jellyfin.logout(session.token, session.deviceId);
     audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed out');
   }
   res.clearCookie(SESSION_COOKIE, cookieOptions(req));
@@ -269,6 +299,127 @@ authRouter.delete('/sessions/:id', requireAuth, async (req, res) => {
     return;
   }
   sessions.destroy(target.id);
-  await jellyfin.logout(target.token, target.deviceId);
+  if (target.method !== 'oidc') await jellyfin.logout(target.token, target.deviceId);
   res.json({ ok: true });
+});
+
+/* ------------------------------ two-factor ------------------------------ */
+
+const mfaLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'rate_limited', message: 'Too many attempts. Try again in a few minutes.' },
+});
+
+authRouter.post('/mfa/verify', mfaLimiter, async (req, res) => {
+  const b = z.object({ challenge: z.string().max(100), code: z.string().trim().min(6).max(20) }).strict().safeParse(req.body ?? {});
+  const c = b.success ? challenges.get(b.data.challenge) : undefined;
+  if (!b.success || !c || c.expires < Date.now()) {
+    if (b.success) challenges.delete(b.data.challenge);
+    res.status(401).json({ error: 'expired', message: 'This sign-in has expired. Enter your password again.' });
+    return;
+  }
+  const how = verifyMfa(c.data.userId, b.data.code);
+  if (!how) {
+    if (++c.attempts >= 5) {
+      challenges.delete(b.data.challenge);
+      await jellyfin.logout(c.data.token, c.data.deviceId);
+    }
+    audit({ userId: c.data.userId, userName: c.data.userName, ip: req.ip }, '[auth] sign-in failed: wrong two-factor code', false);
+    res.status(401).json({ error: 'invalid_code', message: 'That code didn’t work. Check your authenticator app and try again.' });
+    return;
+  }
+  challenges.delete(b.data.challenge);
+  const session = startSession(req, res, c.data);
+  audit({ userId: session.userId, userName: session.userName, ip: req.ip }, `[auth] signed in with two-factor${how === 'recovery' ? ' (recovery code)' : ''}`);
+  res.json({ user: publicUser(session) });
+});
+
+authRouter.get('/mfa', requireAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ ...mfaInfo(req.session!.userId), sso: req.session!.method === 'oidc' });
+});
+
+authRouter.post('/mfa/setup', requireAuth, (req, res) => {
+  if (mfaEnabled(req.session!.userId)) {
+    res.status(409).json({ error: 'conflict', message: 'Two-factor sign-in is already on.' });
+    return;
+  }
+  res.set('Cache-Control', 'no-store').json(beginSetup(req.session!.userId, req.session!.userName));
+});
+
+authRouter.post('/mfa/enable', requireAuth, mfaLimiter, (req, res) => {
+  const code = String((req.body as { code?: unknown } | undefined)?.code ?? '');
+  const codes = finishSetup(req.session!.userId, req.session!.userName, code);
+  if (!codes) {
+    res.status(400).json({ error: 'invalid_code', field: 'code', message: 'That code didn’t match. Make sure your phone’s clock is right and try the newest code.' });
+    return;
+  }
+  audit(req, '[auth] two-factor sign-in turned on');
+  res.set('Cache-Control', 'no-store').json({ recoveryCodes: codes, ...mfaInfo(req.session!.userId) });
+});
+
+authRouter.post('/mfa/disable', requireAuth, mfaLimiter, (req, res) => {
+  const code = String((req.body as { code?: unknown } | undefined)?.code ?? '');
+  if (!verifyMfa(req.session!.userId, code)) {
+    res.status(400).json({ error: 'invalid_code', field: 'code', message: 'Enter a current code (or a recovery code) to turn this off.' });
+    return;
+  }
+  disableMfa(req.session!.userId);
+  audit(req, '[auth] two-factor sign-in turned off');
+  res.json(mfaInfo(req.session!.userId));
+});
+
+/* ---------------------------- single sign-on ---------------------------- */
+
+function publicBase(req: Request) {
+  const saved = readPref<string | null>('publicUrl', null);
+  return (saved || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+}
+const loginError = (res: Response, message: string) => res.redirect(302, `/login?error=${encodeURIComponent(message)}`);
+
+authRouter.get('/oidc/start', setupLimiter, async (req, res) => {
+  if (!oidcReady()) return loginError(res, 'Single sign-on isn’t set up.');
+  try {
+    res.redirect(302, await authorizeUrl(`${publicBase(req)}/api/auth/oidc/callback`));
+  } catch (err) {
+    loginError(res, `Couldn’t reach your identity provider: ${(err as Error).message}`);
+  }
+});
+
+authRouter.get('/oidc/callback', setupLimiter, async (req, res) => {
+  if (!oidcReady()) return loginError(res, 'Single sign-on isn’t set up.');
+  const { code, state, error, error_description: desc } = req.query as Record<string, string | undefined>;
+  if (error) return loginError(res, desc ?? error);
+  if (!code || !state) return loginError(res, 'Sign-in was cancelled.');
+  try {
+    const who = await finishLogin(state, code);
+    const users = await jellyfin.serverUsers();
+    const user = users.find((u) => u.Name.toLowerCase() === who.name.toLowerCase());
+    if (!user || user.Policy?.IsDisabled) {
+      audit({ userName: who.name, ip: req.ip }, `[auth] single sign-on refused: no Jellyfin user named “${who.name}”`, false);
+      return loginError(res, `There’s no Jellyfin user called “${who.name}”.`);
+    }
+    const isAdmin = !!user.Policy?.IsAdministrator;
+    if (!isAdmin && !membersCanSignIn()) {
+      audit({ userId: user.Id, userName: user.Name, ip: req.ip }, '[auth] single sign-on refused: member access is off', false);
+      return loginError(res, 'StreamForge is restricted to Jellyfin administrators.');
+    }
+    const session = startSession(req, res, {
+      userId: user.Id,
+      userName: user.Name,
+      isAdmin,
+      primaryImageTag: user.PrimaryImageTag,
+      token: '',
+      deviceId: newDeviceId(),
+      serverId: user.ServerId,
+      method: 'oidc',
+    });
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with single sign-on');
+    res.redirect(302, '/');
+  } catch (err) {
+    loginError(res, (err as Error).message);
+  }
 });

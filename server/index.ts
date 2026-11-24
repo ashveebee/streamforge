@@ -17,6 +17,7 @@ import { startClientSampler } from './services/clients/index.js';
 import { startPlaybackGuard } from './services/playbackGuard.js';
 import { startDigest } from './services/digest.js';
 import { startRules } from './services/rules.js';
+import { resetByName } from './services/mfa.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
 import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
@@ -90,6 +91,10 @@ app.listen(config.port, config.host, () => {
     console.log(`    ${SERVICE_NAMES[id].padEnd(11)}→ ${where}`);
   }
   console.log(`    Settings DB → ${dbPath}\n`);
+  if (process.env.STREAMFORGE_RESET_2FA) {
+    const n = resetByName(process.env.STREAMFORGE_RESET_2FA);
+    console.log(`  ! Two-factor sign-in reset for ${n} account(s) named "${process.env.STREAMFORGE_RESET_2FA}". Remove STREAMFORGE_RESET_2FA now.\n`);
+  }
   if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
   startMonitors();
   void startHostMetrics();

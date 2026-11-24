@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
 import { AREAS, memberAccess, setMemberAccess } from './access.js';
 import { Router } from 'express';
+import { readPref } from './lib/db.js';
 import { audit } from './lib/audit.js';
 import { z } from 'zod';
 import { createClient, UpstreamError } from './lib/http.js';
@@ -25,6 +26,9 @@ import {
   setPublicUrl,
   testChannel,
 } from './services/notify.js';
+import { describeOidc, discover, updateOidc } from './services/oidc.js';
+import { disable as disableMfa, mfaUsers } from './services/mfa.js';
+import { hasServerKey } from './services/jellyfin.js';
 import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
 import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
@@ -549,4 +553,53 @@ settingsRouter.post('/backup/restore', async (req, res) => {
     if (err instanceof BackupError) return badRequest(res, err.message, 'file');
     throw err;
   }
+});
+
+/* ------------------------- single sign-on & 2FA ------------------------- */
+
+settingsRouter.get('/sso', (req, res) => {
+  const base = (readPref<string | null>('publicUrl', null) || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  res.set('Cache-Control', 'no-store').json({ ...describeOidc(), redirectUri: `${base}/api/auth/oidc/callback`, hasApiKey: hasServerKey(), mfaUsers: mfaUsers() });
+});
+
+const ssoBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    issuer: urlField.optional(),
+    clientId: z.string().trim().max(512).optional(),
+    clientSecret: z.string().trim().max(2048).optional(),
+    label: z.string().trim().min(1).max(40).optional(),
+    claim: z.string().trim().regex(/^[\w.:-]{1,64}$/, 'Use a claim name like preferred_username').optional(),
+    hidePassword: z.boolean().optional(),
+  })
+  .strict();
+
+settingsRouter.put('/sso', (req, res) => {
+  const parsed = ssoBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  if (b.enabled && !hasServerKey()) return badRequest(res, 'Single sign-on needs a Jellyfin API key. Add one on the Jellyfin card first.');
+  // Blank keeps the saved secret.
+  updateOidc({ ...b, clientSecret: b.clientSecret || undefined });
+  audit(req, `[settings] single sign-on ${b.enabled === undefined ? 'updated' : b.enabled ? 'turned on' : 'turned off'}`);
+  res.json(describeOidc());
+});
+
+settingsRouter.post('/sso/test', async (req, res) => {
+  const issuer = urlField.safeParse((req.body as { issuer?: unknown } | undefined)?.issuer ?? '');
+  if (!issuer.success || !issuer.data) return res.json({ ok: false, message: 'Enter the issuer URL.' });
+  try {
+    const d = await discover(issuer.data);
+    res.json({ ok: true, issuer: d.issuer, matches: d.issuer.replace(/\/+$/, '') === issuer.data.replace(/\/+$/, '') });
+  } catch (err) {
+    res.json({ ok: false, message: (err as Error).message });
+  }
+});
+
+settingsRouter.delete('/mfa/:userId', (req, res) => {
+  const id = String(req.params.userId);
+  const who = mfaUsers().find((u) => u.userId === id);
+  if (!who || !disableMfa(id)) return res.status(404).json({ error: 'not_found', message: 'That user doesn’t use two-factor sign-in.' });
+  audit(req, `[auth] two-factor sign-in reset for ${who.userName}`);
+  res.json({ ok: true });
 });
