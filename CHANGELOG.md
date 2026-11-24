@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/ashveebee/streamforge/compare/v1.2.1...v1.3.0) (2026-11-24)
+
+
+### Features
+
+* details page for every movie and show ([b8fbefb](https://github.com/ashveebee/streamforge/commit/b8fbefbc9af255fd60ae99ec8c5df2cf6444b7b6))
+* title details pages, a loader on every page, and fix pages needing a hard refresh ([c23c511](https://github.com/ashveebee/streamforge/commit/c23c511667e6efa454da8ccc153801e28fc32e34))
+
+
+### Bug Fixes
+
+* pages that wouldn't load until a hard refresh, and a loader on every page ([fe3cff2](https://github.com/ashveebee/streamforge/commit/fe3cff265f437852e6fe528e44a29098e3e32ba9))
+
 ## [1.2.1](https://github.com/ashveebee/streamforge/compare/v1.2.0...v1.2.1) (2026-11-24)
 
 
