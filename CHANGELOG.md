@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/ashveebee/streamforge/compare/v1.5.0...v1.6.0) (2026-11-24)
+
+
+### Features
+
+* every episode of a season, including missing ones ([c58a49c](https://github.com/ashveebee/streamforge/commit/c58a49c30506f4de28ab37c1f3144cc2807deb2c))
+* every episode with details, Moonfin support, and phone layout fixes ([6de7feb](https://github.com/ashveebee/streamforge/commit/6de7feb28bfe4f26962cc883bd11e89f23de2b97))
+* open titles in Moonfin ([49462b5](https://github.com/ashveebee/streamforge/commit/49462b50867bd2d22de682b9d6e7501b550bc4ec))
+
+
+### Bug Fixes
+
+* Sonarr, Radarr and System pages run off the screen on phones ([69c53ea](https://github.com/ashveebee/streamforge/commit/69c53eac86452629327a2f8dda6f72b506e99502))
+
 ## [1.5.0](https://github.com/ashveebee/streamforge/compare/v1.4.0...v1.5.0) (2026-11-24)
 
 
