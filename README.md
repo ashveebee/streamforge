@@ -35,7 +35,20 @@ server.
     <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" alt="Library health: incomplete series, upgrades available and mismatches with Jellyfin"></a><br><b>Library health.</b> Missing episodes, upgrades and items out of sync with Jellyfin.</td>
   </tr>
   <tr>
-    <td colspan="2"><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services from the UI, test each connection and apply changes without a restart.</td>
+    <td><a href="docs/screenshots/downloads.jpg"><img src="docs/screenshots/downloads.jpg" alt="Downloads: live speeds and every download in qBittorrent and SABnzbd"></a><br><b>Downloads.</b> Real speeds and controls for your download clients.</td>
+    <td><a href="docs/screenshots/search.jpg"><img src="docs/screenshots/search.jpg" alt="Search: results from Jellyfin, Sonarr and Seerr with a Request button"></a><br><b>Search.</b> ⌘K searches everything and requests what's missing.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/me.jpg"><img src="docs/screenshots/me.jpg" alt="Personal page: continue watching, next up, requests, history and devices"></a><br><b>Your page.</b> Continue watching, requests, history and devices.</td>
+    <td><a href="docs/screenshots/digest.jpg"><img src="docs/screenshots/digest.jpg" alt="Weekly digest: new movies and episodes and the most watched titles"></a><br><b>Weekly digest.</b> What's new and what got watched.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/rules.jpg"><img src="docs/screenshots/rules.jpg" alt="Rules: automations such as pausing downloads when a disk is almost full"></a><br><b>Rules.</b> If this happens, do that.</td>
+    <td><a href="docs/screenshots/audit.jpg"><img src="docs/screenshots/audit.jpg" alt="Audit log: changes, approvals and sign-ins with who made them"></a><br><b>Audit log.</b> Who changed what, and when.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/bazarr.jpg"><img src="docs/screenshots/bazarr.jpg" alt="Bazarr: episodes and movies missing subtitles"></a><br><b>Bazarr.</b> Missing subtitles with search buttons.</td>
+    <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
   </tr>
 </table>
 

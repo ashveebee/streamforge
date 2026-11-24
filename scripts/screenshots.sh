@@ -50,4 +50,10 @@ shot sonarr      /sonarr      1440,1700
 shot seerr       /seerr       1440,900
 shot infinidisk  /infinidisk  1440,900
 shot settings    /settings    1440,1000
+shot downloads   /downloads   1440,1100
+shot me          /me          1440,1600
+shot digest      /digest      1440,1100
+shot rules       /rules       1440,900
+shot audit       /audit       1440,900
+shot bazarr      /bazarr      1440,1100
 echo "Saved to $OUT"
