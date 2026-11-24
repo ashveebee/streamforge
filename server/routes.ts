@@ -16,6 +16,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
@@ -127,6 +128,34 @@ api.post(
     if (b.data.command === 'stop' && b.data.text) await jellyfin.controlSession(ctxOf(req.session!), id, 'message', b.data.text);
     await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
     audit(req, `[jellyfin] stream ${id}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
+    return { ok: true };
+  }),
+);
+
+/* Scheduled tasks and library scans (admins). */
+api.get('/jellyfin/tasks', requireAdmin, handle('jellyfin', (req) => scheduledTasks(ctxOf(req.session!))));
+api.post(
+  '/jellyfin/tasks/:id/:op',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    const op = String(req.params.op);
+    if (!TASK_ID_RE.test(id) || (op !== 'start' && op !== 'stop')) throw new HttpError(400, 'Invalid request');
+    const name = typeof (req.body as { name?: unknown } | undefined)?.name === 'string' ? String((req.body as { name: string }).name).slice(0, 120) : id;
+    await (op === 'start' ? startTask : stopTask)(ctxOf(req.session!), id);
+    audit(req, `[jellyfin] task “${name}” ${op === 'start' ? 'started' : 'stopped'}`);
+    return { ok: true };
+  }),
+);
+api.post(
+  '/jellyfin/scan',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const b = z.object({ library: z.string().optional(), name: z.string().max(120).optional(), full: z.boolean().optional() }).strict().safeParse(req.body ?? {});
+    if (!b.success || (b.data.library && !jellyfin.isValidId(b.data.library))) throw new HttpError(400, 'Invalid request');
+    if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
+    else await scanAll(ctxOf(req.session!));
+    audit(req, `[jellyfin] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}`);
     return { ok: true };
   }),
 );

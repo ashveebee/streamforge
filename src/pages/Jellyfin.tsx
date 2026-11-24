@@ -1,4 +1,9 @@
-import { Clapperboard, Film, MonitorPlay, Repeat, Users } from 'lucide-react';
+import { Clapperboard, Film, LoaderCircle, MonitorPlay, RefreshCw, Repeat, ScanSearch, Users } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useLibraryScan } from '@/hooks/useServices';
+import { Button } from '@/components/ui/Button';
+import { Menu } from '@/components/ui/Menu';
+import { JellyfinTasks } from '@/components/widgets/JellyfinTasks';
 import { useJellyfin } from '@/hooks/queries';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { relative } from '@/lib/format';
@@ -15,6 +20,8 @@ import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
 
 export default function JellyfinPage() {
   const q = useJellyfin();
+  const { user } = useAuth();
+  const scan = useLibraryScan();
   return (
     <>
       <ServiceHeader id="jellyfin" />
@@ -30,7 +37,19 @@ export default function JellyfinPage() {
 
             <div className="grid gap-5 xl:grid-cols-3">
               <Card className="xl:col-span-2">
-                <CardHeader icon={Clapperboard} accent="var(--color-jellyfin)" title="Libraries" subtitle={`${d.libraries.length} libraries`} />
+                <CardHeader
+                  icon={Clapperboard}
+                  accent="var(--color-jellyfin)"
+                  title="Libraries"
+                  subtitle={scan.error ? <span className="text-bad">{(scan.error as Error).message}</span> : `${d.libraries.length} libraries`}
+                  action={
+                    user?.isAdmin ? (
+                      <Button size="sm" disabled={scan.isPending} onClick={() => scan.mutate({})}>
+                        {scan.isPending && !scan.variables?.library ? <LoaderCircle className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />} Scan all
+                      </Button>
+                    ) : undefined
+                  }
+                />
                 <CardBody>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {d.libraries.map((l) => {
@@ -46,7 +65,24 @@ export default function JellyfinPage() {
                             </div>
                             <span className="text-lg font-semibold text-white tabular">{l.itemCount?.toLocaleString() ?? '—'}</span>
                           </div>
-                          {l.refreshing && <div className="absolute top-2 right-2"><Pill tone="brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</Pill></div>}
+                          {l.refreshing && <div className="absolute top-2 left-2"><Pill tone="brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</Pill></div>}
+                          {user?.isAdmin && (
+                            <div className="absolute top-1.5 right-1.5 rounded-lg bg-black/40 text-white backdrop-blur">
+                              <Menu
+                                label={`Actions for ${l.name}`}
+                                busy={scan.isPending && scan.variables?.library === l.id}
+                                items={[
+                                  { label: 'Scan for new files', icon: ScanSearch, onSelect: () => scan.mutate({ library: l.id, name: l.name }) },
+                                  {
+                                    label: 'Refresh all metadata',
+                                    icon: RefreshCw,
+                                    hint: 'Slow on large libraries',
+                                    onSelect: () => confirm(`Replace all metadata in ${l.name}? This can take a long time.`) && scan.mutate({ library: l.id, name: l.name, full: true }),
+                                  },
+                                ]}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -94,6 +130,7 @@ export default function JellyfinPage() {
                 </CardBody>
               </Card>
             </div>
+            {user?.isAdmin && <JellyfinTasks />}
             <ActivityWidget limit={15} />
           </div>
         )}

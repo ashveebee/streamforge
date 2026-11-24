@@ -5,12 +5,12 @@ import { VERSION as APP_VERSION } from '../version.js';
 import type { HealthProbe } from './types.js';
 
 /** The configured Jellyfin URL; throws when Jellyfin hasn't been set up yet. */
-function base() {
+export function base() {
   const url = resolve('jellyfin').settings.url;
   if (!url) throw new UpstreamError('Jellyfin is not configured', undefined, 'jellyfin');
   return url;
 }
-const serverApiKey = () => resolve('jellyfin').settings.apiKey;
+export const serverApiKey = () => resolve('jellyfin').settings.apiKey;
 const CLIENT = 'StreamForge';
 const VERSION = APP_VERSION;
 const TICKS_PER_MS = 10_000;
@@ -37,11 +37,11 @@ export interface JfCtx {
  * Server-wide data (sessions, activity log, users) uses the optional
  * Jellyfin API key when present, otherwise the signed-in user's token.
  */
-function serverToken(ctx: JfCtx) {
+export function serverToken(ctx: JfCtx) {
   return serverApiKey() ?? ctx.token;
 }
 
-function jf<T>(path: string, token: string, deviceId: string, query?: Record<string, string | number | boolean | undefined>) {
+export function jf<T>(path: string, token: string, deviceId: string, query?: Record<string, string | number | boolean | undefined>) {
   return requestJson<T>(buildUrl(base(), path, query), {
     headers: authHeader(token, deviceId),
     service: 'jellyfin',

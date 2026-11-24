@@ -59,3 +59,44 @@ export function useMusicQueueRemove(kind: MusicKind) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: [kind] }),
   });
 }
+
+/* --------------------------- Jellyfin tasks/scans --------------------------- */
+
+export interface JellyfinTask {
+  id: string;
+  key?: string;
+  name: string;
+  category: string;
+  description?: string;
+  state: 'Idle' | 'Running' | 'Cancelling';
+  progress?: number;
+  last?: { startedAt?: string; endedAt?: string; status?: string; error?: string };
+  schedule: string[];
+}
+
+export const useJellyfinTasks = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['jellyfin', 'tasks'],
+    queryFn: ({ signal }) => api<JellyfinTask[]>('/jellyfin/tasks', { signal }),
+    enabled,
+    refetchInterval: (q) => (q.state.data?.some((t) => t.state !== 'Idle') ? 2000 : 30_000),
+  });
+
+export function useTaskControl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, op, name }: { id: string; op: 'start' | 'stop'; name: string }) => api(`/jellyfin/tasks/${id}/${op}`, { method: 'POST', body: { name } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['jellyfin', 'tasks'] }),
+  });
+}
+
+export function useLibraryScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { library?: string; name?: string; full?: boolean }) => api('/jellyfin/scan', { method: 'POST', body: b }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['jellyfin', 'tasks'] });
+      setTimeout(() => void qc.invalidateQueries({ queryKey: ['jellyfin', 'overview'] }), 2000);
+    },
+  });
+}
