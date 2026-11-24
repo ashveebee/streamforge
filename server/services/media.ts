@@ -520,6 +520,123 @@ export async function jellyfinEpisodes(ctx: JfCtx, seriesId: string, seasonId: s
   return { episodes: (res.Items ?? []).map((e) => episodeOf(e, isAdmin)) };
 }
 
+/* ------------------------- every episode of a season ------------------------ */
+
+interface SonarrEpisode {
+  id: number;
+  seriesId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  title?: string;
+  overview?: string;
+  airDateUtc?: string;
+  runtime?: number;
+  hasFile?: boolean;
+  monitored?: boolean;
+  images?: ArrImage[];
+  episodeFile?: {
+    size?: number;
+    path?: string;
+    quality?: { quality?: { name?: string } };
+    mediaInfo?: { videoCodec?: string; audioCodec?: string; audioChannels?: number; resolution?: string; videoDynamicRangeType?: string; subtitles?: string; audioLanguages?: string };
+  };
+}
+interface SeerrSeason {
+  episodes?: { episodeNumber: number; name?: string; overview?: string; airDate?: string; stillPath?: string; voteAverage?: number }[];
+}
+
+export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
+
+/**
+ * Every episode of one season, including the ones you don't have: titles and
+ * stills from Seerr (TMDB), files and monitoring from Sonarr, watch state and
+ * playback from Jellyfin, merged by episode number.
+ */
+export async function seasonEpisodes(ctx: JfCtx, tmdbId: number, season: number, opts: { isAdmin: boolean; can: (area: string) => boolean }) {
+  const [s, lib] = await Promise.all([seerrDetails('tv', tmdbId), libraryItems(ctx).catch(() => [])]);
+  const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === 'Series');
+  const arr = await arrEntries('tv', tmdbId, s?.externalIds?.tvdbId, opts.can);
+  const sonarr = arr.find((a) => a.series);
+  const [tmdb, son, jfe] = await Promise.all([
+    isConfigured('seerr')
+      ? cache.get(`seerr:season:${tmdbId}:${season}`, 10 * 60_000, () => seerr()!.get<SeerrSeason>(`/api/v1/tv/${tmdbId}/season/${season}`)).catch(() => undefined)
+      : undefined,
+    sonarr
+      ? cache
+          .get(`${sonarr.inst.id}:episodes:${sonarr.series!.id}:${season}`, 30_000, () =>
+            sonarr.inst.client.get<SonarrEpisode[]>('/api/v3/episode', { seriesId: sonarr.series!.id!, seasonNumber: season, includeEpisodeFile: true, includeImages: true }),
+          )
+          .catch(() => [] as SonarrEpisode[])
+      : ([] as SonarrEpisode[]),
+    jfItem
+      ? jf<{ Items: JfItem[] }>(`/Shows/${jfItem.id}/Episodes`, ctx.token, ctx.deviceId, { userId: ctx.userId, season, Fields: 'Overview,MediaSources,Path', isMissing: false })
+          .then((r) => (r.Items ?? []).filter((e) => e.LocationType !== 'Virtual'))
+          .catch(() => [] as JfItem[])
+      : ([] as JfItem[]),
+  ]);
+  const numbers = new Set<number>([
+    ...(tmdb?.episodes ?? []).map((e) => e.episodeNumber),
+    ...son.map((e) => e.episodeNumber),
+    ...jfe.filter((e) => e.IndexNumber !== undefined).map((e) => e.IndexNumber!),
+  ]);
+  const now = Date.now();
+  const episodes = [...numbers]
+    .sort((a, b) => a - b)
+    .map((n) => {
+      const t = tmdb?.episodes?.find((e) => e.episodeNumber === n);
+      const so = son.find((e) => e.episodeNumber === n);
+      const j = jfe.find((e) => e.IndexNumber === n);
+      const jfEp = j ? episodeOf(j, opts.isAdmin) : undefined;
+      const airDate = t?.airDate ?? so?.airDateUtc ?? jfEp?.airDate;
+      const have = !!j || !!so?.hasFile;
+      const status: EpisodeStatus = have ? 'available' : airDate && Date.parse(airDate) > now ? 'unaired' : so && !so.monitored ? 'unmonitored' : 'missing';
+      const mi = so?.episodeFile?.mediaInfo;
+      const file = j?.MediaSources?.[0] ? fileInfo(j.MediaSources[0], opts.isAdmin) : undefined;
+      return {
+        number: n,
+        season,
+        name: t?.name || so?.title || j?.Name || `Episode ${n}`,
+        overview: t?.overview || so?.overview || j?.Overview,
+        airDate,
+        runtimeMin: jfEp?.runtimeMin ?? so?.runtime ?? undefined,
+        rating: t?.voteAverage ? Math.round(t.voteAverage * 10) / 10 : jfEp?.rating,
+        still: jfEp?.still ?? (t?.stillPath ? `${TMDB}/w400${t.stillPath}` : remote(so?.images, 'screenshot')),
+        status,
+        monitored: so?.monitored,
+        quality: so?.episodeFile?.quality?.quality?.name,
+        size: so?.episodeFile?.size ?? file?.size,
+        path: opts.isAdmin ? (so?.episodeFile?.path ?? file?.path) : undefined,
+        /** From Jellyfin when it has the file, else Sonarr's media info. */
+        file:
+          file ??
+          (mi
+            ? {
+                id: `sonarr-${so!.id}`,
+                container: undefined,
+                size: so?.episodeFile?.size,
+                video: { codec: mi.videoCodec?.toUpperCase(), resolution: mi.resolution, range: mi.videoDynamicRangeType || undefined },
+                audio: (mi.audioLanguages ?? '').split('/').filter(Boolean).map((l, i) => ({ title: l.trim(), codec: i === 0 ? mi.audioCodec : undefined, channels: i === 0 && mi.audioChannels ? String(mi.audioChannels) : undefined, isDefault: i === 0 })),
+                subtitles: (mi.subtitles ?? '').split('/').filter(Boolean).map((l) => ({ title: l.trim(), forced: false, external: false, sdh: false, isDefault: false })),
+              }
+            : undefined),
+        jellyfin: jfEp ? { id: jfEp.id, url: jfEp.url, watch: jfEp.watch } : undefined,
+        sonarr: so && opts.isAdmin ? { instance: sonarr!.inst.id, episodeId: so.id } : undefined,
+      };
+    });
+  return {
+    season,
+    episodes,
+    counts: {
+      total: episodes.length,
+      available: episodes.filter((e) => e.status === 'available').length,
+      missing: episodes.filter((e) => e.status === 'missing').length,
+      unaired: episodes.filter((e) => e.status === 'unaired').length,
+    },
+    sources: { tmdb: !!tmdb, sonarr: !!sonarr, jellyfin: !!jfItem },
+    sonarr: sonarr && opts.isAdmin ? { instance: sonarr.inst.id, seriesId: sonarr.series!.id! } : undefined,
+  };
+}
+
 /**
  * Resolves a Jellyfin item (a movie, series, season or episode) to a title.
  * With a TMDB id the page switches to the full details; otherwise (home
@@ -555,11 +672,21 @@ export async function jellyfinMedia(ctx: JfCtx, itemId: string, isAdmin: boolean
   };
 }
 
-/** Starts a search in Radarr (one movie) or Sonarr (a whole series). */
-export async function arrTitleSearch(kind: 'radarr' | 'sonarr', instanceId: string, id: number) {
+/**
+ * Starts a search in Radarr (one movie) or Sonarr (a whole series, one
+ * season, or specific episodes).
+ */
+export async function arrTitleSearch(kind: 'radarr' | 'sonarr', instanceId: string, id: number, scope?: { season?: number; episodeIds?: number[] }) {
   const inst = arrInstances(kind).find((i) => i.id === instanceId);
   if (!inst) throw new HttpError(404, 'Unknown instance', 'not_configured');
-  const body = kind === 'radarr' ? { name: 'MoviesSearch', movieIds: [id] } : { name: 'SeriesSearch', seriesId: id };
+  const body =
+    kind === 'radarr'
+      ? { name: 'MoviesSearch', movieIds: [id] }
+      : scope?.episodeIds?.length
+        ? { name: 'EpisodeSearch', episodeIds: scope.episodeIds }
+        : scope?.season !== undefined
+          ? { name: 'SeasonSearch', seriesId: id, seasonNumber: scope.season }
+          : { name: 'SeriesSearch', seriesId: id };
   await inst.client.post('/api/v3/command', body);
   return { ok: true, instance: inst.name };
 }

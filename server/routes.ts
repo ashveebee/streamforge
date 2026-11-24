@@ -12,6 +12,7 @@ import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
 import { hasClients } from './services/clients/index.js';
 import { settingsRouter } from './settingsRoutes.js';
+import { moonfinClientConfig } from './services/moonfin.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
@@ -19,7 +20,7 @@ import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
-import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails } from './services/media.js';
+import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails, seasonEpisodes } from './services/media.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
@@ -52,6 +53,8 @@ api.get('/config', (req, res) => {
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
     downloadClients: hasClients() && canSee(req, 'downloads'),
+    /** Set when Moonfin is switched on: where to open titles. */
+    moonfin: moonfinClientConfig(),
   });
 });
 api.get('/health', (req, res) => res.set('Cache-Control', 'no-store').json(healthSnapshot((kind) => canSee(req, kind))));
@@ -326,6 +329,15 @@ api.get(
   }),
 );
 api.get(
+  '/media/tv/:tmdbId/seasons/:season',
+  handle(null, async (req) => {
+    const tmdbId = Number(req.params.tmdbId);
+    const season = Number(req.params.season);
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !Number.isInteger(season) || season < 0 || season > 1000) throw new HttpError(400, 'Invalid season');
+    return seasonEpisodes(ctxOf(req.session!), tmdbId, season, { isAdmin: !!req.session!.isAdmin, can: (a) => canSee(req, a as never) });
+  }),
+);
+api.get(
   '/media/:type/:tmdbId',
   handle(null, async (req) => {
     const type = String(req.params.type);
@@ -338,9 +350,19 @@ api.post(
   '/media/search',
   requireAdmin,
   handle(null, async (req) => {
-    const b = z.object({ kind: z.enum(['radarr', 'sonarr']), instance: z.string().max(64), id: z.number().int().positive(), title: z.string().max(200).optional() }).strict().safeParse(req.body ?? {});
+    const b = z
+      .object({
+        kind: z.enum(['radarr', 'sonarr']),
+        instance: z.string().max(64),
+        id: z.number().int().positive(),
+        title: z.string().max(200).optional(),
+        season: z.number().int().min(0).max(1000).optional(),
+        episodeIds: z.array(z.number().int().positive()).max(500).optional(),
+      })
+      .strict()
+      .safeParse(req.body ?? {});
     if (!b.success) throw new HttpError(400, 'Invalid request');
-    const r = await arrTitleSearch(b.data.kind, b.data.instance, b.data.id);
+    const r = await arrTitleSearch(b.data.kind, b.data.instance, b.data.id, { season: b.data.season, episodeIds: b.data.episodeIds });
     audit(req, `[search] ${b.data.instance}: search for ${b.data.title ?? `#${b.data.id}`}`);
     return r;
   }),
