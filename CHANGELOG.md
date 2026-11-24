@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0](https://github.com/ashveebee/streamforge/compare/v1.4.0...v1.5.0) (2026-11-24)
+
+
+### Features
+
+* public address for each service ([598dc03](https://github.com/ashveebee/streamforge/commit/598dc03ea6de5c7719e507e6b66080021f6e1168))
+* public service addresses, iPhone app fix and a richer website ([eea35cb](https://github.com/ashveebee/streamforge/commit/eea35cb2deaf194027788f60c997143a6a1af992))
+
+
+### Bug Fixes
+
+* menu and search buttons can't be tapped in the iPhone app ([4b25c4b](https://github.com/ashveebee/streamforge/commit/4b25c4bc5c89da459d47fbc40b3b649460854c7f))
+
+
+### Documentation
+
+* show what StreamForge can do on the website ([55b9d29](https://github.com/ashveebee/streamforge/commit/55b9d292f53ee4da2b01cf1359f0a9e6fc91eba8))
+
 ## [1.4.0](https://github.com/ashveebee/streamforge/compare/v1.3.0...v1.4.0) (2026-11-24)
 
 
