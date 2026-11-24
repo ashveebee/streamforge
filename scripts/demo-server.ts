@@ -820,7 +820,7 @@ const demoUser = { id: 'u-alex', name: 'Alex', isAdmin: true, expiresAt: ahead(1
 app.get('/api/auth/me', json(() => ({ user: demoUser })));
 app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));
-app.get('/api/auth/server', json(() => ({ name: 'Homelab', version: '10.11.2', online: true, configured: true })));
+app.get('/api/auth/server', json(() => ({ name: 'Homelab', version: '10.11.2', online: true, configured: true, sso: { label: 'Authentik', hidePassword: false } })));
 
 app.get('/api/config', json(() => ({
   services: Object.fromEntries((Object.keys(VERSIONS) as ServiceId[]).map((k) => [k, !disabledServices.has(k)])),
@@ -831,8 +831,9 @@ app.get('/api/config', json(() => ({
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
   access: null,
+  downloadClients: true,
 })));
-const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk'] };
+const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'downloads', 'requests', 'jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'] };
 app.get('/api/settings/members', json(() => members));
 app.put('/api/settings/members', (req, res) => {
   Object.assign(members, req.body);
@@ -901,6 +902,217 @@ app.get('/api/radarr/overview', (req, res) => {
 app.get('/api/prowlarr/overview', json(prowlarr));
 app.get('/api/seerr/overview', json(seerr));
 app.get('/api/infinidisk/overview', json(infinidisk));
+
+/* ------------------------- newer features (demo) ------------------------- */
+
+const ALBUMS = [
+  { title: 'Paper Satellites', creator: 'The Quiet Hours' },
+  { title: 'Northern Static', creator: 'Mira Vale' },
+  { title: 'Tidelines', creator: 'Harbor Lights' },
+  { title: 'Glasshouse', creator: 'Ember Choir' },
+];
+const BOOKS = [
+  { title: 'The Cartographer’s Daughter', creator: 'Elin Marsh' },
+  { title: 'A Lantern for Kessa', creator: 'Tomas Reed' },
+  { title: 'Salt and Signal', creator: 'Iris Okafor' },
+];
+app.get(['/api/lidarr/overview', '/api/readarr/overview'], (req, res) => {
+  const music = req.path.includes('lidarr');
+  const list = music ? ALBUMS : BOOKS;
+  res.json({
+    kind: music ? 'lidarr' : 'readarr',
+    stats: music ? { creators: 214, monitored: 188, releases: 1630, files: 18_402, total: 19_120, sizeOnDisk: 1.6 * TB } : { creators: 96, monitored: 71, releases: 742, files: 655, total: 701, sizeOnDisk: 48 * GB },
+    queue: [
+      { id: 1, title: list[0]!.creator, subtitle: list[0]!.title, releaseTitle: `${list[0]!.creator} - ${list[0]!.title} (FLAC)`, status: 'downloading', client: 'qBittorrent', quality: music ? 'FLAC' : 'EPUB', size: 640 * 1024 ** 2, sizeLeft: 210 * 1024 ** 2, progress: 0.67, timeLeft: '00:04:12' },
+    ],
+    upcoming: list.slice(1).map((a, i) => ({ id: i + 10, title: a.title, creator: a.creator, date: ahead((i + 2) * 5 * DAY) })),
+  });
+});
+app.get(['/api/lidarr/missing', '/api/readarr/missing'], (req, res) => {
+  const list = req.path.includes('lidarr') ? ALBUMS : BOOKS;
+  res.json({ total: list.length, page: 1, pageSize: 25, items: list.map((a, i) => ({ id: i + 1, title: a.title, subtitle: a.creator, date: iso((i + 1) * 40 * DAY) })) });
+});
+app.get('/api/bazarr/overview', json(() => ({
+  counts: { episodes: 23, movies: 6, providerIssues: 1, healthIssues: 0 },
+  episodes: { total: 23, items: ['Low Tide', 'Signal Fire', 'Copper Valley'].map((t, i) => ({ seriesId: i + 1, episodeId: i + 10, title: t, subtitle: `S0${i + 1}E0${i + 3} · Episode ${i + 3}`, missing: i ? ['English', 'Spanish'] : ['English (HI)'] })) },
+  movies: { total: 6, items: ['Quiet Orbit', 'Northbound'].map((t, i) => ({ movieId: i + 1, title: t, missing: ['English'] })) },
+  history: ['Atlas Station', 'Saltwind', 'Kitchen Brigade'].map((t, i) => ({ kind: i === 1 ? 'movie' : 'episode', title: t, subtitle: i === 1 ? '' : `S01E0${i + 1}`, language: 'English', provider: 'opensubtitlescom', description: 'English subtitles downloaded', at: iso((i + 1) * 3 * HOUR) })),
+})));
+
+const clientItems = (seed: string, torrent: boolean) =>
+  (torrent ? ['Atlas.Station.S01E07.2160p.WEB-DL', 'Paper.Kingdoms.2023.1080p.BluRay', 'Copper.Valley.S03.1080p.WEB', 'Quiet.Orbit.2024.2160p.UHD.BluRay'] : ['Northbound.2025.1080p.WEB-DL', 'Low.Tide.S02E05.1080p.HDTV']).map((name, i) => {
+    const r = rng(`${seed}${i}`);
+    const size = (2 + r() * 40) * GB;
+    const progress = i === 0 ? 0.42 : i === 1 && torrent ? 1 : i === 2 ? 0.88 : 1;
+    const seeding = torrent && progress >= 1;
+    return {
+      id: `${seed}-${i}`,
+      name,
+      state: progress < 1 ? 'downloading' : seeding ? 'seeding' : 'completed',
+      progress,
+      size,
+      downloaded: size * progress,
+      downSpeed: progress < 1 ? (8 + r() * 30) * 1024 ** 2 : 0,
+      upSpeed: seeding ? (0.5 + r() * 3) * 1024 ** 2 : 0,
+      eta: progress < 1 ? Math.round(600 + r() * 3000) : undefined,
+      ratio: torrent ? Math.round(r() * 300) / 100 : undefined,
+      category: name.includes('S0') ? 'tv' : 'movies',
+      addedAt: iso((i + 1) * 9 * HOUR),
+    };
+  });
+app.get('/api/clients', json(() => {
+  const qb = clientItems('qb', true);
+  const sab = clientItems('sab', false);
+  const sum = (l: typeof qb, k: 'downSpeed' | 'upSpeed') => l.reduce((n, i) => n + i[k], 0);
+  return {
+    clients: [
+      { id: 'qb', type: 'qbittorrent', typeName: 'qBittorrent', name: 'Seedbox', online: true, version: '5.1.2', protocol: 'torrent', downSpeed: sum(qb, 'downSpeed'), upSpeed: sum(qb, 'upSpeed'), downLimit: 0, upLimit: 5 * 1024 ** 2, paused: false, freeSpace: 3.1 * TB, items: qb, latencyMs: 41 },
+      { id: 'sab', type: 'sabnzbd', typeName: 'SABnzbd', name: 'Usenet', online: true, version: '4.5.1', protocol: 'usenet', downSpeed: sum(sab, 'downSpeed'), upSpeed: 0, paused: false, freeSpace: 3.1 * TB, items: sab, latencyMs: 22 },
+    ],
+    history: Array.from({ length: 120 }, (_, i) => {
+      const r = rng(`dl${Math.floor((Date.now() - (119 - i) * 5000) / 5000)}`);
+      return { t: Date.now() - (119 - i) * 5000, down: (25 + r() * 35 + Math.sin(i / 9) * 10) * 1024 ** 2, up: (2 + r() * 3) * 1024 ** 2 };
+    }),
+    sampleIntervalMs: 5000,
+  };
+}));
+app.get('/api/settings/clients', json(() => ({
+  clients: [
+    { id: 'qb', type: 'qbittorrent', name: 'Seedbox', url: 'https://qbit.example.com', username: 'alex', enabled: true, passwordSet: true, apiKeySet: false, createdAt: iso(40 * DAY) },
+    { id: 'sab', type: 'sabnzbd', name: 'Usenet', url: 'https://sab.example.com', username: '', enabled: true, passwordSet: false, apiKeySet: true, apiKeyHint: '••••a91c', createdAt: iso(40 * DAY) },
+  ],
+  types: [
+    { id: 'qbittorrent', name: 'qBittorrent', fields: ['username', 'password'] },
+    { id: 'transmission', name: 'Transmission', fields: ['username', 'password'] },
+    { id: 'sabnzbd', name: 'SABnzbd', fields: ['apiKey'] },
+    { id: 'nzbget', name: 'NZBGet', fields: ['username', 'password'] },
+  ],
+})));
+
+app.get('/api/audit', json(() => ({
+  entries: [
+    ['seerr', 'request #412 approved', 'Alex', 25 * MIN],
+    ['jellyfin', 'stream 8c1f: message (“Server restart in 10 minutes”)', 'Alex', 2 * HOUR],
+    ['queue', 'radarr-4k #233: blocklist-search', 'Sam', 5 * HOUR],
+    ['auth', 'signed in with two-factor', 'Sam', 5 * HOUR + 4 * MIN],
+    ['rules', '“Disk almost full” fired: Media is 95% full → notified, paused downloads', undefined, 9 * HOUR],
+    ['settings', 'download client "Seedbox" (qBittorrent) added', 'Alex', 2 * DAY],
+    ['auth', 'sign-in failed: wrong username or password', 'maya', 3 * DAY],
+    ['library', 'deleted movie “Ember & Ash” in Radarr (files removed)', 'Alex', 4 * DAY],
+  ].map(([category, message, userName, ago], i) => ({ id: 100 - i, at: iso(ago as number), category, message, userName, ip: userName ? '192.168.1.24' : undefined, ok: !String(message).includes('failed') })),
+  more: false,
+  categories: ['auth', 'jellyfin', 'library', 'queue', 'rules', 'seerr', 'settings'],
+  users: ['Alex', 'maya', 'Sam'],
+})));
+
+app.get('/api/auth/sessions', json(() => ({
+  sessions: [
+    { id: 's1', current: true, method: 'password', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15', createdAt: iso(3 * HOUR), lastSeenAt: iso(MIN), expiresAt: ahead(9 * HOUR) },
+    { id: 's2', current: false, method: 'oidc', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1', createdAt: iso(2 * DAY), lastSeenAt: iso(5 * HOUR), expiresAt: ahead(4 * HOUR) },
+  ],
+})));
+app.get('/api/auth/mfa', json(() => ({ enabled: true, enabledAt: iso(30 * DAY), recoveryLeft: 9, sso: false })));
+app.get('/api/me/overview', json(() => ({
+  resume: ['Quiet Orbit', 'Signal Fire', 'The Long Winter'].map((t, i) => ({ id: slug(t), title: t, subtitle: find(t).kind === 'series' ? `S02E0${i + 2} · Episode ${i + 2}` : String(find(t).year), progress: [0.62, 0.18, 0.4][i], remainingMs: [38, 41, 27][i]! * MIN, image: jfArt(t, 'Backdrop') })),
+  nextUp: ['Atlas Station', 'Kitchen Brigade', 'Starfall Academy', 'Copper Valley'].map((t, i) => ({ id: `${slug(t)}-n`, title: t, subtitle: `S01E0${i + 3} · Episode ${i + 3}`, image: jfArt(t, 'Backdrop') })),
+  history: ['Quiet Orbit', 'Signal Fire', 'Saltwind', 'Atlas Station', 'Paper Kingdoms'].map((t, i) => ({ title: t, subtitle: find(t).kind === 'series' ? `S02E0${i + 1}` : undefined, client: ['Living Room TV · Jellyfin Android TV', 'iPhone · Swiftfin'][i % 2], transcoded: i === 3, at: iso((i + 1) * 20 * HOUR), watchedMs: (35 + i * 9) * MIN })),
+  month: { plays: 46, watchedMs: 38 * HOUR },
+  requestsAvailable: true,
+})));
+app.get('/api/me/requests', json(() => ({ linked: true, requests: seerr().recent.slice(0, 5) })));
+app.get('/api/digest', json(() => ({
+  from: iso(7 * DAY),
+  to: iso(0),
+  added: {
+    movies: ['Iron Bloom', 'The Last Lighthouse', 'Velvet Static', 'Small Hours'].map((t) => ({ id: slug(t), title: t, year: find(t).year, image: `/api/jellyfin/image/items/${slug(t)}/Primary?w=200&tag=demo` })),
+    shows: ['Atlas Station', 'Kitchen Brigade', 'Starfall Academy'].map((t, i) => ({ id: slug(t), title: t, episodes: 3 - i, image: `/api/jellyfin/image/items/${slug(t)}/Primary?w=200&tag=demo` })),
+    other: [{ id: 'a1', title: 'Mira Vale – Northern Static', kind: 'Album' }],
+    runtimeMs: 14 * HOUR,
+  },
+  watched: { plays: 131, watchedMs: 97 * HOUR, viewers: 5, top: [{ title: 'Atlas Station', plays: 19 }, { title: 'Signal Fire', plays: 14 }, { title: 'Quiet Orbit', plays: 8 }, { title: 'Kitchen Brigade', plays: 7 }, { title: 'Paper Kingdoms', plays: 5 }] },
+  storage: { used: 41.2 * TB, total: 56 * TB, soonest: { label: 'Media', daysLeft: 63 } },
+})));
+app.get('/api/digest/settings', json(() => ({ enabled: true, day: 0, hour: 18, lastSent: iso(6 * DAY), canSend: true })));
+const RULE_META = {
+  conditions: {
+    disk_usage: { label: 'A volume is more than N% full', param: { name: 'percent', min: 50, max: 99, default: 90, unit: '%' } },
+    disk_days_left: { label: 'A volume will be full in under N days', param: { name: 'days', min: 1, max: 365, default: 14, unit: 'days' } },
+    service_offline: { label: 'A service has been offline for N minutes', param: { name: 'minutes', min: 1, max: 1440, default: 15, unit: 'minutes' } },
+    stalled_downloads: { label: 'At least N downloads are stalled', param: { name: 'count', min: 1, max: 100, default: 3, unit: 'downloads' } },
+    pending_requests: { label: 'At least N requests are waiting for approval', param: { name: 'count', min: 1, max: 500, default: 5, unit: 'requests' } },
+    active_streams: { label: 'At least N streams are playing', param: { name: 'count', min: 1, max: 100, default: 5, unit: 'streams' } },
+    ended_unwatched: { label: 'Ended series nobody has watched in N days', param: { name: 'days', min: 30, max: 1460, default: 180, unit: 'days' } },
+  },
+  actions: {
+    notify: { label: 'Send a notification', for: null },
+    pause_downloads: { label: 'Pause all download clients', for: ['disk_usage', 'disk_days_left', 'active_streams'] },
+    resume_downloads: { label: 'Resume all download clients', for: null },
+    run_cleanup: { label: 'Run the stalled-download cleanup', for: ['stalled_downloads'] },
+    unmonitor: { label: 'Stop monitoring those series in Sonarr', for: ['ended_unwatched'] },
+  },
+};
+app.get('/api/rules', json(() => ({
+  ...RULE_META,
+  rules: [
+    { id: 'r1', name: 'Disk almost full', enabled: true, condition: 'disk_usage', value: 95, actions: ['notify', 'pause_downloads'], cooldownHours: 12, createdAt: iso(20 * DAY), state: { lastCheck: iso(2 * MIN), matched: false, summary: 'Every volume is under 95%', lastFired: iso(9 * DAY) } },
+    { id: 'r2', name: 'Stalled downloads', enabled: true, condition: 'stalled_downloads', value: 3, actions: ['notify', 'run_cleanup'], cooldownHours: 6, createdAt: iso(20 * DAY), state: { lastCheck: iso(2 * MIN), matched: false, summary: '1 download is stalled' } },
+    { id: 'r3', name: 'Ended and unwatched', enabled: false, condition: 'ended_unwatched', value: 180, actions: ['notify'], cooldownHours: 168, createdAt: iso(8 * DAY), state: { lastCheck: iso(3 * DAY), matched: true, summary: '2 ended series unwatched for 180+ days: Copper Valley, The Long Winter' } },
+  ],
+})));
+app.get('/api/jellyfin/tasks', json(() =>
+  [
+    ['Scan media library', 'Library', 'Running', 0.37, ['Every 12 hours']],
+    ['Refresh people', 'Library', 'Idle', undefined, ['Weekly on Sunday at 03:00']],
+    ['Extract chapter images', 'Library', 'Idle', undefined, ['Daily at 02:00']],
+    ['Clean up collections and playlists', 'Maintenance', 'Idle', undefined, ['On startup']],
+    ['Download missing subtitles', 'Subtitles', 'Idle', undefined, ['Every 6 hours']],
+  ].map(([name, category, state, progress, schedule], i) => ({ id: `${'0'.repeat(31)}${i}`, name, category, state, progress, schedule, last: { endedAt: iso((i + 1) * 3 * HOUR), status: i === 4 ? 'Failed' : 'Completed', error: i === 4 ? 'No subtitle providers configured' : undefined } })),
+));
+app.get('/api/jellyfin/guard', json(() => ({
+  settings: { enabled: true, maxTranscodes: 3, fourK: 'message', maxMbps: 80, message: 'This 4K title is being converted for your device, which strains the server. If you can, please watch it on a TV or app that plays 4K directly.' },
+  last: { at: iso(20_000), streams: 4, transcodes: 1, mbps: 46.2 },
+  recent: [{ at: iso(2 * DAY), kind: '4k', message: '4K is being transcoded: Jonah · Quiet Orbit on Bedroom Fire TV (VideoCodecNotSupported)' }],
+})));
+app.get('/api/library/reclaim', json(() => ({
+  days: 365,
+  total: 4,
+  reclaimable: 412 * GB,
+  kept: 1,
+  checkedAt: iso(4 * MIN),
+  items: [
+    { key: 'a', kind: 'series', instance: 'sonarr', arrId: 1, title: 'Copper Valley', year: 2022, size: 214 * GB, added: iso(700 * DAY), lastWatched: iso(420 * DAY), poster: poster('Copper Valley'), ended: true },
+    { key: 'b', kind: 'movie', instance: 'radarr-4k', instanceName: '4K', arrId: 2, title: 'Ember & Ash', year: 2023, size: 88 * GB, added: iso(500 * DAY), poster: poster('Ember & Ash') },
+    { key: 'c', kind: 'series', instance: 'sonarr', arrId: 3, title: 'The Long Winter', year: 2023, size: 77 * GB, added: iso(600 * DAY), lastWatched: iso(390 * DAY), poster: poster('The Long Winter'), ended: true },
+    { key: 'd', kind: 'movie', instance: 'radarr', arrId: 4, title: 'Lanterns Over Kessa', year: 2024, size: 33 * GB, added: iso(480 * DAY), poster: poster('Lanterns Over Kessa') },
+  ],
+})));
+app.get('/api/settings/sso', json(() => ({
+  enabled: true,
+  issuer: 'https://auth.example.com/application/o/streamforge/',
+  clientId: 'streamforge',
+  clientSecretSet: true,
+  clientSecretHint: '••••41af',
+  label: 'Authentik',
+  claim: 'preferred_username',
+  hidePassword: false,
+  redirectUri: 'https://streamforge.example.com/api/auth/oidc/callback',
+  hasApiKey: true,
+  mfaUsers: [{ userId: 'u-sam', userName: 'Sam', enabledAt: iso(30 * DAY) }],
+})));
+app.get('/api/search', (req, res) => {
+  const q = String(req.query.q ?? '').toLowerCase();
+  const hits = ALL.filter((t) => t.title.toLowerCase().includes(q));
+  res.json({
+    library: hits.slice(0, 4).map((t) => ({ key: `jf:${slug(t.title)}`, source: 'jellyfin', title: t.title, subtitle: t.kind === 'movie' ? 'Movie' : 'Series', year: t.year, image: poster(t.title), status: 'available' })),
+    managed: hits.slice(0, 3).map((t) => ({ key: `arr:${slug(t.title)}`, source: t.kind === 'movie' ? 'radarr' : 'sonarr', title: t.title, subtitle: t.kind === 'movie' ? 'Downloaded' : '10/10 episodes', year: t.year, image: poster(t.title), path: t.kind === 'movie' ? '/radarr' : '/sonarr', status: t.kind === 'movie' ? 'downloaded' : undefined })),
+    discover: q.length > 1 ? [
+      { key: 'd1', source: 'seerr', title: `${q[0]!.toUpperCase()}${q.slice(1)} Rising`, subtitle: 'Movie', year: 2026, mediaType: 'movie', tmdbId: 9001, status: 'none', overview: 'A fictional film that isn’t in your library yet.' },
+      { key: 'd2', source: 'seerr', title: `The ${q[0]!.toUpperCase()}${q.slice(1)} Files`, subtitle: 'Series', year: 2025, mediaType: 'tv', tmdbId: 9002, status: 'requested' },
+    ] : [],
+    canRequest: true,
+    canAdd: true,
+  });
+});
 
 app.post('/api/:kind/queue/:id/action', (_req, res) => res.json({ ok: true }));
 app.get('/api/:kind/missing', (req, res) => {

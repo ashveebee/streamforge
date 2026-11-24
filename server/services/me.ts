@@ -78,8 +78,8 @@ export async function myOverview(ctx: JfCtx) {
   };
 
   return {
-    resume: resume.Items.map(card),
-    nextUp: nextUp.Items.map(card),
+    resume: (resume.Items ?? []).map(card),
+    nextUp: (nextUp.Items ?? []).map(card),
     history: rows
       .filter((r) => r.watched_ms >= 60_000)
       .map((r) => ({

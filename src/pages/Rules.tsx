@@ -31,6 +31,7 @@ const COOLDOWNS = [
   { h: 168, label: 'Again after a week' },
 ];
 
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const allowed = (meta: RulesStatus, a: ActionType, c: ConditionType) => !meta.actions[a].for || meta.actions[a].for!.includes(c);
 
 function RuleForm({ meta, rule, initial, onDone }: { meta: RulesStatus; rule?: Rule; initial?: RuleInput; onDone: () => void }) {
@@ -113,7 +114,7 @@ function RuleRow({ meta, r }: { meta: RulesStatus; r: Rule }) {
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium">{r.name}</div>
         <div className="text-[11px] text-ink-3">
-          If {meta.conditions[r.condition].label.replace('N', String(r.value))} → {r.actions.map((a) => meta.actions[a].label.toLowerCase()).join(', ')}
+          If {lower(meta.conditions[r.condition].label.replace('N', String(r.value)))} → {r.actions.map((a) => meta.actions[a].label.toLowerCase()).join(', ')}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-4">
           {s.lastError ? <span className="text-bad">{s.lastError}</span> : s.summary ? <span>{s.summary}</span> : <span>Not checked yet</span>}
