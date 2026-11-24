@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
+import { audit } from './lib/audit.js';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import { handle, HttpError, pipeImage } from './lib/handle.js';
@@ -86,7 +87,7 @@ for (const kind of ARR_KINDS) {
     requireAdmin,
     handle(null, async (req) => {
       const patch = parseBody(autoImportPatch, req);
-      console.log(`[auto-import:${kind}] settings changed by ${req.session!.userName}: ${JSON.stringify(patch)}`);
+      audit(req, `[auto-import:${kind}] settings changed: ${JSON.stringify(patch)}`);
       return autoImport(kind).update(patch);
     }),
   );
@@ -96,6 +97,7 @@ for (const kind of ARR_KINDS) {
     handle(null, async (req) => {
       const opts = parseBody(autoImportRun, req);
       if (opts.instance) instanceOf(kind, req);
+      if (!opts.dryRun) audit(req, `[auto-import] ${opts.instance ?? kind}: run manually`);
       const results = await autoImport(kind).run({ trigger: 'manual', ...opts });
       return { results, status: autoImport(kind).status() };
     }),
@@ -109,7 +111,7 @@ for (const kind of ARR_KINDS) {
       if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'Invalid queue id');
       const { action } = parseBody(queueActionBody, req);
       await queueAction(inst, id, action);
-      console.log(`[queue] ${inst.id} #${id}: ${action} by ${req.session!.userName}`);
+      audit(req, `[queue] ${inst.id} #${id}: ${action}`);
       return { ok: true };
     }),
   );
@@ -126,7 +128,7 @@ for (const kind of ARR_KINDS) {
     requireAdmin,
     withInstance(kind, async (inst, req) => {
       const { ids } = parseBody(searchBody, req);
-      console.log(`[search] ${inst.id}: ${ids.length ? `${ids.length} item(s)` : 'all missing'} by ${req.session!.userName}`);
+      audit(req, `[search] ${inst.id}: ${ids.length ? `${ids.length} item(s)` : 'all missing'}`);
       return arrSearch(inst, ids);
     }),
   );
@@ -134,7 +136,7 @@ for (const kind of ARR_KINDS) {
     `/${kind}/search-upgrades`,
     requireAdmin,
     withInstance(kind, async (inst, req) => {
-      console.log(`[search] ${inst.id}: cutoff-unmet search by ${req.session!.userName}`);
+      audit(req, `[search] ${inst.id}: cutoff-unmet search`);
       return searchUpgrades(inst);
     }),
   );

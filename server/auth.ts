@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { membersCanSignIn } from './access.js';
 import { newDeviceId, sessions, SESSION_COOKIE, type Session } from './lib/sessions.js';
 import { UpstreamError } from './lib/http.js';
+import { audit } from './lib/audit.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
 import { urlField } from './settingsRoutes.js';
@@ -171,7 +172,7 @@ authRouter.post('/setup', setupLimiter, async (req, res) => {
       return;
     }
     saveSettings('jellyfin', { url }, 'setup');
-    console.log(`[settings] Jellyfin set to ${url} during first-run setup`);
+    audit({ ip: req.ip }, `[settings] Jellyfin set to ${url} during first-run setup`);
     res.json({ name: info.meta?.server, version: info.version, online: true, configured: true });
   } catch (err) {
     res.status(502).json({ error: 'upstream', message: `Could not reach Jellyfin: ${(err as Error).message}` });
@@ -194,6 +195,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
     const isAdmin = !!result.User.Policy?.IsAdministrator;
     if (!isAdmin && !membersCanSignIn()) {
       await jellyfin.logout(result.AccessToken, deviceId);
+      audit({ userId: result.User.Id, userName: result.User.Name, ip: req.ip }, '[auth] sign-in refused: member access is off', false);
       res.status(403).json({
         error: 'forbidden',
         message: 'StreamForge is restricted to Jellyfin administrators.',
@@ -212,10 +214,12 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       serverId: result.ServerId,
     });
     res.cookie(SESSION_COOKIE, session.id, { ...cookieOptions(req), maxAge: config.sessionTtlMs });
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in');
     res.json({ user: publicUser(session) });
   } catch (err) {
     const e = err as UpstreamError;
     if (e.status === 401) {
+      audit({ userName: body.data.username, ip: req.ip }, '[auth] sign-in failed: wrong username or password', false);
       res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
     } else {
       res.status(502).json({ error: 'upstream', message: `Could not reach Jellyfin: ${e.message}` });
@@ -228,6 +232,7 @@ authRouter.post('/logout', async (req, res) => {
   if (session) {
     sessions.destroy(session.id);
     await jellyfin.logout(session.token, session.deviceId);
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed out');
   }
   res.clearCookie(SESSION_COOKIE, cookieOptions(req));
   res.json({ ok: true });

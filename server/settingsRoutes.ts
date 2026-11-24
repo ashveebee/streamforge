@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
 import { AREAS, memberAccess, setMemberAccess } from './access.js';
 import { Router } from 'express';
+import { audit } from './lib/audit.js';
 import { z } from 'zod';
 import { createClient, UpstreamError } from './lib/http.js';
 import { sessions } from './lib/sessions.js';
@@ -210,7 +211,7 @@ settingsRouter.put('/services/:id', (req, res) => {
   // Sessions belong to the old Jellyfin server; they mean nothing on a new one.
   const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(s.url);
   if (signedOut) sessions.clear();
-  console.log(`[settings] ${SERVICE_NAMES[id]} updated by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} updated`);
   res.json({ service: describe(id), signedOut });
 });
 
@@ -228,7 +229,7 @@ settingsRouter.delete('/services/:id', (req, res) => {
   resetSettings(id);
   const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(resolve(id).settings.url);
   if (signedOut) sessions.clear();
-  console.log(`[settings] ${SERVICE_NAMES[id]} reset to environment by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} reset to environment`);
   res.json({ service: describe(id), signedOut });
 });
 
@@ -245,7 +246,7 @@ settingsRouter.put('/services/:id/enabled', (req, res) => {
     return;
   }
   setEnabled(id, parsed.data.enabled);
-  console.log(`[settings] ${SERVICE_NAMES[id]} ${parsed.data.enabled ? 'enabled' : 'disabled'} by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[id]} ${parsed.data.enabled ? 'enabled' : 'disabled'}`);
   res.json({ service: describe(id), signedOut: false });
 });
 
@@ -293,7 +294,7 @@ settingsRouter.post('/instances', (req, res) => {
   if (!url) return badRequest(res, 'Enter the server address', 'url');
   if (!apiKey) return badRequest(res, 'Enter the API key', 'apiKey');
   const inst = addInstance({ kind, name, url, apiKey });
-  console.log(`[settings] ${SERVICE_NAMES[kind]} instance "${name}" added by ${req.session!.userName}`);
+  audit(req, `[settings] ${SERVICE_NAMES[kind]} instance "${name}" added`);
   res.json({ instance: describeInstances().find((i) => i.id === inst.id) });
 });
 
@@ -309,14 +310,14 @@ settingsRouter.put('/instances/:id', (req, res) => {
     return badRequest(res, 'Re-enter the API key when changing the server address.', 'apiKey');
   }
   updateInstance(id, { name: b.name, url: b.url, apiKey: b.apiKey || undefined, enabled: b.enabled });
-  console.log(`[settings] instance ${id} updated by ${req.session!.userName}`);
+  audit(req, `[settings] instance ${id} updated`);
   res.json({ instance: describeInstances().find((i) => i.id === id) });
 });
 
 settingsRouter.delete('/instances/:id', (req, res) => {
   const id = String(req.params.id);
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
-  console.log(`[settings] instance ${id} removed by ${req.session!.userName}`);
+  audit(req, `[settings] instance ${id} removed`);
   res.json({ ok: true });
 });
 
@@ -345,6 +346,7 @@ settingsRouter.put('/notifications/public-url', (req, res) => {
   const parsed = z.object({ url: urlField }).strict().safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', 'publicUrl');
   setPublicUrl(parsed.data.url);
+  audit(req, `[settings] public address set to ${parsed.data.url || '(none)'}`);
   res.json(notificationsStatus());
 });
 
@@ -353,7 +355,7 @@ settingsRouter.post('/notifications/channels', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   try {
     const ch = saveChannel(parsed.data);
-    console.log(`[notify] channel "${ch.name}" (${ch.type}) added by ${req.session!.userName}`);
+    audit(req, `[notify] channel "${ch.name}" (${ch.type}) added`);
     res.json({ channel: describeChannel(ch) });
   } catch (err) {
     channelError(res, err);
@@ -365,6 +367,7 @@ settingsRouter.put('/notifications/channels/:id', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   try {
     const ch = saveChannel({ ...parsed.data, id: String(req.params.id) });
+    audit(req, `[notify] channel "${ch.name}" (${ch.type}) updated`);
     res.json({ channel: describeChannel(ch) });
   } catch (err) {
     channelError(res, err);
@@ -373,6 +376,7 @@ settingsRouter.put('/notifications/channels/:id', (req, res) => {
 
 settingsRouter.delete('/notifications/channels/:id', (req, res) => {
   if (!removeChannel(String(req.params.id))) return res.status(404).json({ error: 'not_found', message: 'Unknown channel' });
+  audit(req, `[notify] channel ${String(req.params.id)} removed`);
   res.json({ ok: true });
 });
 
@@ -422,6 +426,6 @@ settingsRouter.put('/members', (req, res) => {
   const parsed = z.object({ signIn: z.boolean().optional(), areas: z.array(z.enum(AREAS)).max(AREAS.length).optional() }).strict().safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid');
   const next = setMemberAccess(parsed.data);
-  console.log(`[settings] member access changed by ${req.session!.userName}: ${JSON.stringify(next)}`);
+  audit(req, `[settings] member access changed: ${JSON.stringify(next)}`);
   res.json({ ...next, available: AREAS });
 });

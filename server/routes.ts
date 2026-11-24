@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import { Router } from 'express';
+import { audit, auditEntries } from './lib/audit.js';
 import { z } from 'zod';
 import { handle, HttpError, pipeImage } from './lib/handle.js';
 import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup, type CleanupAction } from './services/cleanup.js';
@@ -55,6 +56,7 @@ api.put(
   handle(null, async (req) => {
     const p = Number((req.body as { percent?: unknown } | undefined)?.percent);
     if (!Number.isInteger(p) || p < 50 || p > 99) throw new HttpError(400, 'Pick a value between 50 and 99%');
+    audit(req, `[storage] disk alert threshold set to ${p}%`);
     return setAlertPercent(p);
   }),
 );
@@ -75,7 +77,7 @@ api.put(
   handle(null, async (req) => {
     const r = cleanupPatch.safeParse(req.body ?? {});
     if (!r.success) throw new HttpError(400, r.error.issues[0]?.message ?? 'Invalid settings');
-    console.log(`[cleanup] settings changed by ${req.session!.userName}: ${JSON.stringify(r.data)}`);
+    audit(req, `[cleanup] settings changed: ${JSON.stringify(r.data)}`);
     return updateCleanup(r.data);
   }),
 );
@@ -84,6 +86,7 @@ api.post(
   requireAdmin,
   handle(null, async (req) => {
     const dryRun = (req.body as { dryRun?: unknown } | undefined)?.dryRun === true;
+    if (!dryRun) audit(req, '[cleanup] run manually');
     const results = await runCleanup({ dryRun });
     return { results, status: cleanupStatus() };
   }),
@@ -118,7 +121,7 @@ api.post(
     // A stop can carry a message explaining why, shown before playback ends.
     if (b.data.command === 'stop' && b.data.text) await jellyfin.controlSession(ctxOf(req.session!), id, 'message', b.data.text);
     await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
-    console.log(`[jellyfin] session ${id}: ${b.data.command} by ${req.session!.userName}`);
+    audit(req, `[jellyfin] stream ${id}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
     return { ok: true };
   }),
 );
@@ -161,11 +164,26 @@ api.post(
     const decision = String(req.params.decision);
     if (!Number.isInteger(id) || id <= 0 || (decision !== 'approve' && decision !== 'decline')) throw new HttpError(400, 'Invalid request');
     await decideRequest(id, decision);
-    console.log(`[seerr] request #${id} ${decision}d by ${req.session!.userName}`);
+    audit(req, `[seerr] request #${id} ${decision}d`);
     return { ok: true };
   }),
 );
 api.get('/infinidisk/overview', handle('infinidisk', () => infinidiskOverview()));
+
+/* --------------------------------- audit -------------------------------- */
+
+api.get('/audit', requireAdmin, (req, res) => {
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 100) : undefined);
+  res.set('Cache-Control', 'no-store').json(
+    auditEntries({
+      category: str(req.query.category),
+      user: str(req.query.user),
+      q: str(req.query.q),
+      before: Number(req.query.before) || undefined,
+      limit: Number(req.query.limit) || undefined,
+    }),
+  );
+});
 
 /* -------------------------------- settings ------------------------------ */
 
