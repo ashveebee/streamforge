@@ -50,6 +50,9 @@ server.
     <td><a href="docs/screenshots/bazarr.jpg"><img src="docs/screenshots/bazarr.jpg" alt="Bazarr: episodes and movies missing subtitles"></a><br><b>Bazarr.</b> Missing subtitles with search buttons.</td>
     <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
   </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/buffering.jpg"><img src="docs/screenshots/buffering.jpg" alt="Buffering diagnosis: a stream that stalled, the likely cause with evidence, and what to try"></a><br><b>Why did it buffer?</b> Spots streams that stalled and explains the likely cause, from the transcoder to your upload.</td>
+  </tr>
 </table>
 
 ## Features
@@ -158,6 +161,23 @@ server.
 - **Transcode and bandwidth alerts.** Get alerted when too many streams
   transcode at once, total bandwidth passes a limit, or a 4K file is being
   transcoded (optionally messaging the viewer).
+- **Buffering diagnosis.** StreamForge records every stream, the host's CPU
+  and network, download client speeds and Jellyfin's response time every 15
+  seconds, and keeps three days. It spots streams that fell behind real time
+  while not paused and explains the likely cause, with evidence and what to
+  try:
+  - Jellyfin converting slower than real time (with its transcode reasons
+    and whether hardware acceleration is on);
+  - a maxed-out CPU;
+  - a full internet upload for viewers away from home, split into streams
+    and torrent seeding;
+  - a video bitrate the connection can't carry;
+  - downloads running flat out, or Jellyfin slow or not responding.
+  When nothing on the server stands out, it says so: the cause is then the
+  viewer's Wi-Fi, connection or device. When someone reports buffering, pick
+  their stream and roughly when, and StreamForge finds the nearest stall.
+  Admins only; needs a Jellyfin API key. Set your upload speed on the page for
+  sharper results (otherwise the highest upload seen is used).
 - **Rules.** Simple automations: if a disk is nearly full, pause the download
   clients; if downloads stall, run the cleanup; if a service stays down,
   notify; and more. Rules never delete anything.

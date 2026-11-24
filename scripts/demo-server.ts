@@ -9,6 +9,8 @@
  *   npm run demo      → UI on http://localhost:5173, already signed in
  */
 import express from 'express';
+import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js';
+import { demoTicks } from './demo-diagnosis.js';
 import type {
   ActivityEntry,
   AutoImportEntry,
@@ -1000,6 +1002,45 @@ app.get('/api/settings/clients', json(() => ({
     { id: 'nzbget', name: 'NZBGet', fields: ['username', 'password'] },
   ],
 })));
+
+// Buffering diagnosis over a made-up timeline (see demo-diagnosis.ts).
+let demoUpload: number | null = 50;
+const diagTicks = demoTicks();
+const diagIncidents = findIncidents(diagTicks);
+const diagStatus = () => {
+  const plays = new Map<string, { id: string; user: string; title: string; device?: string; remote: boolean; first: number; last: number }>();
+  for (const t of diagTicks) for (const p of t.streams) {
+    const cur = plays.get(p.id);
+    if (cur) cur.last = t.t;
+    else plays.set(p.id, { id: p.id, user: p.user, title: p.title, device: p.device, remote: p.remote, first: t.t, last: t.t });
+  }
+  return {
+    recording: true,
+    since: diagTicks[0]?.t,
+    sampleMs: 15_000,
+    keepDays: 3,
+    uploadMbps: demoUpload,
+    hostMetrics: true,
+    incidents: diagIncidents,
+    plays: [...plays.values()].sort((a, b) => b.last - a.last),
+  };
+};
+app.get('/api/diagnosis', json(diagStatus));
+app.put('/api/diagnosis/settings', (req, res) => {
+  demoUpload = typeof req.body?.uploadMbps === 'number' ? req.body.uploadMbps : null;
+  res.json(diagStatus());
+});
+app.get('/api/diagnosis/explain', (req, res) => {
+  const opts = { uploadBps: demoUpload ? demoUpload * 1e6 : undefined, history: diagTicks };
+  const inc = diagIncidents.find((i) => i.id === req.query.incident);
+  if (inc) return void res.json({ incident: inc, ...analyse(diagTicks, { from: inc.start, to: inc.end, session: inc.session }, opts) });
+  const at = Number(req.query.at);
+  if (!at) return void res.status(400).json({ error: 'bad_request', message: 'Pick a time to check' });
+  const session = typeof req.query.session === 'string' ? req.query.session : undefined;
+  const near = diagIncidents.find((i) => i.session === session && Math.abs(i.start - at) < 10 * 60_000);
+  if (near) return void res.json({ incident: near, ...analyse(diagTicks, { from: near.start, to: near.end, session }, opts) });
+  res.json({ ...analyse(diagTicks, { from: at - 60_000, to: at + 30_000, session }, opts) });
+});
 
 app.get('/api/audit', json(() => ({
   entries: [

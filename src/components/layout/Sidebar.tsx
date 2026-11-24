@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
@@ -151,6 +151,7 @@ export function Sidebar({
         {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/diagnose" icon={Radar} label="Buffering" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/rules" icon={Sparkles} label="Rules" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/audit" icon={ScrollText} label="Audit log" collapsed={collapsed} onNavigate={onNavigate} />}

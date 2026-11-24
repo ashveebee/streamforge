@@ -82,6 +82,11 @@ const migrations = [
      ok         INTEGER NOT NULL DEFAULT 1
    );
    CREATE INDEX audit_at ON audit(at);`,
+  // Timeline samples for the buffering diagnosis (see services/diagnosis).
+  `CREATE TABLE diag_ticks (
+     t     INTEGER PRIMARY KEY,
+     data  TEXT NOT NULL
+   );`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */

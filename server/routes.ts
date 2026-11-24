@@ -26,6 +26,7 @@ import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
@@ -518,6 +519,35 @@ api.post(
 );
 
 /* --------------------------------- audit -------------------------------- */
+
+/* ------------------------------- diagnosis ------------------------------- */
+
+api.get('/diagnosis', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(diagnosisStatus()));
+api.get(
+  '/diagnosis/explain',
+  requireAdmin,
+  handle(null, async (req) => {
+    const str = (v: unknown) => (typeof v === 'string' && v.length <= 200 ? v : undefined);
+    try {
+      return explain({ incident: str(req.query.incident), session: str(req.query.session), at: Number(req.query.at) || undefined });
+    } catch (err) {
+      if (err instanceof DiagnosisError) throw new HttpError(400, err.message);
+      throw err;
+    }
+  }),
+);
+const diagnosisBody = z.object({ uploadMbps: z.number().positive().max(100_000).nullable() }).strict();
+api.put(
+  '/diagnosis/settings',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = diagnosisBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Enter your upload speed in Mbps');
+    updateDiagnosisPrefs(b.data);
+    audit(req, b.data.uploadMbps ? `[diagnosis] upload speed set to ${b.data.uploadMbps} Mbps` : '[diagnosis] upload speed cleared');
+    return diagnosisStatus();
+  }),
+);
 
 api.get('/audit', requireAdmin, (req, res) => {
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 100) : undefined);

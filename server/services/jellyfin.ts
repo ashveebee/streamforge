@@ -167,6 +167,8 @@ interface JfMediaStream {
   Channels?: number;
   IsDefault?: boolean;
   VideoRangeType?: string;
+  RealFrameRate?: number;
+  AverageFrameRate?: number;
 }
 
 interface JfItem {
@@ -328,6 +330,8 @@ function normaliseSession(s: JfSession) {
       videoCodec: video?.Codec,
       /** Source video bitrate in bits/s, when Jellyfin reports it. */
       bitrate: video?.BitRate,
+      /** Frames per second of the source video. */
+      frameRate: video?.RealFrameRate ?? video?.AverageFrameRate,
       audio: audio?.DisplayTitle ?? audio?.Codec,
       ...artworkFor(item),
     },
