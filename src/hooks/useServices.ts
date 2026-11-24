@@ -100,3 +100,39 @@ export function useLibraryScan() {
     },
   });
 }
+
+/* ---------------------------- cleanup suggestions ---------------------------- */
+
+export interface ReclaimItem {
+  key: string;
+  kind: 'movie' | 'series';
+  instance: string;
+  instanceName?: string;
+  arrId: number;
+  title: string;
+  year?: number;
+  size: number;
+  added?: string;
+  lastWatched?: string;
+  poster?: string;
+  ended?: boolean;
+}
+export interface ReclaimResult {
+  days: number;
+  total: number;
+  reclaimable: number;
+  kept: number;
+  items: ReclaimItem[];
+  checkedAt: string;
+}
+
+export const useReclaim = (days: number) =>
+  useQuery({ queryKey: ['library', 'reclaim', days], queryFn: ({ signal }) => api<ReclaimResult>(`/library/reclaim?days=${days}`, { signal }), placeholderData: (p) => p, staleTime: 60_000 });
+
+export function useReclaimAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { kind: 'movie' | 'series'; instance: string; id: number; action: 'delete' | 'unmonitor' | 'keep' | 'unkeep' }) => api('/library/reclaim', { method: 'POST', body: b }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library', 'reclaim'] }),
+  });
+}

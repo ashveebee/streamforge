@@ -10,6 +10,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { ReclaimCard } from '@/components/widgets/ReclaimCard';
 
 function ItemList({ items, total, empty }: { items: LibraryHealthItem[]; total: number; empty: string }) {
   if (!items.length) return <EmptyState icon={Check} title="All good" description={empty} />;
@@ -119,6 +120,7 @@ export default function LibraryHealthPage() {
               ) : (
                 <p className="text-xs text-ink-4">Jellyfin couldn’t be reached, so the Jellyfin cross-checks are skipped.</p>
               )}
+              {d.hasJellyfin && <ReclaimCard />}
             </div>
           )
         }

@@ -16,6 +16,7 @@ import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { playbackStats } from './services/playStats.js';
+import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
@@ -57,6 +58,32 @@ api.post('/health/recheck', handle(null, async (req) => {
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
 api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));
+api.get(
+  '/library/reclaim',
+  handle('jellyfin', (req) => {
+    const d = Number(req.query.days);
+    return reclaimSuggestions(ctxOf(req.session!), (UNWATCHED_DAYS as readonly number[]).includes(d) ? d : 365);
+  }),
+);
+const reclaimBody = z
+  .object({ kind: z.enum(['movie', 'series']), instance: z.string().max(64), id: z.number().int().positive(), action: z.enum(['delete', 'unmonitor', 'keep', 'unkeep']) })
+  .strict();
+api.post(
+  '/library/reclaim',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = reclaimBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const { kind, instance, id, action } = b.data;
+    if (action === 'keep' || action === 'unkeep') {
+      keepItem(`${instance}:${kind}:${id}`, action === 'keep');
+      return { ok: true };
+    }
+    const r = await reclaim(kind, instance, id, action);
+    audit(req, `[library] ${action === 'delete' ? 'deleted' : 'unmonitored'} ${kind} “${r.title}” in ${r.instance}${action === 'delete' ? ' (files removed)' : ''}`);
+    return { ok: true };
+  }),
+);
 api.get('/storage/forecast', (_req, res) => res.set('Cache-Control', 'no-store').json(storageForecast()));
 api.put(
   '/storage/alert',
