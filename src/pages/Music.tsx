@@ -9,7 +9,8 @@ import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { MissingCard } from '@/components/widgets/MissingCard';
 
 const WORDS = {
@@ -26,7 +27,7 @@ function Page({ kind }: { kind: MusicKind }) {
   return (
     <>
       <ServiceHeader id={kind} />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading your library" hint="Asking the app for its queue and releases…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

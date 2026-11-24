@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { ReclaimCard } from '@/components/widgets/ReclaimCard';
 
 function ItemList({ items, total, empty }: { items: LibraryHealthItem[]; total: number; empty: string }) {
@@ -87,7 +88,7 @@ export default function LibraryHealthPage() {
           q.data ? `Cross-checks Sonarr, Radarr and Jellyfin · checked ${relative(q.data.checkedAt)}` : 'Cross-checks Sonarr, Radarr and Jellyfin'
         }
       />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Checking library health" hint="Cross-checking Sonarr, Radarr and Jellyfin…" />}>
         {(d) =>
           !d.hasSonarr && !d.hasRadarr ? (
             <Card><EmptyState icon={Stethoscope} title="Connect Sonarr or Radarr" description="Library health compares what Sonarr and Radarr manage with what Jellyfin has." /></Card>

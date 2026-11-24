@@ -8,6 +8,7 @@ import { Card, CardHeader } from '../ui/Card';
 import { FadeImage } from '../ui/Image';
 import { QueryState, Skeleton } from '../ui/States';
 import { EmptyState } from '../ui/States';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 export function RecentlyAddedWidget() {
   const q = useLatest();
@@ -45,7 +46,7 @@ export function RecentlyAddedWidget() {
                 transition={{ delay: Math.min(idx, 10) * 0.03 }}
                 className="group w-32 shrink-0 snap-start sm:w-36"
               >
-                <div className="relative">
+                <TitleLink to={`/media/jellyfin/${i.id}`} className="relative block">
                   <FadeImage
                     src={jfImage(i.poster, 320)}
                     alt={i.title}
@@ -58,8 +59,8 @@ export function RecentlyAddedWidget() {
                       {i.rating.toFixed(1)}
                     </span>
                   )}
-                </div>
-                <div className="mt-2 truncate text-[13px] font-medium">{i.title}</div>
+                </TitleLink>
+                <TitleLink to={`/media/jellyfin/${i.id}`} className="mt-2 block truncate text-[13px] font-medium">{i.title}</TitleLink>
                 <div className="truncate text-[11px] text-ink-3">{i.subtitle ?? i.year ?? ''}</div>
                 <div className="text-[11px] text-ink-4">{relative(i.added)}</div>
               </motion.div>

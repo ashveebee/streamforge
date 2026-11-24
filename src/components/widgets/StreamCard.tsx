@@ -10,6 +10,7 @@ import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { DeviceGlyph } from './NowPlayingHero';
 import { kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 function Row({ icon: Icon, label, children }: { icon: typeof Cpu; label: string; children: React.ReactNode }) {
   return (
@@ -58,7 +59,9 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
               <Pill>{kindLabel(s.item.type)}</Pill>
               {s.item.year && <Pill>{s.item.year}</Pill>}
             </div>
-            <h3 className="truncate text-lg leading-tight font-semibold text-white">{titleOf(s)}</h3>
+            <h3 className="truncate text-lg leading-tight font-semibold text-white">
+              <TitleLink to={s.item.type === 'Audio' ? undefined : `/media/jellyfin/${s.item.id}`}>{titleOf(s)}</TitleLink>
+            </h3>
             {subtitle && <p className="truncate text-sm text-ink-2">{subtitle}</p>}
           </div>
         </div>

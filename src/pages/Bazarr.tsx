@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 
 function SearchButton({ label, onClick, busy, done }: { label: string; onClick: () => void; busy: boolean; done: boolean }) {
   return (
@@ -30,7 +31,7 @@ export default function BazarrPage() {
   return (
     <>
       <ServiceHeader id="bazarr" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading subtitles" hint="Asking Bazarr what’s missing…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

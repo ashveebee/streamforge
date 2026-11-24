@@ -5,6 +5,7 @@ import type { UpcomingItem } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { FadeImage } from '../ui/Image';
 import { EmptyState, SkeletonRows } from '../ui/States';
+import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
 
 const KIND_LABEL: Record<UpcomingItem['kind'], string> = {
   episode: 'Airs',
@@ -42,7 +43,7 @@ export function UpcomingList({ items, limit }: { items: UpcomingItem[]; limit?: 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="size-1.5 shrink-0 rounded-full" style={{ background: i.source === 'sonarr' ? 'var(--color-sonarr)' : 'var(--color-radarr)' }} />
-                    <span className="truncate text-[13px] font-medium">{i.title}</span>
+                    <TitleLink to={arrTitlePath(i.source, i.tmdbId)} className="truncate text-[13px] font-medium">{i.title}</TitleLink>
                   </div>
                   <div className="truncate text-[11px] text-ink-3">{i.subtitle}</div>
                   <div className="truncate text-[11px] text-ink-4">

@@ -7,8 +7,10 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { ChartTooltip, Legend } from '@/components/ui/Chart';
 import { FadeImage } from '@/components/ui/Image';
 import { StatTile } from '@/components/ui/Stat';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { RequestDecision, RequestRow } from '@/components/widgets/RequestsWidget';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 // Two-slice categorical split; validated pair.
 const SPLIT = [
@@ -21,7 +23,7 @@ export default function SeerrPage() {
   return (
     <>
       <ServiceHeader id="seerr" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading requests" hint="Asking Seerr for the latest requests…" />}>
         {(d) => {
           const split = SPLIT.map((s) => ({ name: s.label, value: d.counts[s.key], color: s.color }));
           return (
@@ -47,7 +49,7 @@ export default function SeerrPage() {
                             <div className="relative flex gap-3 p-3">
                               <FadeImage src={r.poster} alt={r.title} className="aspect-[2/3] w-16 shrink-0 rounded-lg ring-1 ring-white/10" />
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-semibold">{r.title}</div>
+                                <TitleLink to={r.tmdbId ? `/media/${r.type}/${r.tmdbId}` : undefined} className="block truncate text-sm font-semibold">{r.title}</TitleLink>
                                 <div className="text-[11px] text-ink-3">{r.year} · {r.type === 'tv' ? 'Series' : 'Movie'}{r.is4k ? ' · 4K' : ''}</div>
                                 <div className="mt-2 text-[11px] text-ink-4">Requested by <span className="text-ink-2">{r.requestedBy}</span></div>
                                 <div className="text-[11px] text-ink-4">{relative(r.createdAt)}</div>

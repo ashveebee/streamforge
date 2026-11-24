@@ -19,6 +19,7 @@ import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
+import { arrTitleSearch, jellyfinMedia, mediaDetails } from './services/media.js';
 import { myOverview, myRequests } from './services/me.js';
 import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
@@ -303,6 +304,38 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
     }),
   );
 }
+
+/* --------------------------------- media -------------------------------- */
+
+/* Title details. Open to every signed-in user; each section respects access. */
+api.get(
+  '/media/jellyfin/:id',
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    if (!jellyfin.isValidId(id)) throw new HttpError(400, 'Invalid id');
+    return jellyfinMedia(ctxOf(req.session!), id);
+  }),
+);
+api.get(
+  '/media/:type/:tmdbId',
+  handle(null, async (req) => {
+    const type = String(req.params.type);
+    const tmdbId = Number(req.params.tmdbId);
+    if ((type !== 'movie' && type !== 'tv') || !Number.isInteger(tmdbId) || tmdbId <= 0) throw new HttpError(400, 'Invalid title');
+    return mediaDetails(ctxOf(req.session!), type, tmdbId, { isAdmin: !!req.session!.isAdmin, can: (a) => canSee(req, a as never) });
+  }),
+);
+api.post(
+  '/media/search',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ kind: z.enum(['radarr', 'sonarr']), instance: z.string().max(64), id: z.number().int().positive(), title: z.string().max(200).optional() }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const r = await arrTitleSearch(b.data.kind, b.data.instance, b.data.id);
+    audit(req, `[search] ${b.data.instance}: search for ${b.data.title ?? `#${b.data.id}`}`);
+    return r;
+  }),
+);
 
 /* ---------------------------------- me ---------------------------------- */
 

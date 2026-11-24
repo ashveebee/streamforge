@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
+import { lazyPage } from '@/lib/lazyPage';
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useRouteError } from 'react-router';
 import { AnimatePresence } from 'motion/react';
 import { Lock } from 'lucide-react';
@@ -12,26 +13,28 @@ import { Loader } from '@/components/ui/Loader';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 
-const NowPlaying = lazy(() => import('@/pages/NowPlaying'));
-const Jellyfin = lazy(() => import('@/pages/Jellyfin'));
-const Sonarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.SonarrPage })));
-const Radarr = lazy(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
-const Prowlarr = lazy(() => import('@/pages/Prowlarr'));
-const Seerr = lazy(() => import('@/pages/Seerr'));
-const Bazarr = lazy(() => import('@/pages/Bazarr'));
-const Lidarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.LidarrPage })));
-const Readarr = lazy(() => import('@/pages/Music').then((m) => ({ default: m.ReadarrPage })));
-const Infinidisk = lazy(() => import('@/pages/Infinidisk'));
-const System = lazy(() => import('@/pages/System'));
-const Stats = lazy(() => import('@/pages/Stats'));
-const LibraryHealth = lazy(() => import('@/pages/LibraryHealth'));
-const Rules = lazy(() => import('@/pages/Rules'));
-const Digest = lazy(() => import('@/pages/Digest'));
-const Me = lazy(() => import('@/pages/Me'));
-const Downloads = lazy(() => import('@/pages/Downloads'));
-const Audit = lazy(() => import('@/pages/Audit'));
-const Settings = lazy(() => import('@/pages/Settings'));
-const NotFound = lazy(() => import('@/pages/NotFound'));
+const NowPlaying = lazyPage(() => import('@/pages/NowPlaying'));
+const Jellyfin = lazyPage(() => import('@/pages/Jellyfin'));
+const Sonarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.SonarrPage })));
+const Radarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
+const Prowlarr = lazyPage(() => import('@/pages/Prowlarr'));
+const Seerr = lazyPage(() => import('@/pages/Seerr'));
+const Bazarr = lazyPage(() => import('@/pages/Bazarr'));
+const Lidarr = lazyPage(() => import('@/pages/Music').then((m) => ({ default: m.LidarrPage })));
+const Readarr = lazyPage(() => import('@/pages/Music').then((m) => ({ default: m.ReadarrPage })));
+const Infinidisk = lazyPage(() => import('@/pages/Infinidisk'));
+const System = lazyPage(() => import('@/pages/System'));
+const Stats = lazyPage(() => import('@/pages/Stats'));
+const LibraryHealth = lazyPage(() => import('@/pages/LibraryHealth'));
+const Rules = lazyPage(() => import('@/pages/Rules'));
+const Digest = lazyPage(() => import('@/pages/Digest'));
+const Media = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.MediaPage })));
+const JellyfinMedia = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.JellyfinMediaPage })));
+const Me = lazyPage(() => import('@/pages/Me'));
+const Downloads = lazyPage(() => import('@/pages/Downloads'));
+const Audit = lazyPage(() => import('@/pages/Audit'));
+const Settings = lazyPage(() => import('@/pages/Settings'));
+const NotFound = lazyPage(() => import('@/pages/NotFound'));
 
 function Splash() {
   return (
@@ -105,6 +108,8 @@ const router = createBrowserRouter([
       { path: '/settings', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
       { path: '/me', element: page(<Me />) },
+      { path: '/media/jellyfin/:id', element: page(<JellyfinMedia />) },
+      { path: '/media/:type/:id', element: page(<Media />) },
       { path: '/digest', element: page(<Digest />) },
       { path: '/rules', element: page(<Rules />) },
       { path: '/downloads', element: page(<Downloads />, 'downloads') },

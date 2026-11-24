@@ -10,12 +10,14 @@ import { axisProps, ChartTooltip, gridProps } from '@/components/ui/Chart';
 import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { EmptyState, QueryState } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
 import { AutoImportCard } from '@/components/widgets/AutoImportCard';
 import { MissingCard } from '@/components/widgets/MissingCard';
 import { QueueRow } from '@/components/widgets/DownloadsWidget';
 import { VolumeRow } from '@/components/widgets/StorageWidget';
 import { UpcomingList } from '@/components/widgets/UpcomingWidget';
+import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
 
 function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number; accent: string }) {
   const dl = useDownloads();
@@ -56,27 +58,22 @@ function DisksCard({ disks }: { disks: DiskInfo[] }) {
   );
 }
 
-function PosterStrip({ items }: { items: { id: number; title: string; year?: number; poster?: string; caption?: string; progress?: number }[] }) {
+function PosterStrip({ items, kind }: { kind: 'sonarr' | 'radarr'; items: { id: number; title: string; year?: number; poster?: string; caption?: string; progress?: number; tmdbId?: number }[] }) {
   return (
     <div className="flex gap-4 overflow-x-auto px-5 pb-5 no-scrollbar">
       {items.map((i) => (
-        <div key={i.id} className="group w-28 shrink-0 sm:w-32">
+        <TitleLink key={i.id} to={arrTitlePath(kind, i.tmdbId)} className="group block w-28 shrink-0 sm:w-32">
           <FadeImage src={i.poster} alt={i.title} className="aspect-[2/3] rounded-xl ring-1 ring-white/10 transition duration-500 group-hover:-translate-y-1 group-hover:ring-white/25" />
           {i.progress !== undefined && <ProgressBar value={i.progress} height={3} glow={false} className="mt-2" />}
           <div className="mt-1.5 truncate text-[13px] font-medium">{i.title}</div>
           <div className="truncate text-[11px] text-ink-3">{i.caption ?? i.year}</div>
-        </div>
+        </TitleLink>
       ))}
     </div>
   );
 }
 
-const pageSkeleton = (
-  <div className="space-y-5">
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
-    <Skeleton className="h-80 rounded-[1.25rem]" />
-  </div>
-);
+const pageSkeleton = <PageLoader label="Loading" hint="Fetching the queue, calendar and library…" />;
 
 export function SonarrPage() {
   const instance = useSelectedInstance('sonarr');
@@ -107,7 +104,7 @@ export function SonarrPage() {
             </div>
             <Card>
               <CardHeader icon={Layers} title="Recently added series" />
-              <PosterStrip items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />
+              <PosterStrip kind="sonarr" items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />
             </Card>
             <DisksCard disks={d.disks} />
           </div>
@@ -143,7 +140,7 @@ export function RadarrPage() {
             <div className="grid gap-5 xl:grid-cols-3">
               <Card className="xl:col-span-2">
                 <CardHeader icon={Layers} title="Recently added movies" />
-                <PosterStrip items={d.recent.map((r) => ({ ...r, caption: r.hasFile ? `${r.year ?? ''} · On disk` : `${r.year ?? ''} · Missing` }))} />
+                <PosterStrip kind="radarr" items={d.recent.map((r) => ({ ...r, caption: r.hasFile ? `${r.year ?? ''} · On disk` : `${r.year ?? ''} · Missing` }))} />
               </Card>
               <Card>
                 <CardHeader icon={ListChecks} title="Quality breakdown" subtitle="Downloaded movies by quality" />

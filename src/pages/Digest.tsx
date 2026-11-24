@@ -9,8 +9,10 @@ import { FadeImage } from '@/components/ui/Image';
 import { Select } from '@/components/ui/Input';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { Switch } from '@/components/ui/Switch';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -58,7 +60,7 @@ export default function DigestPage() {
   return (
     <>
       <PageHeader eyebrow="This week" title="Weekly digest" description="What’s new in the library and what everyone’s been watching over the last seven days." />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Putting this week together" hint="Collecting what was added and watched…" />}>
         {(d) => {
           const nothing = !d.added.movies.length && !d.added.shows.length && !d.added.other.length;
           return (
@@ -83,11 +85,11 @@ export default function DigestPage() {
                       <CardBody>
                         <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">
                           {d.added.movies.map((m) => (
-                            <div key={m.id} className="min-w-0">
+                            <TitleLink key={m.id} to={`/media/jellyfin/${m.id}`} className="block min-w-0">
                               <FadeImage src={m.image} alt="" className="aspect-[2/3] rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3"><Clapperboard className="size-6 text-ink-4" /></div>} />
                               <div className="mt-1 truncate text-[12px] font-medium" title={m.title}>{m.title}</div>
                               {m.year && <div className="text-[11px] text-ink-4">{m.year}</div>}
-                            </div>
+                            </TitleLink>
                           ))}
                         </div>
                       </CardBody>
@@ -99,11 +101,11 @@ export default function DigestPage() {
                       <CardBody>
                         <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">
                           {d.added.shows.map((s) => (
-                            <div key={s.id} className="min-w-0">
+                            <TitleLink key={s.id} to={`/media/jellyfin/${s.id}`} className="block min-w-0">
                               <FadeImage src={s.image} alt="" className="aspect-[2/3] rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3"><Tv className="size-6 text-ink-4" /></div>} />
                               <div className="mt-1 truncate text-[12px] font-medium" title={s.title}>{s.title}</div>
                               <div className="text-[11px] text-ink-4">{s.episodes} episode{s.episodes === 1 ? '' : 's'}</div>
-                            </div>
+                            </TitleLink>
                           ))}
                         </div>
                       </CardBody>

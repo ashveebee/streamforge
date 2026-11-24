@@ -168,6 +168,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [active, setActive] = useState(0);
   // Bumped when Enter is pressed on a discover row, which then requests it.
   const [trigger, setTrigger] = useState<{ key: string; n: number }>({ key: '', n: 0 });
+  const shiftKey = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -193,7 +194,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const go = (i: number, fromKeyboard = false) => {
     const row = flat[i];
     if (!row) return;
-    if (fromKeyboard && row.kind === 'hit' && d && d.discover.includes(row.h) && requestable(row.h) && (d.canRequest || d.canAdd)) {
+    // Shift+Enter requests a new title straight away; Enter opens its details.
+    if (fromKeyboard && shiftKey.current && row.kind === 'hit' && d && d.discover.includes(row.h) && requestable(row.h) && (d.canRequest || d.canAdd)) {
       setTrigger((t) => ({ key: row.h.key, n: t.n + 1 }));
       return;
     }
@@ -213,6 +215,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActive((a) => Math.max(0, a - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      shiftKey.current = e.shiftKey;
       go(active, true);
     } else if (e.key === 'Escape') onClose();
   };
@@ -310,7 +313,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             </PaletteBoundary>
             <div className="flex items-center gap-3 border-t border-line px-4 py-2 text-[11px] text-ink-4">
               <span><kbd className="font-sans">↑↓</kbd> to move</span>
-              <span><kbd className="font-sans">↵</kbd> to open{d?.canRequest ? ' or request' : ''}</span>
+              <span><kbd className="font-sans">↵</kbd> to open</span>
+              {d?.canRequest && <span className="hidden sm:inline"><kbd className="font-sans">⇧↵</kbd> to request</span>}
               <span className="ml-auto">Searches Jellyfin, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
             </div>
           </motion.div>

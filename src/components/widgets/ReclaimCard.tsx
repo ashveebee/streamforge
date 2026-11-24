@@ -9,6 +9,7 @@ import { FadeImage } from '../ui/Image';
 import { Menu } from '../ui/Menu';
 import { Pill } from '../ui/Status';
 import { EmptyState, ErrorState, SkeletonRows } from '../ui/States';
+import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
 
 const PERIODS = [
   { days: 90, label: '3 months' },
@@ -25,7 +26,7 @@ function Row({ i }: { i: ReclaimItem }) {
     <li className={cn('flex items-center gap-3 py-2', act.isSuccess && 'opacity-40')}>
       <FadeImage src={i.poster} alt="" className="h-12 w-8 shrink-0 rounded-md ring-1 ring-white/10" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium">{i.title} {i.year ? <span className="font-normal text-ink-4">({i.year})</span> : null}</div>
+        <TitleLink to={arrTitlePath(i.kind === 'series' ? 'sonarr' : 'radarr', i.tmdbId)} className="block truncate text-[13px] font-medium">{i.title} {i.year ? <span className="font-normal text-ink-4">({i.year})</span> : null}</TitleLink>
         <div className="truncate text-[11px] text-ink-3">
           {[i.kind === 'series' ? (i.ended ? 'Ended series' : 'Series') : 'Movie', i.instanceName, i.lastWatched ? `last watched ${relative(i.lastWatched)}` : 'never watched', i.added ? `added ${relative(i.added)}` : undefined].filter(Boolean).join(' · ')}
         </div>

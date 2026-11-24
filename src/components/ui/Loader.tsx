@@ -70,3 +70,12 @@ export function Loader({
     </motion.div>
   );
 }
+
+/** The loader in a card, sized to stand in for a whole page's content. */
+export function PageLoader({ label, hint, slowHint }: { label: string; hint?: string; slowHint?: string }) {
+  return (
+    <div className="card min-h-[420px] rounded-[1.25rem]">
+      <Loader label={label} hint={hint} slowHint={slowHint} className="min-h-[420px]" />
+    </div>
+  );
+}

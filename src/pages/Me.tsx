@@ -11,23 +11,25 @@ import { Avatar, FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton, SkeletonRows } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState, SkeletonRows } from '@/components/ui/States';
 import { REQUEST_TONE } from '@/components/widgets/RequestsWidget';
 import { SecuritySection } from '@/components/settings/SecuritySection';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 function Shelf({ items, empty }: { items: MeCard[]; empty: string }) {
   if (!items.length) return <p className="py-6 text-center text-sm text-ink-4">{empty}</p>;
   return (
     <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
       {items.map((i) => (
-        <div key={i.id} className="w-56 shrink-0 snap-start">
+        <TitleLink key={i.id} to={`/media/jellyfin/${i.id}`} className="block w-56 shrink-0 snap-start">
           <div className="relative overflow-hidden rounded-xl border border-line">
             <FadeImage src={jfImage(i.image, 480)} alt="" className="aspect-video" fallback={<div className="size-full bg-gradient-to-br from-jellyfin/25 to-surface-3" />} />
             {i.progress !== undefined && i.progress > 0 && <ProgressBar value={i.progress} height={3} glow={false} className="absolute inset-x-0 bottom-0 rounded-none" />}
           </div>
           <div className="mt-1.5 truncate text-[13px] font-medium">{i.title}</div>
           <div className="truncate text-[11px] text-ink-3">{[i.subtitle, i.remainingMs ? `${duration(i.remainingMs)} left` : undefined].filter(Boolean).join(' · ')}</div>
-        </div>
+        </TitleLink>
       ))}
     </div>
   );
@@ -85,7 +87,7 @@ export default function MePage() {
         title={user?.name ?? 'Me'}
         description="What you’re watching, what you’ve asked for, and where you’re signed in."
       />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading your activity" hint="Fetching what you’re watching…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -119,7 +121,7 @@ export default function MePage() {
                           <li key={r.id} className="flex items-center gap-3 py-2">
                             <FadeImage src={r.poster} alt="" className="h-12 w-8 shrink-0 rounded-md ring-1 ring-white/10" />
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[13px] font-medium">{r.title} {r.year ? <span className="font-normal text-ink-4">({r.year})</span> : null}</div>
+                              <TitleLink to={r.tmdbId ? `/media/${r.type}/${r.tmdbId}` : undefined} className="block truncate text-[13px] font-medium">{r.title} {r.year ? <span className="font-normal text-ink-4">({r.year})</span> : null}</TitleLink>
                               <div className="text-[11px] text-ink-4">{r.type === 'tv' ? 'Series' : 'Movie'} · requested {relative(r.createdAt)}</div>
                             </div>
                             <span className={cn('shrink-0 rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold capitalize', REQUEST_TONE[r.status])}>

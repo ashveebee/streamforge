@@ -104,10 +104,10 @@ interface ArrQueueRecord {
   errorMessage?: string;
   statusMessages?: { title: string; messages: string[] }[];
   quality?: { quality?: { name?: string } };
-  series?: { title: string; images?: ArrImage[] };
+  series?: { title: string; images?: ArrImage[]; tmdbId?: number };
   episode?: { title: string; seasonNumber: number; episodeNumber: number };
   seasonNumber?: number;
-  movie?: { title: string; year?: number; images?: ArrImage[] };
+  movie?: { title: string; year?: number; images?: ArrImage[]; tmdbId?: number };
   downloadId?: string;
   added?: string;
 }
@@ -155,6 +155,7 @@ export async function arrQueue(inst: ArrInstance): Promise<{ total: number; item
           errorMessage: r.errorMessage,
           warnings: (r.statusMessages ?? []).flatMap((m) => m.messages),
           poster: coverUrl(inst, source === 'sonarr' ? r.series?.images : r.movie?.images),
+          tmdbId: source === 'sonarr' ? r.series?.tmdbId : r.movie?.tmdbId,
         };
       }),
     };
@@ -170,6 +171,8 @@ export const sonarr = derived('sonarr', (s) => arrClient('sonarr', s.url, s.apiK
 interface SonarrSeries {
   id: number;
   title: string;
+  tmdbId?: number;
+  tvdbId?: number;
   status: 'continuing' | 'ended' | 'upcoming' | 'deleted';
   monitored: boolean;
   network?: string;
@@ -242,6 +245,7 @@ export async function sonarrOverview(inst: ArrInstance) {
       monitored: e.monitored,
       network: e.series?.network,
       poster: coverUrl(inst, e.series?.images),
+      tmdbId: e.series?.tmdbId,
     }));
 
   const recent = [...series]
@@ -256,6 +260,7 @@ export async function sonarrOverview(inst: ArrInstance) {
       status: s.status,
       progress: (s.statistics?.percentOfEpisodes ?? 0) / 100,
       poster: coverUrl(inst, s.images),
+      tmdbId: s.tmdbId,
     }));
 
   return {
@@ -283,6 +288,7 @@ export const radarr = derived('radarr', (s) => arrClient('radarr', s.url, s.apiK
 interface RadarrMovie {
   id: number;
   title: string;
+  tmdbId?: number;
   year?: number;
   monitored: boolean;
   hasFile: boolean;
@@ -339,6 +345,7 @@ export async function radarrOverview(inst: ArrInstance) {
         monitored: m.monitored,
         network: m.studio,
         poster: coverUrl(inst, m.images),
+        tmdbId: m.tmdbId,
       });
     }
   }
@@ -374,6 +381,7 @@ export async function radarrOverview(inst: ArrInstance) {
         year: m.year,
         hasFile: m.hasFile,
         poster: coverUrl(inst, m.images),
+        tmdbId: m.tmdbId,
       })),
     disks,
   };
@@ -427,6 +435,7 @@ export interface MissingItem {
   subtitle?: string;
   date?: string;
   poster?: string;
+  tmdbId?: number;
 }
 
 const PAGE = 25;
@@ -454,6 +463,7 @@ export async function arrMissing(inst: ArrInstance, page = 1): Promise<{ total: 
         subtitle: `S${String(e.seasonNumber).padStart(2, '0')}E${String(e.episodeNumber).padStart(2, '0')} · ${e.title}`,
         date: e.airDateUtc,
         poster: coverUrl(inst, e.series?.images),
+        tmdbId: e.series?.tmdbId,
       })),
     };
   }
@@ -472,6 +482,7 @@ export async function arrMissing(inst: ArrInstance, page = 1): Promise<{ total: 
       subtitle: m.year ? String(m.year) : undefined,
       date: released(m) || undefined,
       poster: coverUrl(inst, m.images),
+      tmdbId: m.tmdbId,
     })),
   };
 }

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api';
 import { AuthProvider } from '@/hooks/useAuth';
 import App from './App';
+import { reloadForNewBuild } from '@/lib/lazyPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -18,6 +19,11 @@ const queryClient = new QueryClient({
       },
     },
   },
+});
+
+// A page file from an older build failed to load: reload once to get the new build.
+window.addEventListener('vite:preloadError', (e) => {
+  if (reloadForNewBuild()) e.preventDefault();
 });
 
 // The service worker handles push notifications (and makes the app installable).

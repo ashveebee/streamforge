@@ -12,11 +12,12 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
 import { KV, StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { QueryState, Skeleton } from '@/components/ui/States';
+import { QueryState } from '@/components/ui/States';
 import { ActivityWidget } from '@/components/widgets/ActivityWidget';
 import { LIBRARY_ICONS } from '@/components/widgets/LibraryWidget';
 import { PlaysWidget } from '@/components/widgets/PlaysWidget';
 import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
+import { PageLoader } from '@/components/ui/Loader';
 
 export default function JellyfinPage() {
   const q = useJellyfin();
@@ -25,7 +26,7 @@ export default function JellyfinPage() {
   return (
     <>
       <ServiceHeader id="jellyfin" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading Jellyfin" hint="Fetching libraries, users and server details…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

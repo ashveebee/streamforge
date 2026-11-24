@@ -76,6 +76,10 @@ if (existsSync(webDist)) {
       },
     }),
   );
+  // A missing bundle (e.g. an old tab after an upgrade) must be a 404, not the
+  // app shell: browsers and the service worker would otherwise keep HTML under
+  // a .js name and the page would never load again without a hard refresh.
+  app.use(['/assets', '/icons'], (_req, res) => res.status(404).set('Cache-Control', 'no-store').end());
   app.get(/^(?!\/api\/).*/, (_req, res) => {
     res.set('Cache-Control', 'no-cache').sendFile(path.join(webDist, 'index.html'));
   });

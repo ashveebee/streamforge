@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, ErrorState, SkeletonRows } from '@/components/ui/States';
+import { EmptyState, ErrorState } from '@/components/ui/States';
+import { Loader } from '@/components/ui/Loader';
 
 const CATEGORY_LABEL: Record<string, string> = {
   auth: 'Sign-in',
@@ -60,7 +61,7 @@ export default function AuditPage() {
         {audit.isError ? (
           <ErrorState error={audit.error} onRetry={() => void audit.refetch()} />
         ) : !audit.data ? (
-          <SkeletonRows rows={8} className="p-5" />
+          <Loader label="Loading the audit log" className="min-h-[360px]" />
         ) : !entries.length ? (
           <EmptyState icon={ScrollText} title="Nothing recorded" description={q || category || who ? 'No entries match these filters.' : 'Actions will show up here as people use StreamForge.'} />
         ) : (

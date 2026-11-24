@@ -8,7 +8,8 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RingGauge, usageColor, ProgressBar } from '@/components/ui/Progress';
 import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
-import { EmptyState, QueryState, Skeleton } from '@/components/ui/States';
+import { PageLoader } from '@/components/ui/Loader';
+import { EmptyState, QueryState } from '@/components/ui/States';
 import { DRIVE_HEALTH } from '@/components/widgets/StorageWidget';
 
 export default function InfinidiskPage() {
@@ -16,7 +17,7 @@ export default function InfinidiskPage() {
   return (
     <>
       <ServiceHeader id="infinidisk" />
-      <QueryState query={q} skeleton={<Skeleton className="h-96 rounded-[1.25rem]" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Loading storage" hint="Reading drives and capacity…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-3">

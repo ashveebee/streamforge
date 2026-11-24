@@ -9,7 +9,8 @@
  *    app still opens (and says it's offline) without a connection.
  */
 
-const CACHE = 'streamforge-v1';
+// Bumped to drop caches from older versions (which could hold HTML for a .js URL).
+const CACHE = 'streamforge-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -58,7 +59,8 @@ self.addEventListener('fetch', (event) => {
         (hit) =>
           hit ||
           fetch(req).then((res) => {
-            if (res.ok) {
+            const type = res.headers.get('content-type') || '';
+            if (res.ok && !type.includes('text/html')) {
               const copy = res.clone();
               caches.open(CACHE).then((c) => c.put(req, copy));
             }
