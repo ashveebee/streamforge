@@ -36,6 +36,7 @@ interface Movie {
 interface Series {
   id: number;
   title: string;
+  tmdbId?: number;
   year?: number;
   tvdbId?: number;
   imdbId?: string;
@@ -120,6 +121,7 @@ export interface Suggestion {
   lastWatched?: string;
   poster?: string;
   ended?: boolean;
+  tmdbId?: number;
 }
 
 export async function reclaimSuggestions(ctx: JfCtx, days: number) {
@@ -172,6 +174,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
                 added: m.added,
                 lastWatched: t ? new Date(t).toISOString() : undefined,
                 poster: coverUrl(inst, m.images),
+                tmdbId: m.tmdbId,
               },
               m.added,
             );
@@ -195,6 +198,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
                 lastWatched: t ? new Date(t).toISOString() : undefined,
                 poster: coverUrl(inst, s.images),
                 ended: s.status === 'ended',
+                tmdbId: s.tmdbId,
               },
               s.added,
             );

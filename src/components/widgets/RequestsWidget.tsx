@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from '../ui/Card';
 import { FadeImage } from '../ui/Image';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { EmptyState, QueryState, SkeletonRows } from '../ui/States';
+import { TitleLink } from '@/components/ui/TitleLink';
 
 export const REQUEST_TONE: Record<SeerrRequest['status'], string> = {
   pending: 'text-warn bg-warn/10 border-warn/25',
@@ -59,11 +60,13 @@ export function RequestRow({ r }: { r: SeerrRequest }) {
   const { user } = useAuth();
   return (
     <li className="flex items-center gap-3 py-2">
-      <FadeImage src={r.poster} alt="" className="h-14 w-10 shrink-0 rounded-md ring-1 ring-white/10" />
+      <TitleLink to={r.tmdbId ? `/media/${r.type}/${r.tmdbId}` : undefined} className="shrink-0">
+        <FadeImage src={r.poster} alt="" className="h-14 w-10 shrink-0 rounded-md ring-1 ring-white/10" />
+      </TitleLink>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium">
+        <TitleLink to={r.tmdbId ? `/media/${r.type}/${r.tmdbId}` : undefined} className="block truncate text-[13px] font-medium">
           {r.title} {r.year && <span className="font-normal text-ink-4">({r.year})</span>}
-        </div>
+        </TitleLink>
         <div className="truncate text-[11px] text-ink-3">
           {r.type === 'tv' ? `Series${r.seasons.length ? ` · S${r.seasons.join(', S')}` : ''}` : 'Movie'}
           {r.is4k && ' · 4K'} · {r.requestedBy}

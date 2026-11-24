@@ -107,6 +107,7 @@ async function normalise(r: SeerrRequest) {
   return {
     id: r.id,
     type: r.type,
+    tmdbId: r.media.tmdbId,
     title: d.title ?? d.name ?? `TMDB #${r.media.tmdbId}`,
     year: date ? Number(date.slice(0, 4)) : undefined,
     poster: d.posterPath ? `${TMDB_IMG}/w342${d.posterPath}` : undefined,

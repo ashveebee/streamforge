@@ -28,6 +28,8 @@ const Stats = lazyPage(() => import('@/pages/Stats'));
 const LibraryHealth = lazyPage(() => import('@/pages/LibraryHealth'));
 const Rules = lazyPage(() => import('@/pages/Rules'));
 const Digest = lazyPage(() => import('@/pages/Digest'));
+const Media = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.MediaPage })));
+const JellyfinMedia = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.JellyfinMediaPage })));
 const Me = lazyPage(() => import('@/pages/Me'));
 const Downloads = lazyPage(() => import('@/pages/Downloads'));
 const Audit = lazyPage(() => import('@/pages/Audit'));
@@ -106,6 +108,8 @@ const router = createBrowserRouter([
       { path: '/settings', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
       { path: '/me', element: page(<Me />) },
+      { path: '/media/jellyfin/:id', element: page(<JellyfinMedia />) },
+      { path: '/media/:type/:id', element: page(<Media />) },
       { path: '/digest', element: page(<Digest />) },
       { path: '/rules', element: page(<Rules />) },
       { path: '/downloads', element: page(<Downloads />, 'downloads') },

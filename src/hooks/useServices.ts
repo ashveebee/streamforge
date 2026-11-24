@@ -116,6 +116,7 @@ export interface ReclaimItem {
   lastWatched?: string;
   poster?: string;
   ended?: boolean;
+  tmdbId?: number;
 }
 export interface ReclaimResult {
   days: number;

@@ -244,6 +244,7 @@ export interface QueueItem {
   errorMessage?: string;
   warnings: string[];
   poster?: string;
+  tmdbId?: number;
 }
 
 export interface UpcomingItem {
@@ -257,6 +258,7 @@ export interface UpcomingItem {
   monitored: boolean;
   network?: string;
   poster?: string;
+  tmdbId?: number;
 }
 
 export interface DiskInfo {
@@ -279,7 +281,7 @@ export interface SonarrOverview {
   };
   queue: { total: number; items: QueueItem[] };
   upcoming: UpcomingItem[];
-  recent: { id: number; title: string; year?: number; network?: string; status: string; progress: number; poster?: string }[];
+  recent: { id: number; title: string; year?: number; network?: string; status: string; progress: number; poster?: string; tmdbId?: number }[];
   disks: DiskInfo[];
 }
 
@@ -288,7 +290,7 @@ export interface RadarrOverview {
   qualities: { name: string; count: number }[];
   queue: { total: number; items: QueueItem[] };
   upcoming: UpcomingItem[];
-  recent: { id: number; title: string; year?: number; hasFile: boolean; poster?: string }[];
+  recent: { id: number; title: string; year?: number; hasFile: boolean; poster?: string; tmdbId?: number }[];
   disks: DiskInfo[];
 }
 
@@ -348,6 +350,7 @@ export interface SeerrRequest {
   requestedBy: string;
   modifiedBy?: string;
   createdAt: string;
+  tmdbId?: number;
 }
 
 export interface SeerrOverview {
@@ -543,6 +546,7 @@ export interface MissingItem {
   subtitle?: string;
   date?: string;
   poster?: string;
+  tmdbId?: number;
 }
 export interface MissingPage {
   total: number;

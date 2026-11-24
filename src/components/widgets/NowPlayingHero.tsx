@@ -13,6 +13,7 @@ import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { ErrorState, Skeleton } from '../ui/States';
 import { deviceIcon, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
+import { TitleLink } from '../ui/TitleLink';
 
 const DEVICE_ICONS = { tv: Tv, phone: Smartphone, web: MonitorSmartphone, desktop: Laptop };
 
@@ -111,7 +112,9 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
               className="max-h-20 max-w-[min(360px,80%)] object-contain object-left drop-shadow-[0_4px_20px_rgb(0_0_0/0.6)] lg:max-h-24"
             />
           ) : (
-            <h2 className="text-3xl leading-tight font-semibold tracking-tight text-balance text-white lg:text-[40px]">{titleOf(s)}</h2>
+            <h2 className="text-3xl leading-tight font-semibold tracking-tight text-balance text-white lg:text-[40px]">
+              <TitleLink to={s.item.type === 'Audio' ? undefined : `/media/jellyfin/${s.item.id}`}>{titleOf(s)}</TitleLink>
+            </h2>
           )}
           {subtitle && <p className="mt-2 text-base font-medium text-ink lg:text-lg">{subtitle}</p>}
           <div className="mt-1.5">

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { EmptyState, SkeletonRows } from '@/components/ui/States';
+import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
 
 /** Monitored items that aren't downloaded yet, with search buttons. */
 export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 'readarr'; instance?: string }) {
@@ -57,7 +58,7 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
                 <li key={i.id} className="flex items-center gap-3 py-2">
                   <FadeImage src={i.poster} alt="" className="h-12 w-8 shrink-0 rounded-md ring-1 ring-white/10" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium">{i.title}</div>
+                    <TitleLink to={kind === 'sonarr' || kind === 'radarr' ? arrTitlePath(kind, i.tmdbId) : undefined} className="block truncate text-[13px] font-medium">{i.title}</TitleLink>
                     <div className="truncate text-[11px] text-ink-3">{[i.subtitle, i.date ? dayLabel(i.date) : undefined].filter(Boolean).join(' · ')}</div>
                   </div>
                   {user?.isAdmin && (

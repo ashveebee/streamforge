@@ -12,6 +12,7 @@ import { ProgressBar } from '../ui/Progress';
 import { EmptyState, Skeleton } from '../ui/States';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { Menu, type MenuItem } from '../ui/Menu';
+import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
 
 const CONFIRM: Partial<Record<QueueActionName, string>> = {
   remove: 'Remove this download and delete it from the download client?',
@@ -64,7 +65,7 @@ export function QueueRow({ item, speedBps, stalledSince, actions = true }: { ite
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} title={item.source} />
-          <span className="truncate text-[13px] font-medium">{item.title}</span>
+          <TitleLink to={arrTitlePath(item.source, item.tmdbId)} className="truncate text-[13px] font-medium">{item.title}</TitleLink>
         </div>
         <div className="truncate text-[11px] text-ink-3" title={item.releaseTitle}>
           {[item.instanceName, item.subtitle, item.quality, item.client].filter(Boolean).join(' · ')}

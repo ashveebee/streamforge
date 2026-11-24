@@ -68,6 +68,7 @@ async function jellyfinHits(ctx: JfCtx, q: string): Promise<SearchHit[]> {
       year: i.ProductionYear,
       image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}` : undefined,
       status: 'available',
+      path: ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type) ? `/media/jellyfin/${i.Id}` : '/jellyfin',
     };
   });
 }
@@ -107,7 +108,7 @@ async function arrHits(inst: ArrInstance, q: string): Promise<SearchHit[]> {
       subtitle: [inst.primary ? undefined : inst.name, isTv ? `${r.statistics?.episodeFileCount ?? 0}/${r.statistics?.episodeCount ?? 0} episodes` : r.hasFile ? 'Downloaded' : r.monitored ? 'Missing' : 'Not monitored'].filter(Boolean).join(' · '),
       year: r.year,
       image: coverUrl(inst, r.images),
-      path: `/${inst.kind}${inst.primary ? '' : `?instance=${encodeURIComponent(inst.id)}`}`,
+      path: r.tmdbId ? `/media/${isTv ? 'tv' : 'movie'}/${r.tmdbId}` : `/${inst.kind}${inst.primary ? '' : `?instance=${encodeURIComponent(inst.id)}`}`,
       tmdbId: r.tmdbId,
       tvdbId: r.tvdbId,
       status: isTv ? undefined : r.hasFile ? 'downloaded' : 'missing',
@@ -155,6 +156,7 @@ async function seerrHits(q: string): Promise<SearchHit[]> {
         image: r.posterPath ? `${TMDB_IMG}${r.posterPath}` : undefined,
         mediaType: r.mediaType as 'movie' | 'tv',
         tmdbId: r.id,
+        path: `/media/${r.mediaType}/${r.id}`,
         tvdbId: r.mediaInfo?.tvdbId,
         status: SEERR_STATUS[r.mediaInfo?.status ?? 0] ?? 'none',
         overview: r.overview?.slice(0, 240),
@@ -180,6 +182,7 @@ async function lookupHits(inst: ArrInstance, q: string): Promise<SearchHit[]> {
     image: r.remotePoster ?? r.images?.find((i) => i.coverType === 'poster')?.remoteUrl,
     mediaType: isTv ? 'tv' : 'movie',
     tmdbId: r.tmdbId,
+    path: r.tmdbId ? `/media/${isTv ? 'tv' : 'movie'}/${r.tmdbId}` : undefined,
     tvdbId: r.tvdbId,
     // Lookup results for titles already in the library carry an id.
     status: r.id ? 'in-library' : 'none',

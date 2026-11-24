@@ -39,6 +39,7 @@ export interface QueueItem {
   errorMessage?: string;
   warnings: string[];
   poster?: string;
+  tmdbId?: number;
 }
 
 export interface UpcomingItem {
@@ -52,6 +53,7 @@ export interface UpcomingItem {
   monitored: boolean;
   network?: string;
   poster?: string;
+  tmdbId?: number;
 }
 
 export interface DiskInfo {

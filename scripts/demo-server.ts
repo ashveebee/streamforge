@@ -109,6 +109,8 @@ const SERIES: Title[] = [
 const ALL = [...MOVIES, ...SERIES];
 const byTitle = new Map(ALL.map((t) => [slug(t.title), t]));
 const find = (title: string) => byTitle.get(slug(title))!;
+/** Fictional TMDB ids for the demo catalogue. */
+const tmdbOf = (title: string) => 1000 + ALL.findIndex((t) => slug(t.title) === slug(title));
 
 const USERS = [
   { id: 'u-alex', name: 'Alex', isAdmin: true },
@@ -703,6 +705,7 @@ function seerr(): SeerrOverview {
     return {
       id: 500 - i,
       type: x.kind === 'movie' ? 'movie' : 'tv',
+      tmdbId: tmdbOf(x.title),
       title: x.title,
       year: x.year,
       poster: poster(t),
@@ -1099,14 +1102,85 @@ app.get('/api/settings/sso', json(() => ({
   hasApiKey: true,
   mfaUsers: [{ userId: 'u-sam', userName: 'Sam', enabledAt: iso(30 * DAY) }],
 })));
+
+/* Title details (demo). */
+const CAST = ['Mara Quill', 'Tobias Rennick', 'Ines Calloway', 'Dev Okonkwo', 'Hana Ito', 'Felix Marrow', 'Rosa Lindqvist', 'Omar Haddad', 'June Park', 'Callum Reyes'];
+app.get('/api/media/jellyfin/:id', (req, res) => {
+  const key = String(req.params.id).replace(/-s\d+e\d+$/, '').replace(/-n$/, '');
+  const t = byTitle.get(key);
+  if (!t) return res.status(404).json({ error: 'not_found', message: 'Not in the demo library' });
+  res.json({ redirect: { type: t.kind === 'movie' ? 'movie' : 'tv', tmdbId: tmdbOf(t.title) } });
+});
+app.get('/api/media/:type/:id', (req, res) => {
+  const t = ALL[Number(req.params.id) - 1000];
+  if (!t) return res.status(404).json({ error: 'not_found', message: 'Unknown title' });
+  const r = rng(`details-${t.title}`);
+  const tv = t.kind === 'series';
+  const inLib = !['The Last Lighthouse', 'Velvet Static'].includes(t.title);
+  const seasons = tv
+    ? (() => {
+        const count = 2 + Math.floor(r() * 3);
+        return Array.from({ length: count }, (_, i) => {
+          const episodes = 8 + Math.floor(r() * 5);
+          const files = i === count - 1 ? Math.floor(episodes * 0.6) : episodes;
+          return { number: i + 1, name: `Season ${i + 1}`, episodes, files, airDate: iso((count - i) * 300 * DAY), status: files >= episodes ? 'available' : 'partial' };
+        });
+      })()
+    : undefined;
+  const pending = seerr().recent.filter((q) => q.title === t.title);
+  res.json({
+    type: tv ? 'tv' : 'movie',
+    tmdbId: Number(req.params.id),
+    title: t.title,
+    year: t.year,
+    tagline: tv ? 'Every map hides a door.' : 'Some journeys only go one way.',
+    overview: t.overview,
+    genres: t.genres,
+    runtimeMin: tv ? 48 : 96 + Math.floor(r() * 40),
+    rating: t.rating,
+    certification: tv ? 'TV-14' : 'PG-13',
+    status: tv ? 'Returning Series' : 'Released',
+    network: t.network ?? 'Lumen Pictures',
+    releaseDate: `${t.year}-03-14`,
+    poster: poster(t.title),
+    backdrop: backdropUrl(t.title),
+    trailer: 'https://www.youtube.com/watch?v=demo',
+    cast: CAST.slice(0, 8).map((name, i) => ({ name, character: ['Captain Vale', 'Ada', 'The Keeper', 'Jonas', 'Mira', 'Elias', 'Doctor Wren', 'Sol'][i] })),
+    seasons,
+    availability: !inLib ? (pending.length ? 'requested' : 'none') : tv && seasons!.some((x) => x.status !== 'available') ? 'partial' : 'available',
+    jellyfin: inLib ? { itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' } : undefined,
+    arr: inLib
+      ? [
+          {
+            kind: tv ? 'sonarr' : 'radarr',
+            instance: tv ? 'sonarr' : 'radarr',
+            instanceName: tv ? 'Sonarr' : 'Radarr',
+            primary: true,
+            id: 7,
+            monitored: true,
+            downloaded: true,
+            files: tv ? seasons!.reduce((n, x) => n + x.files, 0) : undefined,
+            total: tv ? seasons!.reduce((n, x) => n + x.episodes, 0) : undefined,
+            sizeOnDisk: (tv ? 60 : 12) * GB * (0.6 + r()),
+            quality: tv ? undefined : 'Bluray-1080p',
+            path: tv ? `/media/tv/${t.title}` : `/media/movies/${t.title} (${t.year})`,
+          },
+        ]
+      : [],
+    requests: pending.map((q) => ({ id: q.id, status: q.status, requestedBy: q.requestedBy, createdAt: q.createdAt, is4k: q.is4k, seasons: q.seasons })),
+    can: { request: !inLib || (tv && seasons!.some((x) => x.status !== 'available')), add: !inLib, search: inLib, approve: true },
+    sources: { seerr: true, jellyfin: inLib },
+  });
+});
+app.post('/api/media/search', (_req, res) => res.json({ ok: true, instance: 'Radarr' }));
 app.post('/api/search/request', (_req, res) => res.json({ ok: true, asSelf: true }));
 app.post('/api/search/add', (_req, res) => res.json({ ok: true, title: 'Demo', instance: 'Radarr' }));
 app.get('/api/search', (req, res) => {
   const q = String(req.query.q ?? '').toLowerCase();
   const hits = ALL.filter((t) => t.title.toLowerCase().includes(q));
   res.json({
-    library: hits.slice(0, 4).map((t) => ({ key: `jf:${slug(t.title)}`, source: 'jellyfin', title: t.title, subtitle: t.kind === 'movie' ? 'Movie' : 'Series', year: t.year, image: poster(t.title), status: 'available' })),
-    managed: hits.slice(0, 3).map((t) => ({ key: `arr:${slug(t.title)}`, source: t.kind === 'movie' ? 'radarr' : 'sonarr', title: t.title, subtitle: t.kind === 'movie' ? 'Downloaded' : '10/10 episodes', year: t.year, image: poster(t.title), path: t.kind === 'movie' ? '/radarr' : '/sonarr', status: t.kind === 'movie' ? 'downloaded' : undefined })),
+    library: hits.slice(0, 4).map((t) => ({ key: `jf:${slug(t.title)}`, source: 'jellyfin', title: t.title, subtitle: t.kind === 'movie' ? 'Movie' : 'Series', year: t.year, image: poster(t.title), status: 'available', path: `/media/jellyfin/${slug(t.title)}` })),
+    managed: hits.slice(0, 3).map((t) => ({ key: `arr:${slug(t.title)}`, source: t.kind === 'movie' ? 'radarr' : 'sonarr', title: t.title, subtitle: t.kind === 'movie' ? 'Downloaded' : '10/10 episodes', year: t.year, image: poster(t.title), path: `/media/${t.kind === 'movie' ? 'movie' : 'tv'}/${tmdbOf(t.title)}`, status: t.kind === 'movie' ? 'downloaded' : undefined })),
     discover: q.length > 1 ? [
       { key: 'd1', source: 'seerr', title: `${q[0]!.toUpperCase()}${q.slice(1)} Rising`, subtitle: 'Movie', year: 2026, mediaType: 'movie', tmdbId: 9001, status: 'none', overview: 'A fictional film that isn’t in your library yet.' },
       { key: 'd2', source: 'seerr', title: `The ${q[0]!.toUpperCase()}${q.slice(1)} Files`, subtitle: 'Series', year: 2025, mediaType: 'tv', tmdbId: 9002, status: 'requested' },
