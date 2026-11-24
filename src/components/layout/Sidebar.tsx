@@ -95,7 +95,7 @@ export function Sidebar({
       className={cn(
         'glass flex h-full flex-col rounded-3xl p-3 transition-[width] duration-300 ease-out-expo',
         collapsed ? 'w-[68px]' : 'w-[248px]',
-        mobile && 'w-[280px] rounded-l-none',
+        mobile && 'w-[280px] rounded-l-none pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))]',
       )}
     >
       <div className={cn('flex h-11 items-center gap-2.5 px-1.5', collapsed && 'justify-center px-0')}>

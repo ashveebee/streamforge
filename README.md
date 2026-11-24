@@ -272,6 +272,15 @@ docker run --rm -v streamforge-data:/data -v "$PWD":/backup alpine \
 
 The file contains your service API keys, so keep backups private.
 
+### Public addresses
+
+StreamForge usually reaches your services on internal addresses such as
+`http://jellyfin:8096`, which don't work from your phone. Set a **Public
+address** on a service in Settings (or `JELLYFIN_PUBLIC_URL`,
+`SONARR_PUBLIC_URL` and so on) to the address you open it at in a browser,
+for example `https://jellyfin.example.com`. Links such as **Play in
+Jellyfin** and **Open in Sonarr** then use it.
+
 ### Optional: configure with environment variables
 
 Everything can also be set with environment variables, which is handy for

@@ -1,6 +1,6 @@
 import { cache } from '../lib/cache.js';
 import { HttpError } from '../lib/handle.js';
-import { isConfigured, resolve } from '../settings.js';
+import { isConfigured, publicUrl } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
 import { jf, libraryItems, type JfCtx } from './jellyfin.js';
@@ -140,7 +140,7 @@ async function arrLookup(type: MediaType, tmdbId: number) {
 }
 
 function jellyfinUrl(itemId: string) {
-  const base = resolve('jellyfin').settings.url;
+  const base = publicUrl('jellyfin');
   return base ? `${base}/web/#/details?id=${itemId}` : undefined;
 }
 

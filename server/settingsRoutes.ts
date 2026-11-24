@@ -74,6 +74,7 @@ const pathField = z
 const body = z
   .object({
     url: urlField.optional(),
+    publicUrl: urlField.optional(),
     /** Omitted = keep the saved key; empty string = remove it. */
     apiKey: z.string().trim().max(1024).optional(),
     authHeader: z
@@ -94,8 +95,9 @@ const origin = (url?: string) => (url ? new URL(url).origin : undefined);
 /** Applies the submitted fields on top of the current settings. */
 function merge(id: ServiceId, b: Body): ServiceSettings {
   const current = resolve(id).settings;
-  const next: ServiceSettings = { url: current.url, apiKey: current.apiKey };
+  const next: ServiceSettings = { url: current.url, publicUrl: current.publicUrl, apiKey: current.apiKey };
   if (b.url !== undefined) next.url = b.url;
+  if (b.publicUrl !== undefined) next.publicUrl = b.publicUrl;
   if (b.apiKey !== undefined) next.apiKey = b.apiKey;
   if (id === 'infinidisk') {
     next.authHeader = b.authHeader ?? current.authHeader;

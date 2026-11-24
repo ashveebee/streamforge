@@ -28,6 +28,8 @@ export const SERVICE_NAMES: Record<ServiceId, string> = {
 
 export interface ServiceSettings {
   url?: string;
+  /** The address people open in their browser, when it differs from `url`. */
+  publicUrl?: string;
   apiKey?: string;
   /** Infinidisk only. */
   authHeader?: string;
@@ -83,7 +85,7 @@ for (const r of db.prepare('SELECT service, data, updated_at, updated_by FROM se
 /** Drops empty values so "blank" and "missing" mean the same thing. */
 function clean(s: ServiceSettings): ServiceSettings {
   const out: ServiceSettings = {};
-  for (const k of ['url', 'apiKey', 'authHeader', 'statusPath', 'healthPath'] as const) {
+  for (const k of ['url', 'publicUrl', 'apiKey', 'authHeader', 'statusPath', 'healthPath'] as const) {
     const v = s[k]?.trim();
     if (v) out[k] = v;
   }
@@ -217,6 +219,15 @@ export function resetSettings(id: ServiceId) {
 
 /* ------------------------------- helpers ------------------------------- */
 
+/**
+ * The address to send people to for a service (links such as "Play in
+ * Jellyfin"): the public address when set, otherwise the server address.
+ */
+export function publicUrl(id: ServiceId) {
+  const s = resolve(id).settings;
+  return (s.publicUrl || s.url)?.replace(/\/+$/, '') || undefined;
+}
+
 export function infinidiskSettings(s: ServiceSettings) {
   return {
     baseUrl: s.url,
@@ -249,6 +260,7 @@ export function describe(id: ServiceId) {
     updatedAt: r.updatedAt,
     updatedBy: r.updatedBy,
     url: s.url ?? '',
+    publicUrl: s.publicUrl ?? '',
     apiKeySet: !!s.apiKey,
     apiKeyHint: keyHint(s.apiKey),
     ...(id === 'infinidisk'

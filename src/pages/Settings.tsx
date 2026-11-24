@@ -128,6 +128,7 @@ function TestResult({ result }: { result: ConnectionTest }) {
 
 interface FormState {
   url: string;
+  publicUrl: string;
   apiKey: string;
   clearKey: boolean;
   authHeader: string;
@@ -138,6 +139,7 @@ interface FormState {
 
 const initial = (s: ServiceSettingsView): FormState => ({
   url: s.url,
+  publicUrl: s.publicUrl ?? '',
   apiKey: '',
   clearKey: false,
   authHeader: s.authHeader ?? '',
@@ -147,7 +149,7 @@ const initial = (s: ServiceSettingsView): FormState => ({
 });
 
 function toInput(id: ServiceId, f: FormState): ServiceSettingsInput {
-  const input: ServiceSettingsInput = { url: f.url.trim() };
+  const input: ServiceSettingsInput = { url: f.url.trim(), publicUrl: f.publicUrl.trim() };
   if (f.apiKey.trim()) input.apiKey = f.apiKey.trim();
   else if (f.clearKey) input.apiKey = '';
   if (id === 'infinidisk') {
@@ -263,6 +265,26 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
                 value={form.url}
                 aria-invalid={!!fieldError('url')}
                 onChange={(e) => set('url', e.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Public address (optional)"
+              htmlFor={`${s.id}-public`}
+              error={fieldError('publicUrl')}
+              help={`Where you open ${meta.name} in a browser, if it’s different. Used for links${s.id === 'jellyfin' ? ' like Play in Jellyfin' : ''}.`}
+            >
+              <input
+                id={`${s.id}-public`}
+                className={inputCls}
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={form.url || help.placeholder}
+                value={form.publicUrl}
+                aria-invalid={!!fieldError('publicUrl')}
+                onChange={(e) => set('publicUrl', e.target.value)}
               />
             </Field>
 

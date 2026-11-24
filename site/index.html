@@ -186,6 +186,87 @@
     footer a { text-decoration: none; }
     footer a:hover { color: var(--ink); }
 
+
+    /* Act: interactive stream card + action list */
+    .act { display: grid; gap: 28px; margin-top: 48px; align-items: start; }
+    @media (min-width: 960px) { .act { grid-template-columns: 1.05fr 1fr; gap: 40px; } }
+    .stream { position: relative; border-radius: 22px; border: 1px solid var(--line-strong); overflow: hidden; background: #0d0f17; box-shadow: 0 40px 80px -40px rgb(0 0 0 / .9); }
+    .stream .art { position: absolute; inset: 0; background: url(screenshots/now-playing.jpg) center 18% / cover; opacity: .35; filter: blur(2px) saturate(1.2); transform: scale(1.06); }
+    .stream .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(13 15 23 / .2), #0d0f17 78%); }
+    .stream .body { position: relative; padding: 24px; }
+    @media (min-width: 720px) { .stream .body { padding: 30px; } }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--line-strong); background: rgb(255 255 255 / .05); color: var(--ink-2); }
+    .tag.live { color: var(--violet); border-color: rgb(167 139 250 / .4); background: rgb(167 139 250 / .12); }
+    .tag.live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; animation: pulse 1.6s infinite; }
+    .tag.ok { color: var(--ok); border-color: rgb(52 211 153 / .4); background: rgb(52 211 153 / .1); }
+    .tag.hdr { color: #fbbf24; border-color: rgb(251 191 36 / .4); background: rgb(251 191 36 / .1); }
+    .stream.paused .tag.live { color: #fbbf24; border-color: rgb(251 191 36 / .4); background: rgb(251 191 36 / .1); }
+    .stream.paused .tag.live::before { animation: none; }
+    .stream.stopped .tag.live { color: #fb7185; border-color: rgb(251 113 133 / .4); background: rgb(251 113 133 / .1); }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .stream h3 { font-size: clamp(26px, 4vw, 34px); letter-spacing: -.03em; margin: 18px 0 2px; line-height: 1.1; }
+    .stream .ep { color: var(--ink-2); font-weight: 500; }
+    .stream .meta { color: var(--ink-3); font-size: 14px; margin-top: 4px; }
+    .bar2 { margin-top: 22px; height: 6px; border-radius: 99px; background: rgb(255 255 255 / .08); overflow: hidden; }
+    .bar2 > i { display: block; height: 100%; width: 58%; border-radius: inherit; background: var(--grad); box-shadow: 0 0 12px -2px rgb(167 139 250 / .7); transition: width 1s linear; }
+    .times { display: flex; justify-content: space-between; font: 500 12px "JetBrains Mono", monospace; color: var(--ink-3); margin-top: 8px; }
+    .who { display: flex; align-items: center; gap: 10px; margin-top: 18px; font-size: 14px; color: var(--ink-2); }
+    .who .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #f97316, #c2410c); color: #fff; font-weight: 700; font-size: 12px; }
+    .who span:last-child { color: var(--ink-3); }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .ctl { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-strong); background: rgb(255 255 255 / .04); color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
+    .ctl:hover { background: rgb(255 255 255 / .09); }
+    .ctl[aria-pressed="true"] { border-color: rgb(167 139 250 / .5); background: rgb(167 139 250 / .14); }
+    .ctl.danger:hover { color: #fb7185; border-color: rgb(251 113 133 / .45); }
+    .ctl svg.i { width: 15px; height: 15px; }
+    .ctl:disabled { opacity: .45; cursor: default; }
+    .msgrow { display: none; gap: 8px; margin-top: 12px; }
+    .msgrow.open { display: flex; }
+    .msgrow input { flex: 1; min-width: 0; height: 36px; border-radius: 10px; border: 1px solid var(--line-strong); background: rgb(0 0 0 / .3); color: var(--ink); padding: 0 12px; font: 14px Inter, sans-serif; }
+    .toast { min-height: 20px; margin-top: 12px; font-size: 13px; color: var(--ink-2); opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s; }
+    .toast.show { opacity: 1; transform: none; }
+    .toast::before { content: "✓ "; color: var(--ok); }
+    .hint { margin-top: 12px; font-size: 13px; color: var(--ink-3); text-align: center; }
+    .actions { display: grid; gap: 10px; }
+    @media (min-width: 560px) { .actions { grid-template-columns: repeat(2, 1fr); } }
+    .action { display: flex; gap: 12px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+    .action .ico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line-strong); color: var(--c, var(--violet)); background: rgb(255 255 255 / .03); box-shadow: inset 0 0 14px -6px var(--c, var(--violet)); }
+    .action .ico svg.i { width: 16px; height: 16px; }
+    .action b { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -.01em; }
+    .action span { display: block; font-size: 13px; color: var(--ink-3); margin-top: 2px; line-height: 1.45; }
+
+    /* Tour: tabs + big screenshot + details */
+    .tabs { display: flex; gap: 6px; margin-top: 40px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent); mask-image: linear-gradient(90deg, #000 90%, transparent); }
+    .tabs::-webkit-scrollbar { display: none; }
+    @media (min-width: 1000px) { .tabs { flex-wrap: wrap; justify-content: center; -webkit-mask-image: none; mask-image: none; } }
+    .tab { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-3); font: 500 14px Inter, sans-serif; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+    .tab i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); opacity: .6; }
+    .tab:hover { color: var(--ink); }
+    .tab[aria-selected="true"] { color: var(--ink); border-color: var(--line-strong); background: var(--surface-2); box-shadow: 0 0 0 1px rgb(255 255 255 / .04), 0 8px 24px -12px var(--c); }
+    .tab[aria-selected="true"] i { opacity: 1; box-shadow: 0 0 10px var(--c); }
+    .panel { display: grid; gap: 28px; margin-top: 28px; align-items: start; }
+    @media (min-width: 960px) { .panel { grid-template-columns: 1.6fr 1fr; gap: 44px; } }
+    .js .panel[hidden] { display: none; }
+    .no-js .panel { margin-top: 64px; }
+    .panel .shot { border-radius: 16px; border: 1px solid var(--line-strong); overflow: hidden; background: var(--surface); box-shadow: 0 40px 80px -40px rgb(0 0 0 / .9); max-height: 640px; }
+    .panel .shot img { width: 100%; height: auto; }
+    .panel h3 { font-size: clamp(22px, 3vw, 28px); letter-spacing: -.02em; margin: 10px 0 0; line-height: 1.2; }
+    .panel p { color: var(--ink-3); margin: 12px 0 0; }
+    .panel.in-anim { animation: fadeUp .45s cubic-bezier(.16,1,.3,1); }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } }
+
+    /* Phones */
+    .phones { display: flex; justify-content: center; gap: 18px; margin-top: 48px; }
+    .phone { flex: 0 1 280px; min-width: 0; border-radius: 40px; padding: 9px; background: linear-gradient(160deg, #2a2d3a, #12141c); border: 1px solid var(--line-strong); box-shadow: 0 50px 90px -40px rgb(0 0 0 / .95), inset 0 0 0 1px rgb(255 255 255 / .05); }
+    .phone img { border-radius: 32px; width: 100%; height: auto; aspect-ratio: 390 / 844; object-fit: cover; object-position: top; }
+    .phone:nth-child(2) { transform: translateY(-22px); }
+    @media (max-width: 719px) { .phone:not(:nth-child(2)) { display: none; } .phone:nth-child(2) { transform: none; flex-basis: 300px; } }
+    .phone-points { display: grid; gap: 12px; margin: 40px auto 0; max-width: 900px; }
+    @media (min-width: 720px) { .phone-points { grid-template-columns: repeat(3, 1fr); } }
+    .phone-points div { text-align: center; color: var(--ink-3); font-size: 15px; }
+    .phone-points b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+
     .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
     .reveal.in { opacity: 1; transform: none; }
     .no-js .reveal { opacity: 1; transform: none; }
@@ -224,6 +305,16 @@
     <symbol id="i-stethoscope" viewBox="0 0 24 24"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.5 21.7a.5.5 0 0 0 .9 0l6.5-19a.5.5 0 0 0-.6-.6l-19 6.5a.5.5 0 0 0 0 .9l7.9 3.2a2 2 0 0 1 1.1 1.1z"/><path d="m21.9 2.1-10.9 10.9"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-resume" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8Z"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.5"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
   </svg>
 
   <div class="ambient" aria-hidden="true"></div>
@@ -236,7 +327,9 @@
       </a>
       <nav aria-label="Sections">
         <a href="#features">Features</a>
-        <a href="#screenshots">Screenshots</a>
+        <a href="#act">Controls</a>
+        <a href="#tour">Tour</a>
+        <a href="#phone">Phone</a>
         <a href="#install">Install</a>
         <a href="#license">License</a>
       </nav>
@@ -390,6 +483,53 @@
       </div>
     </section>
 
+    <section id="act" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">Not just a dashboard</div>
+          <h2>See it, then <span class="grad-text">do something about it</span></h2>
+          <p class="section-lede">Every page has buttons, not just numbers. Try the controls on this stream: they work the same way in StreamForge.</p>
+        </div>
+        <div class="act">
+          <div class="reveal">
+            <div class="stream" id="demo-stream">
+              <div class="art" aria-hidden="true"></div>
+              <div class="body">
+                <div class="tags"><span class="tag live" id="demo-state">Now playing</span><span class="tag">Episode</span><span class="tag">4K</span><span class="tag hdr">Dolby Vision</span><span class="tag ok">Direct play</span></div>
+                <h3>Signal Fire</h3>
+                <div class="ep">S02E05 · The Smoke Line</div>
+                <div class="meta">2024 · TV-14 · 54m · HEVC 10-bit · TrueHD 7.1</div>
+                <div class="bar2" aria-hidden="true"><i id="demo-bar"></i></div>
+                <div class="times"><span id="demo-pos">31:26</span><span id="demo-left">−22:33 · 54:00</span></div>
+                <div class="who"><span class="av">M</span><span>Maya</span><span>Living Room TV · Jellyfin Android TV</span></div>
+                <div class="controls">
+                  <button class="ctl" type="button" id="demo-pause"><svg class="i"><use href="#i-pause"/></svg><span>Pause</span></button>
+                  <button class="ctl" type="button" id="demo-msg" aria-pressed="false" aria-controls="demo-msgrow"><svg class="i"><use href="#i-msg"/></svg>Message</button>
+                  <button class="ctl danger" type="button" id="demo-stop"><svg class="i"><use href="#i-stop"/></svg>Stop</button>
+                </div>
+                <form class="msgrow" id="demo-msgrow" autocomplete="off">
+                  <input id="demo-text" maxlength="80" placeholder="Message to Maya…" aria-label="Message to Maya">
+                  <button class="ctl" type="submit">Send</button>
+                </form>
+                <div class="toast" role="status" aria-live="polite"></div>
+              </div>
+            </div>
+            <p class="hint">A live demo on this page. Nothing is sent anywhere.</p>
+          </div>
+          <div class="actions">
+            <div class="action reveal" style="--c:var(--jellyfin)"><div class="ico"><svg class="i"><use href="#i-pause"/></svg></div><div><b>Pause, message or stop streams</b><span>From Now Playing or the dashboard, with an optional reason shown on their screen.</span></div></div>
+            <div class="action reveal" style="--c:var(--seerr)"><div class="ico"><svg class="i"><use href="#i-check"/></svg></div><div><b>Approve or decline requests</b><span>Right from the dashboard, the Seerr page or a title's page.</span></div></div>
+            <div class="action reveal" style="--c:var(--sonarr)"><div class="ico"><svg class="i"><use href="#i-search"/></svg></div><div><b>Search now</b><span>Kick off a search in Sonarr or Radarr for one title, or everything missing.</span></div></div>
+            <div class="action reveal" style="--c:var(--radarr)"><div class="ico"><svg class="i"><use href="#i-ban"/></svg></div><div><b>Blocklist and re-search</b><span>Bad release in the queue? Remove it, blocklist it and grab another in one click.</span></div></div>
+            <div class="action reveal" style="--c:var(--downloads)"><div class="ico"><svg class="i"><use href="#i-gauge"/></svg></div><div><b>Pause downloads and set speed limits</b><span>Per client, for qBittorrent, Transmission, SABnzbd and NZBGet.</span></div></div>
+            <div class="action reveal" style="--c:var(--cyan)"><div class="ico"><svg class="i"><use href="#i-send"/></svg></div><div><b>Request from search</b><span>Press ⌘K, find a title and request it, or add it straight to Sonarr or Radarr.</span></div></div>
+            <div class="action reveal" style="--c:var(--bazarr)"><div class="ico"><svg class="i"><use href="#i-captions"/></svg></div><div><b>Fetch missing subtitles</b><span>Search Bazarr for an episode or movie that has none.</span></div></div>
+            <div class="action reveal" style="--c:var(--jellyfin)"><div class="ico"><svg class="i"><use href="#i-cpu"/></svg></div><div><b>Run Jellyfin tasks</b><span>Library scans and maintenance jobs, now instead of on their schedule.</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="screenshots" style="padding-top:0">
       <div class="wrap">
         <div class="show reveal">
@@ -482,19 +622,205 @@
           <div class="shot"><img src="screenshots/me.jpg" width="2880" height="3200" loading="lazy" alt="Personal page with continue watching, next up, requests, watch history and signed-in devices"></div>
         </div>
 
-        <div class="gallery">
-          <a class="reveal" href="screenshots/jellyfin.jpg"><figure><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with libraries, server details and recently added items"><figcaption><b>Jellyfin.</b> Libraries, users, server details and new additions.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/sonarr.jpg"><figure><img src="screenshots/sonarr.jpg" width="2880" height="3400" loading="lazy" alt="Sonarr page with the download queue, episodes airing soon, auto-import and missing episodes"><figcaption><b>Sonarr and Radarr.</b> Queues, upcoming releases, missing items and auto-import.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/stats.jpg"><figure><img src="screenshots/stats.jpg" width="2880" height="2200" loading="lazy" alt="Stats page with plays per day split by direct play and transcode, and top viewers and titles"><figcaption><b>Stats.</b> Watch time, transcodes and who watches what.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/library.jpg"><figure><img src="screenshots/library.jpg" width="2880" height="1800" loading="lazy" alt="Library health page with incomplete series, upgrades available and mismatches with Jellyfin"><figcaption><b>Library health.</b> Gaps, upgrades and items out of sync.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/seerr.jpg"><figure><img src="screenshots/seerr.jpg" width="2880" height="1800" loading="lazy" alt="Seerr page with requests awaiting approval and recent requests"><figcaption><b>Seerr.</b> Pending approvals and recent requests.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/digest.jpg"><figure><img src="screenshots/digest.jpg" width="2880" height="2200" loading="lazy" alt="Weekly digest page with new movies, new episodes and the most watched titles"><figcaption><b>Weekly digest.</b> What's new and what got watched, sent every week.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/rules.jpg"><figure><img src="screenshots/rules.jpg" width="2880" height="1800" loading="lazy" alt="Rules page with automations such as pausing downloads when a disk is almost full"><figcaption><b>Rules.</b> If this happens, do that.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/audit.jpg"><figure><img src="screenshots/audit.jpg" width="2880" height="1800" loading="lazy" alt="Audit log listing changes, approvals and sign-ins with who made them"><figcaption><b>Audit log.</b> Who changed what, and when.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/bazarr.jpg"><figure><img src="screenshots/bazarr.jpg" width="2880" height="2200" loading="lazy" alt="Bazarr page with episodes and movies missing subtitles"><figcaption><b>Bazarr.</b> Missing subtitles, one click to search.</figcaption></figure></a>
-          <a class="reveal" href="screenshots/infinidisk.jpg"><figure><img src="screenshots/infinidisk.jpg" width="2880" height="1800" loading="lazy" alt="Infinidisk page with storage capacity and the health of each drive"><figcaption><b>Infinidisk.</b> Capacity, drive health and temperatures.</figcaption></figure></a>
+      </div>
+    </section>
+
+    <section id="tour" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">Tour</div>
+          <h2>A page for every part of your stack</h2>
+          <p class="section-lede">Pick a page to see what it shows and what you can do there.</p>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Pages">
+          <button class="tab" role="tab" type="button" id="tab-title" aria-controls="panel-title" aria-selected="true" style="--c:var(--seerr)"><i></i>Title pages</button>
+          <button class="tab" role="tab" type="button" id="tab-arr" aria-controls="panel-arr" aria-selected="false" style="--c:var(--sonarr)" tabindex="-1"><i></i>Sonarr &amp; Radarr</button>
+          <button class="tab" role="tab" type="button" id="tab-jellyfin" aria-controls="panel-jellyfin" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Jellyfin</button>
+          <button class="tab" role="tab" type="button" id="tab-stats" aria-controls="panel-stats" aria-selected="false" style="--c:var(--violet)" tabindex="-1"><i></i>Stats</button>
+          <button class="tab" role="tab" type="button" id="tab-library" aria-controls="panel-library" aria-selected="false" style="--c:var(--ok)" tabindex="-1"><i></i>Library health</button>
+          <button class="tab" role="tab" type="button" id="tab-seerr" aria-controls="panel-seerr" aria-selected="false" style="--c:var(--seerr)" tabindex="-1"><i></i>Requests</button>
+          <button class="tab" role="tab" type="button" id="tab-digest" aria-controls="panel-digest" aria-selected="false" style="--c:var(--cyan)" tabindex="-1"><i></i>Weekly digest</button>
+          <button class="tab" role="tab" type="button" id="tab-rules" aria-controls="panel-rules" aria-selected="false" style="--c:var(--violet)" tabindex="-1"><i></i>Rules</button>
+          <button class="tab" role="tab" type="button" id="tab-bazarr" aria-controls="panel-bazarr" aria-selected="false" style="--c:var(--bazarr)" tabindex="-1"><i></i>Bazarr</button>
+          <button class="tab" role="tab" type="button" id="tab-storage" aria-controls="panel-storage" aria-selected="false" style="--c:var(--infinidisk)" tabindex="-1"><i></i>Storage</button>
+          <button class="tab" role="tab" type="button" id="tab-audit" aria-controls="panel-audit" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Audit log</button>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-title" aria-labelledby="tab-title">
+          <a class="shot" href="screenshots/title.jpg"><img src="screenshots/title.jpg" width="2880" height="2600" loading="lazy" alt="A movie page with its poster, watch progress, media info for two versions, audio and subtitle tracks, and its details"></a>
+          <div class="txt">
+            <div class="eyebrow">Title pages</div>
+            <h3>Everything about a movie or show, in one place</h3>
+            <p>Open any title, from search, Now Playing, the queues or the calendar, and see what you have, what you are missing and what you can do about it.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Watch progress with Resume, or Resume S2 E4 for a series</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Seasons you can open to see every episode and what you have watched</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Resolution, HDR, codecs, bitrate and every audio and subtitle track</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Request it, request missing seasons, or add it to Sonarr or Radarr</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Cast, trailer, crew, studios and links to IMDb and TMDB</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-arr" aria-labelledby="tab-arr" hidden>
+          <a class="shot" href="screenshots/sonarr.jpg"><img src="screenshots/sonarr.jpg" width="2880" height="3400" loading="lazy" alt="Sonarr page with the download queue, episodes airing soon, auto-import and missing episodes"></a>
+          <div class="txt">
+            <div class="eyebrow">Sonarr and Radarr</div>
+            <h3>Queues you can actually fix</h3>
+            <p>Every download with its progress and what is wrong with it, plus what is airing soon and what is still missing, across as many instances as you run.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Remove, blocklist and re-search a release in one click</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Auto-import for downloads they could not match</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Missing episodes and movies, with Search all</li>
+              <li><svg class="i"><use href="#i-check"/></svg>A second instance, such as 4K, side by side</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-jellyfin" aria-labelledby="tab-jellyfin" hidden>
+          <a class="shot" href="screenshots/jellyfin.jpg"><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with libraries, server details and recently added items"></a>
+          <div class="txt">
+            <div class="eyebrow">Jellyfin</div>
+            <h3>Your server, at a glance</h3>
+            <p>Libraries and their sizes, what was added recently, who has been active and the state of the server itself.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Libraries with item counts and scan progress</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recently added, linking to each title</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Users and when they were last active</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Run scheduled tasks such as a library scan now</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-stats" aria-labelledby="tab-stats" hidden>
+          <a class="shot" href="screenshots/stats.jpg"><img src="screenshots/stats.jpg" width="2880" height="2200" loading="lazy" alt="Stats page with plays per day split by direct play and transcode, and top viewers and titles"></a>
+          <div class="txt">
+            <div class="eyebrow">Playback stats</div>
+            <h3>Who watches what, and how</h3>
+            <p>Plays and watch time per day, split by direct play and transcode, with the people, titles and apps behind them.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Plays per day, direct play vs transcode</li>
+              <li><svg class="i"><use href="#i-check"/></svg>A heatmap of when people watch, by weekday and hour</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Top viewers, most watched titles and clients</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Spot what forces transcodes before it hurts the server</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-library" aria-labelledby="tab-library" hidden>
+          <a class="shot" href="screenshots/library.jpg"><img src="screenshots/library.jpg" width="2880" height="1800" loading="lazy" alt="Library health page with incomplete series, upgrades available and mismatches with Jellyfin"></a>
+          <div class="txt">
+            <div class="eyebrow">Library health</div>
+            <h3>Find the gaps before anyone notices</h3>
+            <p>StreamForge compares Jellyfin with Sonarr and Radarr and shows where they disagree.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Series with missing episodes</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Files below your quality cutoff, ready to upgrade</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Downloads Jellyfin never picked up</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Items in Jellyfin that nothing manages</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-seerr" aria-labelledby="tab-seerr" hidden>
+          <a class="shot" href="screenshots/seerr.jpg"><img src="screenshots/seerr.jpg" width="2880" height="1800" loading="lazy" alt="Seerr page with requests awaiting approval and recent requests"></a>
+          <div class="txt">
+            <div class="eyebrow">Seerr</div>
+            <h3>Requests, handled from anywhere</h3>
+            <p>Everything waiting for approval and everything recently requested, with who asked and when.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Approve or decline in one click</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Movies vs series and the request mix</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Members request in their own name</li>
+              <li><svg class="i"><use href="#i-check"/></svg>A notification when someone asks for something</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-digest" aria-labelledby="tab-digest" hidden>
+          <a class="shot" href="screenshots/digest.jpg"><img src="screenshots/digest.jpg" width="2880" height="2200" loading="lazy" alt="Weekly digest page with new movies, new episodes and the most watched titles"></a>
+          <div class="txt">
+            <div class="eyebrow">Weekly digest</div>
+            <h3>A newsletter for your server</h3>
+            <p>New movies and episodes, music and books, and the most watched titles of the week, sent to the channels you choose.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Pick the day and time it goes out</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Discord, ntfy, Pushover, webhooks or push</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Preview it before it is sent</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Skips itself in a quiet week</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-rules" aria-labelledby="tab-rules" hidden>
+          <a class="shot" href="screenshots/rules.jpg"><img src="screenshots/rules.jpg" width="2880" height="1800" loading="lazy" alt="Rules page with automations such as pausing downloads when a disk is almost full"></a>
+          <div class="txt">
+            <div class="eyebrow">Rules</div>
+            <h3>If this happens, do that</h3>
+            <p>Simple automations for the things you would otherwise do by hand at 2am.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Pause the download clients when a disk is nearly full</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Run the stalled-download cleanup automatically</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Get told when a service stays down</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Test a rule without running its actions</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-bazarr" aria-labelledby="tab-bazarr" hidden>
+          <a class="shot" href="screenshots/bazarr.jpg"><img src="screenshots/bazarr.jpg" width="2880" height="2200" loading="lazy" alt="Bazarr page with episodes and movies missing subtitles"></a>
+          <div class="txt">
+            <div class="eyebrow">Bazarr</div>
+            <h3>Subtitles, sorted</h3>
+            <p>Episodes and movies missing subtitles, and what Bazarr has downloaded, upgraded or removed lately.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Missing subtitles by language</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Search for one with a click</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recent subtitle activity</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Links straight to each title</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-storage" aria-labelledby="tab-storage" hidden>
+          <a class="shot" href="screenshots/infinidisk.jpg"><img src="screenshots/infinidisk.jpg" width="2880" height="1800" loading="lazy" alt="Infinidisk page with storage capacity and the health of each drive"></a>
+          <div class="txt">
+            <div class="eyebrow">Infinidisk and storage</div>
+            <h3>Never run out of space by surprise</h3>
+            <p>Capacity, health and temperature for every drive and pool, with a forecast of when each one fills up.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Usage, free space and temperatures per drive</li>
+              <li><svg class="i"><use href="#i-check"/></svg>A forecast of when each volume fills</li>
+              <li><svg class="i"><use href="#i-check"/></svg>An alert before it does</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Cleanup suggestions ranked by space freed</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-audit" aria-labelledby="tab-audit" hidden>
+          <a class="shot" href="screenshots/audit.jpg"><img src="screenshots/audit.jpg" width="2880" height="1800" loading="lazy" alt="Audit log listing changes, approvals and sign-ins with who made them"></a>
+          <div class="txt">
+            <div class="eyebrow">Audit log</div>
+            <h3>Who changed what, and when</h3>
+            <p>Every setting change, approval, stream control and sign-in, with who did it and from where.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Searchable and filterable</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign-ins, including failed ones</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Stream controls and request decisions</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Kept on your server only</li>
+            </ul>
+          </div>
         </div>
         <p class="note center">Screenshots use the built-in demo data. All titles, people and artwork are fictional.</p>
+      </div>
+    </section>
+
+    <section id="phone" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">In your pocket</div>
+          <h2>Made for your phone, too</h2>
+          <p class="section-lede">Add StreamForge to your home screen and it opens like an app, with push notifications when something needs you.</p>
+        </div>
+        <div class="phones reveal">
+          <div class="phone"><img src="screenshots/phone-dashboard.jpg" width="1170" height="2532" loading="lazy" alt="The dashboard on a phone, with the stream playing now and service health"></div>
+          <div class="phone"><img src="screenshots/phone-title.jpg" width="1170" height="2532" loading="lazy" alt="A series page on a phone with Resume S2 E4, and continue watching"></div>
+          <div class="phone"><img src="screenshots/phone-now-playing.jpg" width="1170" height="2532" loading="lazy" alt="Now Playing on a phone, with stream counts and the active stream"></div>
+        </div>
+        <div class="phone-points">
+          <div class="reveal"><b>Install it like an app</b>Full screen on iPhone and Android, no app store needed.</div>
+          <div class="reveal"><b>Push notifications</b>Outages, full disks, failed imports and new requests.</div>
+          <div class="reveal"><b>Links that work anywhere</b>Set a public address and Play in Jellyfin opens the address you use outside the house.</div>
+        </div>
       </div>
     </section>
 
@@ -611,6 +937,83 @@
         setTimeout(() => (label.textContent = 'Copy'), 2000);
       });
     });
+    // Tour tabs (arrow keys move between them).
+    const tabs = [...document.querySelectorAll('.tab')];
+    const select = (t, focus) => {
+      for (const x of tabs) {
+        const on = x === t;
+        x.setAttribute('aria-selected', on);
+        x.tabIndex = on ? 0 : -1;
+        const panel = document.getElementById(x.getAttribute('aria-controls'));
+        panel.hidden = !on;
+        if (on) { panel.classList.remove('in-anim'); void panel.offsetWidth; panel.classList.add('in-anim'); }
+      }
+      if (focus) t.focus();
+      t.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    };
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => select(t));
+      t.addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+      });
+    });
+    document.body.classList.add('js');
+
+    // The pretend stream: pause, message and stop work on this page only.
+    (() => {
+      const card = document.getElementById('demo-stream');
+      if (!card) return;
+      const $ = (id) => document.getElementById(id);
+      const toast = card.querySelector('.toast');
+      const total = 54 * 60;
+      let pos = 31 * 60 + 26, paused = false, stopped = false, timer;
+      const fmt = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+      const draw = () => {
+        $('demo-bar').style.width = `${(pos / total) * 100}%`;
+        $('demo-pos').textContent = fmt(pos);
+        $('demo-left').textContent = `−${fmt(total - pos)} · 54:00`;
+      };
+      const say = (text) => {
+        toast.textContent = text;
+        toast.classList.add('show');
+        clearTimeout(timer);
+        timer = setTimeout(() => toast.classList.remove('show'), 2200);
+      };
+      setInterval(() => { if (!paused && !stopped && pos < total) { pos++; draw(); } }, 1000);
+      $('demo-pause').addEventListener('click', () => {
+        paused = !paused;
+        card.classList.toggle('paused', paused);
+        $('demo-state').textContent = paused ? 'Paused' : 'Now playing';
+        $('demo-pause').querySelector('span').textContent = paused ? 'Resume' : 'Pause';
+        $('demo-pause').querySelector('use').setAttribute('href', paused ? '#i-resume' : '#i-pause');
+        say(paused ? 'Paused on Living Room TV' : 'Resumed on Living Room TV');
+      });
+      $('demo-msg').addEventListener('click', () => {
+        const open = $('demo-msgrow').classList.toggle('open');
+        $('demo-msg').setAttribute('aria-pressed', open);
+        if (open) $('demo-text').focus();
+      });
+      $('demo-msgrow').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = $('demo-text').value.trim() || 'Dinner is ready!';
+        $('demo-text').value = '';
+        $('demo-msgrow').classList.remove('open');
+        $('demo-msg').setAttribute('aria-pressed', 'false');
+        say(`Shown on Maya’s screen: “${text.slice(0, 40)}”`);
+      });
+      $('demo-stop').addEventListener('click', () => {
+        stopped = !stopped;
+        card.classList.toggle('stopped', stopped);
+        $('demo-state').textContent = stopped ? 'Stopped' : 'Now playing';
+        $('demo-stop').innerHTML = stopped ? '<svg class="i"><use href="#i-resume"/></svg>Reset demo' : '<svg class="i"><use href="#i-stop"/></svg>Stop';
+        $('demo-pause').disabled = stopped;
+        $('demo-msg').disabled = stopped;
+        if (stopped) { paused = false; card.classList.remove('paused'); $('demo-pause').querySelector('span').textContent = 'Pause'; $('demo-pause').querySelector('use').setAttribute('href', '#i-pause'); $('demo-msgrow').classList.remove('open'); }
+        say(stopped ? 'Playback stopped for Maya' : 'Back to playing');
+      });
+      draw();
+    })();
   </script>
 </body>
 </html>

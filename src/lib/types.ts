@@ -37,6 +37,8 @@ export interface ServiceHealth {
   reason?: string;
   issues: HealthIssue[];
   meta?: Record<string, string | number | boolean | undefined>;
+  /** Address to open the service in a browser (primary services only). */
+  publicUrl?: string;
   uptime?: number;
   history: { t: number; ms: number | null }[];
 }
@@ -410,6 +412,8 @@ export interface ServiceSettingsView {
   updatedAt?: string;
   updatedBy?: string;
   url: string;
+  /** Where people open it in a browser; empty = same as `url`. */
+  publicUrl: string;
   apiKeySet: boolean;
   apiKeyHint?: string;
   /** Infinidisk only. */
@@ -452,6 +456,7 @@ export interface ArrInstanceView {
 
 export interface ServiceSettingsInput {
   url?: string;
+  publicUrl?: string;
   /** Omit to keep the saved key; empty string removes it. */
   apiKey?: string;
   authHeader?: string;
