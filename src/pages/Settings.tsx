@@ -35,6 +35,7 @@ import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
 import { MoonfinSection } from '@/components/settings/MoonfinSection';
+import { UpdatesSection } from '@/components/settings/UpdatesSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
 
@@ -448,6 +449,7 @@ export default function SettingsPage() {
         title="Settings"
         description="Connect your services, or switch off the ones you don’t use. Changes apply immediately — no restart needed."
       />
+      {q.data && <UpdatesSection />}
       {q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
       ) : !q.data ? (

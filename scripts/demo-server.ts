@@ -12,6 +12,7 @@ import express from 'express';
 import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js';
 import { demoTicks } from './demo-diagnosis.js';
 import { demoLibrary, demoProfiles } from './demo-playability.js';
+import { parseNotes } from '../server/services/updates.js';
 import { libraryReport, statusOf, titleReport } from '../server/services/playability/report.js';
 import type {
   ActivityEntry,
@@ -1043,6 +1044,27 @@ app.get('/api/diagnosis/explain', (req, res) => {
   if (near) return void res.json({ incident: near, ...analyse(diagTicks, { from: near.start, to: near.end, session }, opts) });
   res.json({ ...analyse(diagTicks, { from: at - 60_000, to: at + 30_000, session }, opts) });
 });
+
+// A newer release, so the update notice shows in the demo.
+const demoReleases = [
+  {
+    version: '1.8.0',
+    name: 'v1.8.0',
+    url: 'https://github.com/ashveebee/streamforge/releases',
+    publishedAt: iso(1 * DAY),
+    notes: parseNotes('### Features\n\n* learn what each device can play, and predict it for the library ([20ab29e](x))\n* see when a new StreamForge release is out\n\n### Bug Fixes\n\n* stall list scrolls on small phones'),
+  },
+  {
+    version: '1.7.0',
+    name: 'v1.7.0',
+    url: 'https://github.com/ashveebee/streamforge/releases',
+    publishedAt: iso(6 * DAY),
+    notes: parseNotes('### Features\n\n* explain why a stream buffered ([1908fb4](x))'),
+  },
+];
+const updates = () => ({ enabled: true, current: '1.6.0', latest: '1.8.0', available: '1.8.0', releases: demoReleases, checkedAt: Date.now() - 2 * 3600_000, repoUrl: 'https://github.com/ashveebee/streamforge/releases' });
+app.get('/api/updates', json(updates));
+app.post('/api/updates/check', json(updates));
 
 // Device playability from simulated plays (see demo-playability.ts).
 const playProfiles = demoProfiles();

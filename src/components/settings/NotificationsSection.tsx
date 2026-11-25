@@ -24,6 +24,7 @@ export const EVENT_LABEL: Record<NotifyEvent, string> = {
   request_pending: 'New request to approve',
   playback_alert: 'Transcode and bandwidth alerts',
   weekly_digest: 'Weekly digest',
+  update_available: 'StreamForge update available',
   rule: 'Rule alerts',
 };
 

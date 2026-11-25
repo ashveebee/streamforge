@@ -26,6 +26,7 @@ import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { checkNow, updateStatus } from './services/updates.js';
 import { deviceReport, PlayabilityError, playabilityStatus, titlePlayability } from './services/playability/index.js';
 import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
@@ -549,6 +550,11 @@ api.put(
     return diagnosisStatus();
   }),
 );
+
+/* -------------------------------- updates -------------------------------- */
+
+api.get('/updates', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(updateStatus()));
+api.post('/updates/check', requireAdmin, handle(null, () => checkNow()));
 
 /* ------------------------------ playability ------------------------------ */
 

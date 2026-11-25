@@ -201,6 +201,8 @@ server.
 - **Single sign-on and two-factor.** Sign in through any OpenID Connect
   provider (Authentik, Authelia, Keycloak, Pocket ID, …), and turn on
   two-factor sign-in with an authenticator app.
+- **Update notices.** Admins see when a new StreamForge release is out, with
+  what changed since their version and how to update.
 - **Backup and restore.** Download all settings as one encrypted file and
   restore it on another server from Settings.
 - **Installable.** StreamForge is a progressive web app: install it on a phone
@@ -290,6 +292,13 @@ docker compose pull && docker compose up -d
 Your settings are kept in the `streamforge-data` volume. See
 [Releases and image tags](#releases-and-image-tags) to pin a version instead of
 following `latest`.
+
+StreamForge tells admins when a new release is out: the sidebar shows the new
+version, and **Settings → Updates** lists what changed since your version and
+the command to update. It asks GitHub's public API every 6 hours, sending
+nothing but its version number. Pick **StreamForge update available** on a
+notification channel to hear about it there too, or set `UPDATE_CHECK=false`
+to turn the check off.
 
 ### Backing up
 
