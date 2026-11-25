@@ -17,7 +17,7 @@ export interface Session {
   deviceId: string;
   serverId?: string;
   /** How the user signed in. */
-  method?: 'password' | 'oidc' | 'plex';
+  method?: 'password' | 'oidc' | 'plex' | 'emby';
   createdAt: number;
   expiresAt: number;
   lastValidatedAt: number;

@@ -760,18 +760,18 @@ export interface JfServerTarget {
 const REMOTE_DEVICE = 'streamforge-server';
 
 /** Emby answers its API under `/emby`; Jellyfin at the root. */
-function remoteBase(srv: Pick<JfServerTarget, 'url' | 'type'>) {
+export function remoteBase(srv: Pick<JfServerTarget, 'url' | 'type'>) {
   const url = srv.url.replace(/\/+$/, '');
   return srv.type === 'emby' && !/\/emby$/i.test(url) ? `${url}/emby` : url;
 }
 
-function remoteHeaders(srv: Pick<JfServerTarget, 'apiKey' | 'type'>): Record<string, string> {
+export function remoteHeaders(srv: Pick<JfServerTarget, 'apiKey' | 'type'>): Record<string, string> {
   if (srv.type !== 'emby') return authHeader(srv.apiKey, REMOTE_DEVICE);
   // Emby reads the client description and token from its own headers.
   return { 'X-Emby-Authorization': authHeader(undefined, REMOTE_DEVICE).Authorization, 'X-Emby-Token': srv.apiKey };
 }
 
-function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
+export function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
   return requestJson<T>(buildUrl(remoteBase(srv), path, query), { headers: remoteHeaders(srv), service: 'jellyfin' });
 }
 
@@ -966,4 +966,112 @@ export function remoteImage(
 export async function controlRemoteSession(srv: JfServerTarget, sessionId: string, command: SessionCommand, text?: string) {
   await sendSessionCommand(remoteBase(srv), remoteHeaders(srv), sessionId, command, text);
   cache.delete(`jfx:${srv.id}:sessions`);
+}
+
+/* ------------------------------------------------------------------ */
+/* A main Emby server (people sign in with Emby)                       */
+/* ------------------------------------------------------------------ */
+
+/** Every series and movie with its external ids, like `libraryItems`, via the server's API key. */
+export async function remoteLibraryItems(srv: JfServerTarget) {
+  return cache.get(`jfx:${srv.id}:libitems`, 10 * 60_000, async () => {
+    const res = await remote<{ Items: { Id: string; Name: string; Type: string; ProductionYear?: number; ProviderIds?: Record<string, string> }[] }>(srv, '/Items', {
+      IncludeItemTypes: 'Series,Movie',
+      Recursive: true,
+      Fields: 'ProviderIds',
+      EnableImages: false,
+    });
+    return res.Items.map((i) => ({
+      id: i.Id,
+      name: i.Name,
+      type: i.Type as 'Series' | 'Movie',
+      year: i.ProductionYear,
+      tvdb: i.ProviderIds?.Tvdb,
+      tmdb: i.ProviderIds?.Tmdb,
+      imdb: i.ProviderIds?.Imdb,
+    }));
+  });
+}
+
+/** Playback entries from the server's activity log since a time. */
+export async function remotePlaybackEntries(srv: JfServerTarget, since: Date) {
+  return cache.get(`jfx:${srv.id}:playentries:${since.toISOString().slice(0, 13)}`, 5 * 60_000, async () => {
+    const res = await remote<{ Items: JfActivity[] }>(srv, '/System/ActivityLog/Entries', { minDate: since.toISOString(), limit: 5000 });
+    return res.Items.filter((a) => a.Type === 'VideoPlayback' || a.Type === 'AudioPlayback').map((a) => ({ name: a.Name, date: a.Date, userId: a.UserId }));
+  });
+}
+
+/** Plays per day, like `playbackHistory`. */
+export async function remotePlaybackHistory(srv: JfServerTarget, days = 14) {
+  const minDate = new Date(Date.now() - days * 86_400_000);
+  minDate.setHours(0, 0, 0, 0);
+  const entries = await remotePlaybackEntries(srv, minDate);
+  const buckets = new Map<string, { date: string; plays: number; users: Set<string> }>();
+  for (let i = 0; i < days; i++) {
+    const key = new Date(minDate.getTime() + (i + 1) * 86_400_000).toISOString().slice(0, 10);
+    buckets.set(key, { date: key, plays: 0, users: new Set() });
+  }
+  for (const e of entries) {
+    const b = buckets.get(e.date.slice(0, 10));
+    if (!b) continue;
+    b.plays++;
+    if (e.userId) b.users.add(e.userId);
+  }
+  return [...buckets.values()].map((b) => ({ date: b.date, plays: b.plays, users: b.users.size }));
+}
+
+/** Scans one library (or all of them) on a Jellyfin or Emby server, via its API key. */
+export async function remoteScan(srv: JfServerTarget, library?: string, full = false) {
+  if (library && !isValidRemoteId(library)) throw new UpstreamError('Unknown library', 400, 'jellyfin');
+  const path = library ? `/Items/${library}/Refresh` : '/Library/Refresh';
+  const query = library
+    ? { Recursive: true, MetadataRefreshMode: full ? 'FullRefresh' : 'Default', ImageRefreshMode: full ? 'FullRefresh' : 'Default', ReplaceAllMetadata: full, ReplaceAllImages: false }
+    : undefined;
+  await requestJson(buildUrl(remoteBase(srv), path, query), { method: 'POST', headers: remoteHeaders(srv), service: 'jellyfin' });
+  cache.delete(`jfx:${srv.id}:libraries`);
+}
+
+interface EmbyAuthResult {
+  User: JfUser;
+  AccessToken: string;
+  ServerId?: string;
+}
+
+/** Signs a user in to an Emby server with their name and password. */
+export async function embyAuthenticate(url: string, username: string, password: string, deviceId: string) {
+  const t = { url, type: 'emby' as const };
+  try {
+    return await requestJson<EmbyAuthResult>(buildUrl(remoteBase(t), '/Users/AuthenticateByName'), {
+      method: 'POST',
+      headers: { 'X-Emby-Authorization': authHeader(undefined, deviceId).Authorization },
+      body: { Username: username, Pw: password },
+      service: 'jellyfin',
+    });
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status === 401) throw new UpstreamError('Invalid username or password', 401, 'jellyfin');
+    throw err;
+  }
+}
+
+/** One Emby user, read with that user's own token (to re-check a sign-in). */
+export function embyUser(url: string, token: string, userId: string) {
+  return remote<JfUser>({ id: 'emby-main', name: '', url, apiKey: token, type: 'emby' }, `/Users/${userId}`);
+}
+
+export async function embyLogout(url: string, token: string) {
+  const t = { url, apiKey: token, type: 'emby' as const };
+  await requestJson(buildUrl(remoteBase(t), '/Sessions/Logout'), { method: 'POST', headers: remoteHeaders(t), service: 'jellyfin' }).catch(() => undefined);
+}
+
+/**
+ * Creates an API key named "StreamForge" with an administrator's token, so
+ * background features (alerts, stats, Now Playing) work without anyone signed in.
+ */
+export async function embyCreateApiKey(url: string, adminToken: string) {
+  const t = { id: 'emby-setup', name: '', url, apiKey: adminToken, type: 'emby' as const };
+  await requestJson(buildUrl(remoteBase(t), '/Auth/Keys', { App: 'StreamForge' }), { method: 'POST', headers: remoteHeaders(t), service: 'jellyfin' });
+  const keys = await remote<{ Items?: { AccessToken: string; AppName?: string; DateCreated?: string }[] }>(t, '/Auth/Keys');
+  const ours = (keys.Items ?? []).filter((k) => k.AppName === 'StreamForge').sort((a, b) => (b.DateCreated ?? '').localeCompare(a.DateCreated ?? ''));
+  if (!ours[0]?.AccessToken) throw new UpstreamError('Emby didn’t return the new API key', undefined, 'jellyfin');
+  return ours[0].AccessToken;
 }

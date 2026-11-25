@@ -1,7 +1,7 @@
 import { db } from '../lib/db.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
-import { canWatchInBackground, mainNowPlaying, mainPlex } from './mainServer.js';
+import { canWatchInBackground, mainEmby, mainNowPlaying, mainPlex } from './mainServer.js';
 import * as plex from './plex.js';
 
 /*
@@ -116,7 +116,8 @@ async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
   // Plex: its watch history has who played what and when, like Jellyfin's activity log.
   const p = mainPlex();
   if (p) return (await plex.playsSince(p, since)).map((x) => ({ user: x.user, title: x.title, group: x.group, at: x.at }));
-  const entries = await jellyfin.playbackEntries(ctx, new Date(since));
+  const emby = mainEmby();
+  const entries = emby ? await jellyfin.remotePlaybackEntries(emby, new Date(since)) : await jellyfin.playbackEntries(ctx, new Date(since));
   const out: Play[] = [];
   for (const e of entries) {
     const p = parsePlaybackName(e.name);

@@ -13,7 +13,7 @@ import { beginSetup, disable as disableMfa, finishSetup, mfaEnabled, mfaInfo, ve
 import { authorizeUrl, finishLogin, oidcReady, oidcSettings } from './services/oidc.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
-import { mainPlex, mediaReady, plexMode, setMainPlex } from './services/mainServer.js';
+import { mainEmby, mainPlex, mediaReady, notJellyfinMain, plexMode, setMainServer } from './services/mainServer.js';
 import { addServer, describeServers, getStoredServer, updateServer } from './services/mediaServers.js';
 import * as plexAuth from './services/plexAuth.js';
 import * as plex from './services/plex.js';
@@ -80,8 +80,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   if (Date.now() - session.lastValidatedAt > REVALIDATE_MS) {
-    if (session.method === 'plex') {
-      if (!(await revalidatePlex(req, res, session))) return;
+    if (session.method === 'plex' || session.method === 'emby') {
+      if (!(await (session.method === 'plex' ? revalidatePlex : revalidateEmby)(req, res, session))) return;
       sessions.touch(session, req.get('user-agent'));
       req.session = session;
       next();
@@ -137,6 +137,37 @@ async function revalidatePlex(req: Request, res: Response, session: Session) {
   return true;
 }
 
+/** Re-checks an Emby sign-in: the token still works and the user is still allowed in. */
+async function revalidateEmby(req: Request, res: Response, session: Session) {
+  const srv = mainEmby();
+  try {
+    if (!srv) throw new UpstreamError('Emby is no longer the sign-in server', 401);
+    const user = await jellyfin.embyUser(srv.url, session.token, session.userId);
+    session.isAdmin = !!user.Policy?.IsAdministrator;
+    session.primaryImageTag = user.PrimaryImageTag;
+    if (user.Policy?.IsDisabled || (!session.isAdmin && !membersCanSignIn())) throw new UpstreamError('Access revoked', 401);
+    session.lastValidatedAt = Date.now();
+    sessions.save(session);
+  } catch (err) {
+    if (err instanceof UpstreamError && (err.status === 401 || err.status === 403)) {
+      sessions.destroy(session.id);
+      res.clearCookie(SESSION_COOKIE, cookieOptions(req));
+      res.status(401).json({ error: 'unauthenticated', message: 'Your Emby session has ended' });
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Ends a sign-in on the server it came from (Jellyfin or Emby keep a device per sign-in). */
+async function remoteLogout(s: Pick<Session, 'method' | 'token' | 'deviceId'>) {
+  if (s.method === 'password' || !s.method) await jellyfin.logout(s.token, s.deviceId);
+  else if (s.method === 'emby') {
+    const srv = mainEmby();
+    if (srv) await jellyfin.embyLogout(srv.url, s.token);
+  }
+}
+
 /** A stable, non-secret handle for a session (the real id is the cookie). */
 export const sessionHandle = (s: Session) => createHash('sha256').update(s.id).digest('base64url').slice(0, 16);
 
@@ -178,7 +209,7 @@ function startSession(req: Request, res: Response, data: SessionData) {
 const challenges = new Map<string, { data: SessionData; expires: number; attempts: number }>();
 
 // Single sign-on matches people to Jellyfin users, so it's off while Plex is the sign-in server.
-const ssoInfo = () => (oidcReady() && !plexMode() ? { label: oidcSettings().label, hidePassword: oidcSettings().hidePassword } : undefined);
+const ssoInfo = () => (oidcReady() && !notJellyfinMain() ? { label: oidcSettings().label, hidePassword: oidcSettings().hidePassword } : undefined);
 
 const loginBody = z.object({
   username: z.string().trim().min(1).max(256),
@@ -188,6 +219,16 @@ const loginBody = z.object({
 export const authRouter = Router();
 
 authRouter.get('/server', async (_req, res) => {
+  const e = mainEmby();
+  if (e) {
+    try {
+      const info = await jellyfin.embyProbe({ url: e.url });
+      res.json({ type: 'emby', name: info.meta?.server ?? e.name, version: info.version, online: true, configured: true });
+    } catch {
+      res.json({ type: 'emby', name: e.name, online: false, configured: true });
+    }
+    return;
+  }
   const p = mainPlex();
   if (p) {
     try {
@@ -252,12 +293,12 @@ authRouter.post('/setup', setupLimiter, async (req, res) => {
  * First-run setup: looks for Jellyfin servers on the local network so the
  * address can be picked instead of typed. Only while nothing is configured.
  */
-authRouter.post('/setup/discover', setupLimiter, async (_req, res) => {
+authRouter.post('/setup/discover', setupLimiter, async (req, res) => {
   if (mediaReady()) {
     res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
     return;
   }
-  const servers = await discoverWithStatus();
+  const servers = await discoverWithStatus(req.query.type === 'emby' ? ['emby'] : ['jellyfin']);
   res.json({ servers: servers.map(({ id, name, url, version, reachable }) => ({ id, name, url, version, reachable })) });
 });
 
@@ -357,7 +398,7 @@ authRouter.post('/plex/setup', setupLimiter, async (req, res) => {
     const srv = existing
       ? updateServer(existing.id, { apiKey: r.accessToken, serverId: r.clientIdentifier, enabled: true })!
       : addServer({ type: 'plex', name: r.name, url, apiKey: r.accessToken, serverId: r.clientIdentifier });
-    setMainPlex(srv.id);
+    setMainServer('plex', srv.id);
     audit({ ip: req.ip }, `[settings] Plex server “${r.name}” (${url}) set as the sign-in server during first-run setup`);
     await signInWithPlex(req, res, token);
     plexAuth.finishPin(b.data.handle);
@@ -365,6 +406,111 @@ authRouter.post('/plex/setup', setupLimiter, async (req, res) => {
     res.status(502).json({ error: 'upstream', message: `Could not reach plex.tv: ${(err as Error).message}` });
   }
 });
+
+/* ------------------------------ Emby sign-in ------------------------------ */
+
+/**
+ * First run, Emby: checks the server, signs the administrator in, creates an
+ * API key for background features, and makes the server the sign-in server.
+ */
+authRouter.post('/emby/setup', setupLimiter, async (req, res) => {
+  const b = z
+    .object({ url: urlField.refine((v) => v !== '', 'Enter your Emby server address'), username: z.string().trim().min(1).max(256), password: z.string().max(1024).default('') })
+    .strict()
+    .safeParse(req.body ?? {});
+  if (!b.success) {
+    res.status(400).json({ error: 'bad_request', message: b.error.issues[0]?.message ?? 'Invalid request' });
+    return;
+  }
+  if (mediaReady()) {
+    res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+    return;
+  }
+  const { url, username, password } = b.data;
+  let info;
+  try {
+    info = await jellyfin.embyProbe({ url });
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach Emby: ${(err as Error).message}` });
+    return;
+  }
+  const deviceId = newDeviceId();
+  try {
+    const auth = await jellyfin.embyAuthenticate(url, username, password, deviceId);
+    if (!auth.User.Policy?.IsAdministrator) {
+      await jellyfin.embyLogout(url, auth.AccessToken);
+      res.status(403).json({ error: 'forbidden', message: 'Sign in with an Emby administrator account to set StreamForge up.' });
+      return;
+    }
+    const apiKey = await jellyfin.embyCreateApiKey(url, auth.AccessToken);
+    if (mediaReady()) {
+      res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+      return;
+    }
+    const name = typeof info.meta?.server === 'string' ? info.meta.server : 'Emby';
+    const existing = describeServers().find((s) => s.type === 'emby' && s.url === url);
+    const srv = existing ? updateServer(existing.id, { apiKey, serverId: auth.ServerId, enabled: true })! : addServer({ type: 'emby', name, url, apiKey, serverId: auth.ServerId });
+    setMainServer('emby', srv.id);
+    audit({ ip: req.ip }, `[settings] Emby server “${name}” (${url}) set as the sign-in server during first-run setup`);
+    const session = startSession(req, res, {
+      userId: auth.User.Id,
+      userName: auth.User.Name,
+      isAdmin: true,
+      primaryImageTag: auth.User.PrimaryImageTag,
+      token: auth.AccessToken,
+      deviceId,
+      serverId: auth.ServerId,
+      method: 'emby',
+    });
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Emby');
+    res.json({ user: publicUser(session) });
+  } catch (err) {
+    const e = err as UpstreamError;
+    if (e.status === 401) res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
+    else res.status(502).json({ error: 'upstream', message: `Could not finish setting up Emby: ${e.message}` });
+  }
+});
+
+/** Signs in to the main Emby server with a name and password (from /login). */
+async function signInWithEmby(req: Request, res: Response, username: string, password: string) {
+  const srv = mainEmby()!;
+  const deviceId = newDeviceId();
+  try {
+    const result = await jellyfin.embyAuthenticate(srv.url, username, password, deviceId);
+    const isAdmin = !!result.User.Policy?.IsAdministrator;
+    if (result.User.Policy?.IsDisabled || (!isAdmin && !membersCanSignIn())) {
+      await jellyfin.embyLogout(srv.url, result.AccessToken);
+      audit({ userId: result.User.Id, userName: result.User.Name, ip: req.ip }, '[auth] sign-in refused: member access is off', false);
+      res.status(403).json({ error: 'forbidden', message: 'StreamForge is restricted to Emby administrators.' });
+      return;
+    }
+    const data: SessionData = {
+      userId: result.User.Id,
+      userName: result.User.Name,
+      isAdmin,
+      primaryImageTag: result.User.PrimaryImageTag,
+      token: result.AccessToken,
+      deviceId,
+      serverId: result.ServerId,
+      method: 'emby',
+    };
+    if (mfaEnabled(data.userId)) {
+      const challenge = randomBytes(24).toString('base64url');
+      challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
+      res.json({ mfaRequired: true, challenge });
+      return;
+    }
+    const session = startSession(req, res, data);
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Emby');
+    res.json({ user: publicUser(session) });
+  } catch (err) {
+    const e = err as UpstreamError;
+    if (e.status === 401) {
+      audit({ userName: username, ip: req.ip }, '[auth] sign-in failed: wrong username or password', false);
+      res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
+    } else res.status(502).json({ error: 'upstream', message: `Could not reach Emby: ${e.message}` });
+  }
+}
 
 /** Signs a Plex account in to the main Plex server, with two-factor when it's on. */
 async function signInWithPlex(req: Request, res: Response, token: string) {
@@ -425,6 +571,10 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
     res.status(409).json({ error: 'plex', message: 'Sign in with your Plex account.' });
     return;
   }
+  if (mainEmby()) {
+    await signInWithEmby(req, res, body.data.username, body.data.password);
+    return;
+  }
   if (!isConfigured('jellyfin')) {
     res.status(409).json({ error: 'not_configured', message: 'Set up your Jellyfin server first.' });
     return;
@@ -456,7 +606,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       const challenge = randomBytes(24).toString('base64url');
       for (const [k, c] of challenges) if (c.expires < Date.now()) {
         challenges.delete(k);
-        if (c.data.method === 'password') void jellyfin.logout(c.data.token, c.data.deviceId);
+        void remoteLogout(c.data);
       }
       challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
       res.json({ mfaRequired: true, challenge });
@@ -480,7 +630,7 @@ authRouter.post('/logout', async (req, res) => {
   const session = sessions.get(readCookie(req, SESSION_COOKIE));
   if (session) {
     sessions.destroy(session.id);
-    if (session.method === 'password' || !session.method) await jellyfin.logout(session.token, session.deviceId);
+    await remoteLogout(session);
     audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed out');
   }
   res.clearCookie(SESSION_COOKIE, cookieOptions(req));
@@ -518,7 +668,7 @@ authRouter.delete('/sessions/:id', requireAuth, async (req, res) => {
     return;
   }
   sessions.destroy(target.id);
-  if (target.method === 'password' || !target.method) await jellyfin.logout(target.token, target.deviceId);
+  await remoteLogout(target);
   res.json({ ok: true });
 });
 
@@ -545,7 +695,7 @@ authRouter.post('/mfa/verify', mfaLimiter, async (req, res) => {
   if (!how) {
     if (++c.attempts >= 5) {
       challenges.delete(b.data.challenge);
-      if (c.data.method === 'password') await jellyfin.logout(c.data.token, c.data.deviceId);
+      await remoteLogout(c.data);
     }
     audit({ userId: c.data.userId, userName: c.data.userName, ip: req.ip }, '[auth] sign-in failed: wrong two-factor code', false);
     res.status(401).json({ error: 'invalid_code', message: 'That code didn’t work. Check your authenticator app and try again.' });
@@ -600,7 +750,7 @@ function publicBase(req: Request) {
 const loginError = (res: Response, message: string) => res.redirect(302, `/login?error=${encodeURIComponent(message)}`);
 
 authRouter.get('/oidc/start', setupLimiter, async (req, res) => {
-  if (!oidcReady() || plexMode()) return loginError(res, 'Single sign-on isn’t set up.');
+  if (!oidcReady() || notJellyfinMain()) return loginError(res, 'Single sign-on isn’t set up.');
   try {
     res.redirect(302, await authorizeUrl(`${publicBase(req)}/api/auth/oidc/callback`));
   } catch (err) {
@@ -609,7 +759,7 @@ authRouter.get('/oidc/start', setupLimiter, async (req, res) => {
 });
 
 authRouter.get('/oidc/callback', setupLimiter, async (req, res) => {
-  if (!oidcReady() || plexMode()) return loginError(res, 'Single sign-on isn’t set up.');
+  if (!oidcReady() || notJellyfinMain()) return loginError(res, 'Single sign-on isn’t set up.');
   const { code, state, error, error_description: desc } = req.query as Record<string, string | undefined>;
   if (error) return loginError(res, desc ?? error);
   if (!code || !state) return loginError(res, 'Sign-in was cancelled.');

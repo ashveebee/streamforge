@@ -39,7 +39,7 @@ export function MembersSection() {
         <div className="divide-y divide-line">
           <div className="flex items-center gap-3 px-5 py-4">
             <div className="flex-1">
-              <div className="text-[13px] font-medium">{main.plex ? 'People you share your Plex server with can sign in' : 'Non-admin Jellyfin users can sign in'}</div>
+              <div className="text-[13px] font-medium">{main.plex ? 'People you share your Plex server with can sign in' : `Non-admin ${main.name} users can sign in`}</div>
               <div className="text-[11px] text-ink-4">Turning this off signs members out within a few minutes.</div>
             </div>
             <Switch checked={d.signIn} disabled={save.isPending} onChange={(v) => save.mutate({ signIn: v })} label="Allow members to sign in" />

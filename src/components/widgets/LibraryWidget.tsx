@@ -17,7 +17,7 @@ export function LibraryWidget() {
   const main = useMainServer();
   return (
     <Card className="h-full">
-      <CardHeader icon={Library} accent={main.plex ? 'var(--color-plex)' : 'var(--color-jellyfin)'} title="Library" subtitle={q.data ? `${q.data.libraries.length} libraries on ${q.data.server.name}` : main.name} />
+      <CardHeader icon={Library} accent={`var(--color-${main.type})`} title="Library" subtitle={q.data ? `${q.data.libraries.length} libraries on ${q.data.server.name}` : main.name} />
       <CardBody>
         <QueryState query={q} skeleton={<div className="grid grid-cols-2 gap-3">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>}>
           {(d) => (

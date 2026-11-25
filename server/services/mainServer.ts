@@ -7,44 +7,53 @@ import * as plex from './plex.js';
 /*
  * The main media server: the one people sign in with.
  *
- * It's Jellyfin by default. A household that only runs Plex can make a Plex
- * server the main one instead: people then sign in with their Plex account,
- * and everything that used to read the main Jellyfin server (the dashboard,
- * stats, your page, search, library health, alerts) reads that Plex server.
+ * It's Jellyfin by default. A household that only runs Plex or Emby can make
+ * that server the main one instead: people then sign in with their Plex or
+ * Emby account, and everything that used to read the main Jellyfin server
+ * (the dashboard, stats, your page, search, library health, alerts) reads
+ * that server.
  *
- * The main Plex server is stored with the other media servers (so it gets
- * health checks, Now Playing and its page like any other) and named here.
+ * A main Plex or Emby server is stored with the other media servers (so it
+ * gets health checks, Now Playing and its page like any other) and named here.
  */
 
-export type MainType = 'jellyfin' | 'plex';
+export type MainType = 'jellyfin' | 'plex' | 'emby';
 
 interface MainPref {
   type: MainType;
-  /** The media server id of the main Plex server. */
+  /** The media server id of the main Plex or Emby server. */
   id?: string;
 }
 
 const PREF = 'mainServer';
 let pref: MainPref = readPref<MainPref>(PREF, { type: 'jellyfin' });
 
-/** The main Plex server, when Plex is the sign-in server. */
-export function mainPlex(): MediaServer | undefined {
-  if (pref.type !== 'plex' || !pref.id) return undefined;
+/** The main Plex or Emby server, when one of them is the sign-in server. */
+export function mainExtra(): MediaServer | undefined {
+  if (pref.type === 'jellyfin' || !pref.id) return undefined;
   const s = getStoredServer(pref.id);
-  return s?.type === 'plex' ? s : undefined;
+  return s?.type === pref.type ? s : undefined;
 }
+
+export const mainPlex = () => (mainExtra()?.type === 'plex' ? mainExtra() : undefined);
+export const mainEmby = () => (mainExtra()?.type === 'emby' ? mainExtra() : undefined);
 
 /** True when people sign in with Plex. */
 export const plexMode = () => !!mainPlex();
+/** True when people sign in with Emby. */
+export const embyMode = () => !!mainEmby();
+/** True when the sign-in server is Plex or Emby rather than Jellyfin. */
+export const notJellyfinMain = () => !!mainExtra();
 
 /** Which kind of server people sign in with. */
-export const mainType = (): MainType => (plexMode() ? 'plex' : 'jellyfin');
+export const mainType = (): MainType => mainExtra()?.type ?? 'jellyfin';
+export const mainName = () => ({ jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' })[mainType()];
 
-/** True once a main server is set up (either kind). */
-export const mediaReady = () => plexMode() || isConfigured('jellyfin');
+/** True once a main server is set up (any kind). */
+export const mediaReady = () => notJellyfinMain() || isConfigured('jellyfin');
 
-export function setMainPlex(id: string) {
-  pref = { type: 'plex', id };
+export function setMainServer(type: 'plex' | 'emby', id: string) {
+  pref = { type, id };
   writePref(PREF, pref);
 }
 
@@ -53,28 +62,30 @@ export function clearMainServer() {
   writePref(PREF, pref);
 }
 
-export const isMainServer = (id: string) => pref.type === 'plex' && pref.id === id;
+export const isMainServer = (id: string) => pref.type !== 'jellyfin' && pref.id === id;
 
 /** Active streams on the main server, for background features (recorder, alerts, rules). */
 export async function mainNowPlaying(): Promise<jellyfin.NowPlaying[] | undefined> {
-  const p = mainPlex();
-  if (p) return plex.nowPlaying(p);
+  const m = mainExtra();
+  if (m) return m.type === 'plex' ? plex.nowPlaying(m) : jellyfin.remoteNowPlaying(m);
   return jellyfin.serverNowPlaying();
 }
 
 /** Whether background features can read the main server without a signed-in user. */
-export const canWatchInBackground = () => plexMode() || jellyfin.hasServerKey();
+export const canWatchInBackground = () => notJellyfinMain() || jellyfin.hasServerKey();
 
-/** Stops (or, on Jellyfin, messages) a stream on the main server from a background feature. */
+/** Controls a stream on the main server from a background feature. */
 export async function controlMainSession(sessionId: string, command: jellyfin.SessionCommand, text?: string) {
-  const p = mainPlex();
-  if (!p) return jellyfin.controlSessionAsServer(sessionId, command, text);
+  const m = mainExtra();
+  if (!m) return jellyfin.controlSessionAsServer(sessionId, command, text);
+  if (m.type === 'emby') return jellyfin.controlRemoteSession(m, sessionId, command, text);
   // Plex can only end a stream; the message becomes the reason shown to the viewer.
-  if (command === 'stop') return plex.stopSession(p, sessionId, text);
+  if (command === 'stop') return plex.stopSession(m, sessionId, text);
 }
 
 /** Movies and series in the main server's library, with their TMDB/TVDB/IMDb ids. */
 export function mainLibraryItems(ctx: jellyfin.JfCtx) {
-  const p = mainPlex();
-  return p ? plex.libraryItems(p) : jellyfin.libraryItems(ctx);
+  const m = mainExtra();
+  if (!m) return jellyfin.libraryItems(ctx);
+  return m.type === 'plex' ? plex.libraryItems(m) : jellyfin.remoteLibraryItems(m);
 }

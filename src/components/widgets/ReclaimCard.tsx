@@ -101,7 +101,7 @@ export function ReclaimCard() {
           <>
             <ul className="max-h-[520px] divide-y divide-line overflow-y-auto">{q.data.items.map((i) => <Row key={i.key} i={i} />)}</ul>
             <p className="mt-2 text-[11px] text-ink-4">
-              {main.plex ? 'Based on your Plex watch history.' : 'Based on every Jellyfin user’s play history.'} Titles added in this period are skipped.{q.data.kept ? ` ${q.data.kept} kept title${q.data.kept === 1 ? '' : 's'} hidden.` : ''}
+              {main.plex ? 'Based on your Plex watch history.' : main.emby ? 'Based on plays StreamForge has recorded.' : 'Based on every Jellyfin user’s play history.'} Titles added in this period are skipped.{q.data.kept ? ` ${q.data.kept} kept title${q.data.kept === 1 ? '' : 's'} hidden.` : ''}
               {q.data.total > q.data.items.length && <> Showing the largest {q.data.items.length}.</>}
             </p>
             {q.data.items.length > 0 && <Pill className="mt-2">Checked {relative(q.data.checkedAt)}</Pill>}

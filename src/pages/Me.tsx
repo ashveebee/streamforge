@@ -140,7 +140,7 @@ export default function MePage() {
                 <CardHeader icon={History} accent="var(--color-brand)" title="Watch history" subtitle="Recorded by StreamForge" />
                 <CardBody>
                   {!d.history.length ? (
-                    <EmptyState icon={History} title="No history yet" description={main.plex ? 'Your plays will show up here as you watch.' : 'StreamForge records plays when a Jellyfin API key is set in Settings.'} />
+                    <EmptyState icon={History} title="No history yet" description={main.other ? 'Your plays will show up here as you watch.' : 'StreamForge records plays when a Jellyfin API key is set in Settings.'} />
                   ) : (
                     <ul className="max-h-[480px] divide-y divide-line overflow-y-auto">
                       {d.history.map((h, n) => (

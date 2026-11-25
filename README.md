@@ -1,11 +1,11 @@
 # StreamForge
 
-A modern control centre for a **Jellyfin or Plex** media server and the
+A modern control centre for a **Jellyfin, Plex or Emby** media server and the
 services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
 Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
 NZBGet). Run more than one media server? StreamForge also watches extra
-**Jellyfin, Emby and Plex** servers next to your main one. Only have Plex? See
-[Plex-only households](#plex-only-households).
+**Jellyfin, Emby and Plex** servers next to your main one. Only have Plex or
+Emby? See [Plex-only and Emby-only households](#plex-only-and-emby-only-households).
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
@@ -63,10 +63,10 @@ server.
 
 ## Features
 
-- **Jellyfin or Plex sign-in.** Users sign in with their Jellyfin account, or
-  with **Sign in with Plex** when Plex is your main server. The server keeps
-  the token, and the browser only holds an opaque HttpOnly session cookie. The
-  user's profile and avatar come from Jellyfin or Plex.
+- **Jellyfin, Plex or Emby sign-in.** Users sign in with their account on your
+  main server: a Jellyfin or Emby username and password, or **Sign in with
+  Plex**. The server keeps the token, and the browser only holds an opaque
+  HttpOnly session cookie. The user's profile and avatar come from that server.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:
@@ -304,21 +304,31 @@ server you use. People sign in to StreamForge with their account on it.
   `https://jellyfin.example.com` or `http://192.168.1.10:8096`), or click
   **Find servers on my network** to pick one. Then sign in with a **Jellyfin
   administrator** account.
+- **Emby:** enter your Emby server address (or find it on the network) and
+  sign in with an **Emby administrator** account. StreamForge creates its own
+  API key on the server for background features, and everyone else signs in
+  with their Emby account.
 
-You can add Emby servers, and more Jellyfin or Plex servers, from Settings
-afterwards.
+You can add more servers of any kind from Settings afterwards.
 
-<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="49%" alt="First-run setup: pick Plex or Jellyfin"></a>
-<a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="49%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin or Emby"></a>
+<a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="32%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
+<a href="docs/screenshots/setup-emby.jpg"><img src="docs/screenshots/setup-emby.jpg" width="32%" alt="Emby setup: the server address, servers found on the network, and an administrator sign-in"></a>
 
-### Plex-only households
+### Plex-only and Emby-only households
 
-With Plex as the main server, the whole app runs on Plex. Jellyfin isn't
-needed at all.
+With Plex or Emby as the main server, the whole app runs on it. Jellyfin isn't
+needed at all. **Emby** works almost exactly like Jellyfin (it has the same
+API): pausing and messaging streams, the activity log and scans all work. The
+notes below are mostly about **Plex**.
 
 <a href="docs/screenshots/plex-only.jpg"><img src="docs/screenshots/plex-only.jpg" alt="The dashboard of a Plex-only install: streams from two Plex servers, a Plex sidebar entry and service health"></a>
 
-- **Sign-in:** **Sign in with Plex**. The server's owner is an administrator.
+- **Emby sign-in:** username and password, like Jellyfin. Emby
+  administrators are StreamForge administrators; other Emby users are members.
+  Cleanup suggestions use the plays StreamForge records, because Emby's
+  per-user watch data needs each user's own token.
+- **Plex sign-in:** **Sign in with Plex**. The server's owner is an administrator.
   People the server is shared with are members, and can sign in when Settings
   → Access allows it. Two-factor sign-in works as usual. StreamForge never
   sees anyone's Plex password; plex.tv handles the sign-in.
@@ -327,12 +337,12 @@ needed at all.
   Plex), ⌘K search, Library health, cleanup suggestions, the weekly digest,
   rules, playback alerts and the buffering diagnosis. Seerr requests are
   matched to Plex accounts.
-- **Differences:** Plex streams can be stopped (with a reason, needs Plex
+- **Plex differences:** Plex streams can be stopped (with a reason, needs Plex
   Pass) but not paused or messaged, so the 4K alert only notifies you. Stats
   for the time before StreamForge started recording come from Plex's watch
   history, which has no watch time or transcode details. Title pages show
   details from Seerr and the *arr apps, without per-episode file info. Single
-  sign-on and Moonfin are Jellyfin features and are hidden.
+  sign-on and Moonfin are Jellyfin features and are hidden (with Emby too).
 - **Needs:** the StreamForge server must be able to reach `plex.tv` (for
   sign-in) and your Plex server.
 

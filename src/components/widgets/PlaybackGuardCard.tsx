@@ -63,7 +63,7 @@ export function PlaybackGuardCard() {
             </label>
           )}
           <div className="flex items-center gap-2 sm:col-span-3">
-            <p className="mr-auto text-[11px] text-ink-4">Alerts go to channels subscribed to “Transcode and bandwidth alerts” in Settings → Notifications.{main.plex ? ' Plex can’t show viewers a message, so 4K alerts only notify you.' : ' Needs a Jellyfin API key.'}</p>
+            <p className="mr-auto text-[11px] text-ink-4">Alerts go to channels subscribed to “Transcode and bandwidth alerts” in Settings → Notifications.{main.plex ? ' Plex can’t show viewers a message, so 4K alerts only notify you.' : main.emby ? '' : ' Needs a Jellyfin API key.'}</p>
             {save.error && <span className="text-xs text-bad">{(save.error as Error).message}</span>}
             <Button size="sm" variant="primary" type="submit" disabled={!dirty || save.isPending}>
               {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />} Save

@@ -18,7 +18,7 @@ export function RecentlyAddedWidget({ server, serverType: given }: { server?: st
   const serverType = given ?? main.type;
   const q = useLatest(server);
   // Title pages read the main Jellyfin server, so other servers' titles don't link.
-  const linkTo = (id: string) => ((server && server !== 'jellyfin') || main.plex ? undefined : `/media/jellyfin/${id}`);
+  const linkTo = (id: string) => ((server && server !== 'jellyfin') || main.other ? undefined : `/media/jellyfin/${id}`);
   const scroller = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: 'smooth' });
 

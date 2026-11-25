@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import type { Request, Response } from 'express';
 import { UpstreamError } from './http.js';
 import { isConfigured } from '../settings.js';
-import { plexMode } from '../services/mainServer.js';
+import { notJellyfinMain } from '../services/mainServer.js';
 import type { ServiceId } from '../services/types.js';
 
 /** Thrown by handlers for a clean 4xx response. */
@@ -19,8 +19,8 @@ export class HttpError extends Error {
 /** Wraps a handler so upstream failures become clean JSON errors. */
 export function handle(service: ServiceId | null, fn: (req: Request) => Promise<unknown>) {
   return async (req: Request, res: Response) => {
-    // With Plex as the sign-in server, media routes serve the main Plex server instead of Jellyfin.
-    if (service && !isConfigured(service) && !(service === 'jellyfin' && plexMode())) {
+    // With Plex or Emby as the sign-in server, media routes serve that server instead of Jellyfin.
+    if (service && !isConfigured(service) && !(service === 'jellyfin' && notJellyfinMain())) {
       res.status(404).json({ error: 'not_configured', service, message: `${service} is not configured` });
       return;
     }

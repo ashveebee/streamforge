@@ -511,18 +511,18 @@ function ServicesTab() {
           if (!s) return null;
           return (
             <Fragment key={id}>
-              {/* With Plex as the sign-in server, Plex comes first and Jellyfin servers are added like Emby ones. */}
-              {id === 'jellyfin' && main.plex ? (
+              {/* With Plex or Emby as the sign-in server, it comes first and Jellyfin servers are added like the others. */}
+              {id === 'jellyfin' && main.other ? (
                 <>
-                  <MediaServersSection type="plex" />
+                  <MediaServersSection type={main.type} />
                   <MediaServersSection type="jellyfin" standalone />
-                  <MediaServersSection type="emby" />
+                  <MediaServersSection type={main.plex ? 'emby' : 'plex'} />
                 </>
               ) : (
                 <ServiceCard s={s} index={i} />
               )}
               {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              {id === 'jellyfin' && !main.plex && s.configured && (
+              {id === 'jellyfin' && !main.other && s.configured && (
                 <>
                   <MediaServersSection type="jellyfin" />
                   <MediaServersSection type="emby" />
@@ -533,7 +533,7 @@ function ServicesTab() {
           );
         })}
       </ul>
-      {!main.plex && <MoonfinSection />}
+      {!main.other && <MoonfinSection />}
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
       </p>
@@ -569,7 +569,7 @@ export default function SettingsPage() {
         {tab.path === 'access' && (
           <>
             <MembersSection />
-            {!main.plex && <SsoSection />}
+            {!main.other && <SsoSection />}
           </>
         )}
         {tab.path === 'system' && (

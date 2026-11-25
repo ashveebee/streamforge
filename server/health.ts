@@ -4,7 +4,7 @@ import { arrProbe, arrQueue } from './services/arr.js';
 import { arrInstances, onInstancesChange } from './services/instances.js';
 import { MEDIA_SERVER_NAMES, mediaServers, onServersChange, type MediaServerType } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
-import { plexMode } from './services/mainServer.js';
+import { notJellyfinMain } from './services/mainServer.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
@@ -220,7 +220,7 @@ export function healthSnapshot(visible: (kind: ServiceId) => boolean = () => tru
   // Disabled services are hidden entirely, not reported as "unconfigured".
   // Primary services carry the address to open them in a browser.
   // With Plex as the sign-in server and no Jellyfin, there's no Jellyfin row to show.
-  const noJellyfin = plexMode() && !isConfigured('jellyfin');
+  const noJellyfin = notJellyfinMain() && !isConfigured('jellyfin');
   const services = [...state.values()]
     .filter((s) => isEnabled(s.kind) && visible(s.kind) && !(noJellyfin && s.id === 'jellyfin'))
     .map((s) => {

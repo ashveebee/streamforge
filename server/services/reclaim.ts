@@ -4,7 +4,7 @@ import { HttpError } from '../lib/handle.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, serverToken, type JfCtx } from './jellyfin.js';
-import { mainLibraryItems, mainPlex } from './mainServer.js';
+import { mainEmby, mainLibraryItems, mainPlex } from './mainServer.js';
 import * as plex from './plex.js';
 
 /*
@@ -64,6 +64,8 @@ async function lastPlayed(ctx: JfCtx) {
     const items = await plex.libraryItems(p);
     return new Map(items.filter((i) => i.lastPlayed).map((i) => [i.id, i.lastPlayed!] as const));
   }
+  // Emby: per-user watch data needs each user's token, so StreamForge's own play records stand in.
+  if (mainEmby()) return new Map<string, number>();
   return cache.get('jf:lastplayed', 30 * 60_000, async () => {
     const token = serverToken(ctx);
     const users = await jf<{ Id: string; Policy?: { IsDisabled?: boolean } }[]>('/Users', token, ctx.deviceId);

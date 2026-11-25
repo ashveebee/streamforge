@@ -237,7 +237,10 @@ const INTRO: Record<MediaServerType, string> = {
   plex: 'Monitor Plex servers: health, outage alerts, their streams on Now Playing and a Plex page with a tab per server.',
 };
 
-const MAIN_INTRO = 'People sign in with their Plex account on your server. Add more Plex servers to watch them here too.';
+const MAIN_INTRO: Partial<Record<MediaServerType, string>> = {
+  plex: 'People sign in with their Plex account on your server. Add more Plex servers to watch them here too.',
+  emby: 'People sign in with their Emby account on this server. Add more Emby servers to watch them here too.',
+};
 const INTRO_STANDALONE_JELLYFIN = 'Monitor Jellyfin servers: health, outage alerts, their streams on Now Playing and a Jellyfin page with a tab per server.';
 
 /**
@@ -272,7 +275,7 @@ export function MediaServersSection({ type, standalone = type !== 'jellyfin' }: 
                 </span>
               )}
             </h3>
-            <p className="text-[11px] text-ink-4">{list.some((s) => s.main) ? MAIN_INTRO : standalone && type === 'jellyfin' ? INTRO_STANDALONE_JELLYFIN : INTRO[type]}</p>
+            <p className="text-[11px] text-ink-4">{list.some((s) => s.main) ? MAIN_INTRO[type] : standalone && type === 'jellyfin' ? INTRO_STANDALONE_JELLYFIN : INTRO[type]}</p>
           </div>
           <Button size="sm" disabled={discover.isPending} onClick={() => discover.mutate()}>
             {discover.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}

@@ -29,7 +29,7 @@ function DailyChart({ d }: { d: PlaybackStats }) {
         icon={BarChart3}
         accent={SERIES.plays}
         title="Plays per day"
-        subtitle={hasMethod ? 'Split by how the stream was delivered' : main.plex ? 'From Plex watch history' : 'From the Jellyfin activity log'}
+        subtitle={hasMethod ? 'Split by how the stream was delivered' : main.plex ? 'From Plex watch history' : `From the ${main.name} activity log`}
         action={
           hasMethod ? (
             <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} />

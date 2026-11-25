@@ -97,8 +97,8 @@ export function Sidebar({
   const main = useMainServer();
   const mediaOn = config.data?.enabled?.jellyfin ?? true;
   // The sign-in server's kind comes first; Jellyfin only shows when there's a Jellyfin server.
-  const mediaTypes = (main.plex ? ['plex', 'jellyfin', 'emby'] : ['jellyfin', 'emby', 'plex']) as MediaServerType[];
-  const shownTypes = mediaTypes.filter((t) => mediaOn && (t === 'jellyfin' ? !main.plex || servers.some((s) => s.type === 'jellyfin') : servers.some((s) => s.type === t)));
+  const mediaTypes = [main.type, ...(['jellyfin', 'emby', 'plex'] as MediaServerType[]).filter((t) => t !== main.type)];
+  const shownTypes = mediaTypes.filter((t) => mediaOn && (t === 'jellyfin' ? !main.other || servers.some((s) => s.type === 'jellyfin') : servers.some((s) => s.type === t)));
   const RANK: Record<ServiceHealth['status'], number> = { offline: 3, degraded: 2, unconfigured: 1, healthy: 0 };
   const worstOf = (type: MediaServerType) =>
     health.data?.services.filter((s) => s.serverType === type).sort((a, b) => RANK[b.status] - RANK[a.status])[0];
@@ -203,7 +203,7 @@ export function Sidebar({
           if (id !== 'jellyfin') return [item];
           return [
             ...shownTypes.map((t) => {
-              if (t === 'jellyfin' && !main.plex) return item;
+              if (t === 'jellyfin' && !main.other) return item;
               const m = MEDIA_SERVERS[t];
               const h = worstOf(t);
               return (

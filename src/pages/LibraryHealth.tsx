@@ -81,7 +81,7 @@ function Upgrades({ d }: { d: LibraryHealth }) {
 export default function LibraryHealthPage() {
   const q = useLibraryHealth();
   const { user } = useAuth();
-  const { name, plex } = useMainServer();
+  const { name, type, other } = useMainServer();
   return (
     <>
       <PageHeader
@@ -116,7 +116,7 @@ export default function LibraryHealthPage() {
                   )}
                   {d.unmanaged && (
                     <Card>
-                      <CardHeader icon={FileQuestion} accent={plex ? "var(--color-plex)" : "var(--color-jellyfin)"} title={`In ${name} but not managed`} subtitle="Won’t get upgrades or new episodes" />
+                      <CardHeader icon={FileQuestion} accent={`var(--color-${type})`} title={`In ${name} but not managed`} subtitle="Won’t get upgrades or new episodes" />
                       <CardBody><ItemList {...d.unmanaged} empty={`Everything in ${name} is managed by Sonarr or Radarr.`} /></CardBody>
                     </Card>
                   )}
@@ -130,7 +130,7 @@ export default function LibraryHealthPage() {
         }
       </QueryState>
       {/* Device playback learning reads Jellyfin's media details. */}
-      {user?.isAdmin && !plex && <div className="mt-5"><DevicePlaybackCard /></div>}
+      {user?.isAdmin && !other && <div className="mt-5"><DevicePlaybackCard /></div>}
     </>
   );
 }

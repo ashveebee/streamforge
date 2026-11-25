@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Clapperboard, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Projector, Radar, Server, ShieldCheck, User } from 'lucide-react';
+import { ArrowRight, Clapperboard, MonitorPlay, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Projector, Radar, Server, ShieldCheck, User } from 'lucide-react';
 import type { User as AppUser } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
@@ -19,7 +19,7 @@ function Field({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElem
   );
 }
 
-type ServerInfo = { type?: 'jellyfin' | 'plex'; name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
+type ServerInfo = { type?: 'jellyfin' | 'plex' | 'emby'; name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
 
 type PlexResult = { pending?: boolean; servers?: { id: string; name: string; version?: string }[]; user?: AppUser; mfaRequired?: boolean; challenge?: string };
 
@@ -159,14 +159,109 @@ function PlexSetup({ onBack }: { onBack: () => void }) {
         </>
       )}
       <button type="button" onClick={onBack} className="mt-4 w-full text-center text-xs text-ink-4 hover:text-ink-2">
-        Use Jellyfin instead
+        Choose a different server
       </button>
     </div>
   );
 }
 
 /** First run: which media server do people sign in with? */
-function ChooseServer({ onPick }: { onPick: (t: 'jellyfin' | 'plex') => void }) {
+type SetupType = 'jellyfin' | 'plex' | 'emby';
+
+/** First run, Emby: the server's address and an administrator's sign-in, in one step. */
+function EmbySetup({ onBack }: { onBack: () => void }) {
+  const { signedIn } = useAuth();
+  const [url, setUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<Found[]>();
+  const [searching, setSearching] = useState(false);
+
+  async function search() {
+    setSearching(true);
+    setError(undefined);
+    try {
+      const r = await api<{ servers: Found[] }>('/auth/setup/discover?type=emby', { method: 'POST' });
+      setFound(r.servers);
+      const ok = r.servers.filter((x) => x.reachable);
+      if (ok.length === 1 && !url.trim()) setUrl(ok[0]!.url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not search the network');
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      const r = await api<{ user: AppUser }>('/auth/emby/setup', { method: 'POST', body: { url, username, password } });
+      signedIn(r.user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not connect to Emby');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <p className="mb-4 text-sm leading-relaxed text-ink-2">
+        Where is your Emby server? Sign in with an Emby administrator account: StreamForge checks the server, creates its own API key, and everyone else signs in with
+        their Emby account.
+      </p>
+      <Field icon={Globe} type="url" inputMode="url" placeholder="http://192.168.1.20:8096" autoComplete="url" spellCheck={false} autoFocus value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Emby server address" required />
+      {found === undefined ? (
+        <button type="button" onClick={() => void search()} disabled={searching} className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 transition hover:text-ink disabled:opacity-60">
+          {searching ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
+          {searching ? 'Searching your network…' : 'Find Emby servers on my network'}
+        </button>
+      ) : found.length === 0 ? (
+        <p className="mt-3 text-xs leading-relaxed text-ink-4">No Emby servers answered. Discovery only works on the same local network, and from Docker only with host networking. Type the address instead.</p>
+      ) : (
+        <ul className="mt-3 space-y-1.5" aria-label="Emby servers found on your network">
+          {found.map((x) => (
+            <li key={x.id}>
+              <button
+                type="button"
+                onClick={() => setUrl(x.url)}
+                aria-pressed={url === x.url}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${url === x.url ? 'border-brand/50 bg-brand/10' : 'border-line bg-white/[0.02] hover:bg-white/[0.05]'}`}
+              >
+                <Server className="size-4 shrink-0 text-[#52b54b]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{x.name}</span>
+                  <span className="block truncate font-mono text-[11px] text-ink-3">{x.url}</span>
+                </span>
+                <span className="shrink-0 text-[11px] text-ink-4">{x.version ? `v${x.version}` : ''}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 space-y-3">
+        <Field icon={User} placeholder="Emby admin username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        <Field icon={Lock} type="password" placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </div>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <button
+        type="submit"
+        disabled={busy || !url.trim() || !username.trim()}
+        className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#52b54b] text-sm font-semibold text-white shadow-[0_12px_32px_-12px_rgb(82_181_75/0.8)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
+      >
+        {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Connect and sign in <ArrowRight className="size-4" /></>}
+      </button>
+      <button type="button" onClick={onBack} className="mt-4 w-full text-center text-xs text-ink-4 hover:text-ink-2">
+        Choose a different server
+      </button>
+    </form>
+  );
+}
+
+function ChooseServer({ onPick }: { onPick: (t: SetupType) => void }) {
   const card = 'flex w-full items-center gap-3 rounded-2xl border border-line bg-white/[0.02] p-4 text-left transition hover:border-line-strong hover:bg-white/[0.05]';
   return (
     <div className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
@@ -188,8 +283,16 @@ function ChooseServer({ onPick }: { onPick: (t: 'jellyfin' | 'plex') => void }) 
           </span>
           <ArrowRight className="size-4 text-ink-4" />
         </button>
+        <button type="button" className={card} onClick={() => onPick('emby')}>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#52b54b]/15"><MonitorPlay className="size-5 text-[#52b54b]" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">Emby</span>
+            <span className="block text-xs text-ink-3">Sign in with your Emby account</span>
+          </span>
+          <ArrowRight className="size-4 text-ink-4" />
+        </button>
       </div>
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Run both, or Emby too? Pick one for sign-in and add the others from Settings.</p>
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Run more than one? Pick one for sign-in and add the others from Settings.</p>
     </div>
   );
 }
@@ -323,7 +426,7 @@ function Setup({ onDone, onBack }: { onDone: (s: ServerInfo) => void; onBack: ()
       </button>
       <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Once you're in, add Emby and Plex servers, Sonarr, Radarr and the rest from Settings.</p>
       <button type="button" onClick={onBack} className="mt-3 w-full text-center text-xs text-ink-4 hover:text-ink-2">
-        Use Plex instead
+        Choose a different server
       </button>
     </form>
   );
@@ -391,9 +494,11 @@ export default function Login() {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [server, setServer] = useState<ServerInfo>();
-  const [setupType, setSetupType] = useState<'jellyfin' | 'plex'>();
+  const [setupType, setSetupType] = useState<SetupType>();
   const needsSetup = server?.configured === false;
   const plexSignIn = server?.type === 'plex';
+  // Jellyfin and Emby both sign in with a name and password.
+  const pwName = server?.type === 'emby' ? 'Emby' : 'Jellyfin';
   // ?password forces the password form, in case single sign-on is broken.
   const hidePassword = !!server?.sso?.hidePassword && !new URLSearchParams(location.search).has('password');
 
@@ -452,22 +557,22 @@ export default function Login() {
           <h1 className="mt-6 text-[28px] font-semibold tracking-tight">Welcome to StreamForge</h1>
           <p className="mt-1.5 text-sm text-ink-3">
             {needsSetup
-              ? setupType === 'plex'
-                ? 'Let’s connect your Plex server'
-                : setupType === 'jellyfin'
-                  ? 'Let’s connect your Jellyfin server'
-                  : 'Let’s connect your media server'
+              ? setupType
+                ? `Let’s connect your ${{ plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' }[setupType]} server`
+                : 'Let’s connect your media server'
               : plexSignIn
                 ? 'Sign in with your Plex account'
-                : 'Sign in with your Jellyfin account'}
+                : `Sign in with your ${pwName} account`}
           </p>
         </div>
 
         {needsSetup && !challenge ? (
           setupType === 'plex' ? (
-            <PlexSetup onBack={() => setSetupType('jellyfin')} />
+            <PlexSetup onBack={() => setSetupType(undefined)} />
+          ) : setupType === 'emby' ? (
+            <EmbySetup onBack={() => setSetupType(undefined)} />
           ) : setupType === 'jellyfin' ? (
-            <Setup onDone={setServer} onBack={() => setSetupType('plex')} />
+            <Setup onDone={setServer} onBack={() => setSetupType(undefined)} />
           ) : (
             <ChooseServer onPick={setSetupType} />
           )
@@ -542,12 +647,14 @@ export default function Login() {
 
             <div className="mt-5 flex items-center justify-center gap-2 text-xs text-ink-4">
               <span className={`size-1.5 rounded-full ${server === undefined ? 'bg-idle' : server.online ? 'bg-ok shadow-[0_0_8px_var(--color-ok)]' : 'bg-bad'}`} />
-              {server === undefined ? 'Contacting server…' : server.online ? `${server.name} · Jellyfin ${server.version}` : 'Jellyfin server unreachable'}
+              {server === undefined ? 'Contacting server…' : server.online ? `${server.name} · ${pwName} ${server.version}` : `${pwName} server unreachable`}
             </div>
           </form>
         )}
         {!(needsSetup && !setupType) && <p className="mt-6 text-center text-[11px] text-ink-4">
-          {plexSignIn || setupType === 'plex' ? 'You sign in on plex.tv. StreamForge never sees your Plex password.' : 'Credentials are sent directly to your Jellyfin server and never stored.'}
+          {plexSignIn || setupType === 'plex'
+            ? 'You sign in on plex.tv. StreamForge never sees your Plex password.'
+            : `Credentials are sent directly to your ${setupType === 'emby' ? 'Emby' : pwName} server and never stored.`}
         </p>}
       </motion.div>
     </div>

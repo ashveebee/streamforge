@@ -2,7 +2,8 @@ import { db } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
 import { isConfigured } from '../settings.js';
 import { jf, type JfCtx } from './jellyfin.js';
-import { mainPlex } from './mainServer.js';
+import { mainEmby, mainPlex } from './mainServer.js';
+import { remote } from './jellyfin.js';
 import * as plex from './plex.js';
 import { userRequests } from './seerr.js';
 
@@ -63,6 +64,21 @@ const FIELDS = 'PrimaryImageAspectRatio,ParentBackdropItemId,ParentBackdropImage
 async function upNext(ctx: JfCtx, serverToken?: string) {
   const p = mainPlex();
   if (p) return plex.onDeck(p, ctx.userId, serverToken).catch(() => ({ resume: [], nextUp: [] }));
+  // Emby speaks Jellyfin's API: the same calls, with the user's own Emby token.
+  const e = mainEmby();
+  if (e) {
+    const as = { ...e, apiKey: ctx.token };
+    const [resume, nextUp] = await Promise.all([
+      cache.get(`jfx:${e.id}:resume:${ctx.userId}`, 30_000, () =>
+        remote<{ Items: JfItem[] }>(as, `/Users/${ctx.userId}/Items/Resume`, { Limit: 12, MediaTypes: 'Video', Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
+      ).catch(() => ({ Items: [] as JfItem[] })),
+      cache.get(`jfx:${e.id}:nextup:${ctx.userId}`, 60_000, () =>
+        remote<{ Items: JfItem[] }>(as, '/Shows/NextUp', { UserId: ctx.userId, Limit: 12, Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
+      ).catch(() => ({ Items: [] as JfItem[] })),
+    ]);
+    const onEmby = (c: ReturnType<typeof card>) => ({ ...c, image: c.image && { ...c.image, server: e.id } });
+    return { resume: (resume.Items ?? []).map(card).map(onEmby), nextUp: (nextUp.Items ?? []).map(card).map(onEmby) };
+  }
   const [resume, nextUp] = await Promise.all([
     cache.get(`jf:resume:${ctx.userId}`, 30_000, () =>
       jf<{ Items: JfItem[] }>(`/Users/${ctx.userId}/Items/Resume`, ctx.token, ctx.deviceId, { Limit: 12, MediaTypes: 'Video', Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),

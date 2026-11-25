@@ -32,7 +32,7 @@ export function useSelectedMediaServer(type: MediaServerType) {
   const list = useServersOfType(type);
   const main = useMainServer();
   const wanted = params.get('instance');
-  return list.find((s) => s.id === wanted)?.id ?? list[0]?.id ?? (type === 'jellyfin' && !main.plex ? 'jellyfin' : undefined);
+  return list.find((s) => s.id === wanted)?.id ?? list[0]?.id ?? (type === 'jellyfin' && !main.other ? 'jellyfin' : undefined);
 }
 
 /** Tabs for switching between servers of one kind; hidden when there's only one. */

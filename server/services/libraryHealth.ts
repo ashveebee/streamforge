@@ -2,7 +2,7 @@ import { cache } from '../lib/cache.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
 import type * as jellyfin from './jellyfin.js';
-import { mainLibraryItems, mediaReady, plexMode } from './mainServer.js';
+import { mainLibraryItems, mainName, mediaReady } from './mainServer.js';
 
 /*
  * Library health: things that are quietly wrong across Sonarr, Radarr and
@@ -149,7 +149,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
       unmanaged.push({
         title: j.name,
         year: j.year,
-        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : `No metadata ids — identify it in ${plexMode() ? 'Plex' : 'Jellyfin'}`,
+        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : `No metadata ids — identify it in ${mainName()}`,
       });
     }
     unmanaged.sort((a, b) => a.title.localeCompare(b.title));
@@ -163,7 +163,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
     hasRadarr: radarrs.length > 0,
     hasJellyfin: !!jf,
     /** Which server the library cross-checks compare with. */
-    server: plexMode() ? 'Plex' : 'Jellyfin',
+    server: mainName(),
     incomplete: section(incomplete),
     upgrades,
     notInJellyfin: section(notInJellyfin),

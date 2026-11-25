@@ -18,7 +18,7 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
-import { mainPlex, mainType, mediaReady, plexMode } from './services/mainServer.js';
+import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
 import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
@@ -157,30 +157,30 @@ function mainServerName() {
 
 /** Every media server, main one first. Empty when the main Jellyfin server is the only one. */
 function mediaServerList() {
-  const main = mainPlex();
+  const main = mainExtra();
   const rest = mediaServers()
     .filter((s) => s.id !== main?.id)
     .map((s) => ({ id: s.id, type: s.type, name: s.name, primary: false }));
-  if (main) return [{ id: main.id, type: 'plex' as const, name: main.name, primary: true }, ...rest];
+  if (main) return [{ id: main.id, type: main.type, name: main.name, primary: true }, ...rest];
   return rest.length ? [{ id: 'jellyfin', type: 'jellyfin' as const, name: mainServerName(), primary: true }, ...rest] : [];
 }
 
 /**
  * The media server a request addresses with `instance` (query or body). With
  * none given, the main server: undefined for the main Jellyfin server, or the
- * main Plex server when Plex is the sign-in server.
+ * main Plex or Emby server when that is the sign-in server.
  */
 function extraServer(req: Request): MediaServer | undefined {
   const raw = (req.body as { instance?: unknown } | undefined)?.instance ?? req.query.instance ?? req.query.server;
-  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return raw === 'jellyfin' ? undefined : mainPlex();
+  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return raw === 'jellyfin' ? undefined : mainExtra();
   const srv = mediaServer(raw);
   if (!srv) throw new HttpError(404, 'Unknown media server', 'not_found');
   return srv;
 }
 
-/** Jellyfin-only features (title pages, scheduled tasks) answer this when Plex is the sign-in server. */
+/** Jellyfin-only features (title pages, scheduled tasks) answer this when Plex or Emby is the sign-in server. */
 function needJellyfin() {
-  if (plexMode() && !isConfigured('jellyfin')) throw new HttpError(404, 'This needs a Jellyfin server.', 'not_configured');
+  if (notJellyfinMain() && !isConfigured('jellyfin')) throw new HttpError(404, 'This needs a Jellyfin server.', 'not_configured');
 }
 
 /* Calls for an extra server, by type. Emby speaks Jellyfin's API. */
@@ -231,7 +231,8 @@ api.get(
   '/jellyfin/plays',
   handle('jellyfin', (req) => {
     const p = mainPlex();
-    return p ? plex.playsPerDay(p) : jellyfin.playbackHistory(ctxOf(req.session!));
+    const e = mainEmby();
+    return p ? plex.playsPerDay(p) : e ? jellyfin.remotePlaybackHistory(e) : jellyfin.playbackHistory(ctxOf(req.session!));
   }),
 );
 api.get(
@@ -330,14 +331,14 @@ api.post(
       .safeParse(req.body ?? {});
     if (!b.success) throw new HttpError(400, 'Invalid request');
     const srv = extraServer(req);
-    if (srv && srv.type !== 'plex') throw new HttpError(400, 'Scans from StreamForge work on the main Jellyfin server and on Plex servers.');
-    if (srv) await plex.scan(srv, b.data.library, !!b.data.full);
+    if (srv?.type === 'plex') await plex.scan(srv, b.data.library, !!b.data.full);
+    else if (srv) await jellyfin.remoteScan(srv, b.data.library, !!b.data.full);
     else {
       if (b.data.library && !jellyfin.isValidId(b.data.library)) throw new HttpError(400, 'Invalid request');
       if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
       else await scanAll(ctxOf(req.session!));
     }
-    audit(req, `[${srv ? 'plex' : 'jellyfin'}] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}${srv ? ` on ${srv.name}` : ''}`);
+    audit(req, `[${srv ? srv.type : 'jellyfin'}] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}${srv ? ` on ${srv.name}` : ''}`);
     return { ok: true };
   }),
 );

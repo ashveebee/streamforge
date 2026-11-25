@@ -2,7 +2,8 @@ import { db, readPref, writePref } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
 import { emit } from './notify.js';
 import { jf, serverApiKey } from './jellyfin.js';
-import { canWatchInBackground, mainPlex, mediaReady } from './mainServer.js';
+import { canWatchInBackground, mainEmby, mainPlex, mediaReady } from './mainServer.js';
+import { remote } from './jellyfin.js';
 import * as plex from './plex.js';
 import { storageForecast } from './storage.js';
 
@@ -56,8 +57,12 @@ export interface Who {
 async function added(who: Who, since: number) {
   const p = mainPlex();
   if (p) return plex.addedSince(p, since);
-  const res = await jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, {
-    userId: who.userId,
+  // A main Emby server answers the same query with its API key; images then come from it.
+  const e = mainEmby();
+  const on = e ? `&server=${encodeURIComponent(e.id)}` : '';
+  const get = (q: Record<string, string | number | boolean | undefined>) => (e ? remote<{ Items: JfItem[] }>(e, '/Items', q) : jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, q));
+  const res = await get({
+    userId: e ? undefined : who.userId,
     Recursive: true,
     IncludeItemTypes: 'Movie,Episode,MusicAlbum,Book,AudioBook',
     MinDateCreated: new Date(since).toISOString(),
@@ -74,13 +79,13 @@ async function added(who: Who, since: number) {
   for (const i of res.Items) {
     runtime += (i.RunTimeTicks ?? 0) / TICKS_PER_MS;
     if (i.Type === 'Movie') {
-      movies.push({ id: i.Id, title: i.Name, year: i.ProductionYear, image: i.ImageTags?.Primary ? `/api/jellyfin/image/items/${i.Id}/Primary?w=200&tag=${i.ImageTags.Primary}` : undefined });
+      movies.push({ id: i.Id, title: i.Name, year: i.ProductionYear, image: i.ImageTags?.Primary ? `/api/jellyfin/image/items/${i.Id}/Primary?w=200&tag=${i.ImageTags.Primary}${on}` : undefined });
     } else if (i.Type === 'Episode' && i.SeriesId) {
       const s = shows.get(i.SeriesId) ?? {
         id: i.SeriesId,
         title: i.SeriesName ?? 'Unknown series',
         episodes: 0,
-        image: i.SeriesPrimaryImageTag ? `/api/jellyfin/image/items/${i.SeriesId}/Primary?w=200&tag=${i.SeriesPrimaryImageTag}` : undefined,
+        image: i.SeriesPrimaryImageTag ? `/api/jellyfin/image/items/${i.SeriesId}/Primary?w=200&tag=${i.SeriesPrimaryImageTag}${on}` : undefined,
       };
       s.episodes++;
       shows.set(i.SeriesId, s);
@@ -150,7 +155,7 @@ export function digestText(d: Awaited<ReturnType<typeof buildDigest>>) {
 
 export async function sendDigest() {
   const key = serverApiKey();
-  if (!key && !mainPlex()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
+  if (!key && !mainPlex() && !mainEmby()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
   cache.delete('jf:digest:server');
   const d = await buildDigest({ token: key ?? '', deviceId: 'streamforge-server' });
   const count = d.added.movies.length + d.added.shows.length + d.added.other.length;
