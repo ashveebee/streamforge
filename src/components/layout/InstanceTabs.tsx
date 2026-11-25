@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router';
-import { useInstances, useJellyfinServers } from '@/hooks/queries';
+import { useInstances, useJellyfinServers, useMainServer } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import type { ArrKind, MediaServerType } from '@/lib/types';
 
@@ -30,8 +30,9 @@ export function useServersOfType(type: MediaServerType) {
 export function useSelectedMediaServer(type: MediaServerType) {
   const [params] = useSearchParams();
   const list = useServersOfType(type);
+  const main = useMainServer();
   const wanted = params.get('instance');
-  return list.find((s) => s.id === wanted)?.id ?? list[0]?.id ?? (type === 'jellyfin' ? 'jellyfin' : undefined);
+  return list.find((s) => s.id === wanted)?.id ?? list[0]?.id ?? (type === 'jellyfin' && !main.plex ? 'jellyfin' : undefined);
 }
 
 /** Tabs for switching between servers of one kind; hidden when there's only one. */

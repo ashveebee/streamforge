@@ -48,6 +48,7 @@ import {
 } from './services/mediaServers.js';
 import { discoverMediaServers, type DiscoveredServer } from './services/mediaDiscovery.js';
 import * as plex from './services/plex.js';
+import { isMainServer } from './services/mainServer.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
   describe,
@@ -398,8 +399,10 @@ settingsRouter.post('/media-servers/discover', async (req, res) => {
   res.json({ servers });
 });
 
+const describeWithMain = () => describeServers().map((s) => ({ ...s, main: isMainServer(s.id) }));
+
 settingsRouter.get('/media-servers', (_req, res) => {
-  res.set('Cache-Control', 'no-store').json({ servers: describeServers() });
+  res.set('Cache-Control', 'no-store').json({ servers: describeWithMain() });
 });
 
 /** Tests candidate details; reuses the saved key when `id` is given and no key is. */
@@ -429,7 +432,7 @@ settingsRouter.post('/media-servers', (req, res) => {
   if (knownOrigins().has(originOf(url))) return badRequest(res, 'That server is already set up.', 'url');
   const srv = addServer({ type, name, url, publicUrl, apiKey });
   audit(req, `[settings] ${MEDIA_SERVER_NAMES[type]} server "${name}" added`);
-  res.json({ server: describeServers().find((s) => s.id === srv.id) });
+  res.json({ server: describeWithMain().find((s) => s.id === srv.id) });
 });
 
 settingsRouter.put('/media-servers/:id', (req, res) => {
@@ -440,18 +443,20 @@ settingsRouter.put('/media-servers/:id', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   const b = parsed.data;
   if (b.type && b.type !== cur.type) return badRequest(res, 'A server’s type can’t be changed. Remove it and add it again.', 'type');
+  if (b.enabled === false && isMainServer(id)) return badRequest(res, 'This is the server people sign in with, so it can’t be switched off.', 'enabled');
   // Never send a saved key to a different server unless it was re-entered.
   if (b.url && !b.apiKey && origin(b.url) !== origin(cur.url)) {
     return badRequest(res, `Re-enter the ${cur.type === 'plex' ? 'token' : 'API key'} when changing the server address.`, 'apiKey');
   }
   updateServer(id, { name: b.name, url: b.url, publicUrl: b.publicUrl, apiKey: b.apiKey || undefined, enabled: b.enabled });
   audit(req, `[settings] ${MEDIA_SERVER_NAMES[cur.type]} server "${b.name ?? cur.name}" updated`);
-  res.json({ server: describeServers().find((s) => s.id === id) });
+  res.json({ server: describeWithMain().find((s) => s.id === id) });
 });
 
 settingsRouter.delete('/media-servers/:id', (req, res) => {
   const id = String(req.params.id);
   const cur = getStoredServer(id);
+  if (cur && isMainServer(id)) return res.status(400).json({ error: 'bad_request', message: 'This is the server people sign in with, so it can’t be removed.' });
   if (!cur || !removeServer(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown media server' });
   audit(req, `[settings] ${MEDIA_SERVER_NAMES[cur.type]} server "${cur.name}" removed`);
   res.json({ ok: true });

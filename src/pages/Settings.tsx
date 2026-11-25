@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useHealth, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
+import { useHealth, useMainServer, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { relative } from '@/lib/format';
@@ -499,6 +499,7 @@ function SettingsTabs({ update }: { update?: string }) {
 
 function ServicesTab() {
   const q = useServiceSettings();
+  const main = useMainServer();
   const byId = new Map(q.data?.services.map((s) => [s.id, s]));
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
   if (!q.data) return <PageLoader label="Loading settings" />;
@@ -510,9 +511,18 @@ function ServicesTab() {
           if (!s) return null;
           return (
             <Fragment key={id}>
-              <ServiceCard s={s} index={i} />
+              {/* With Plex as the sign-in server, Plex comes first and Jellyfin servers are added like Emby ones. */}
+              {id === 'jellyfin' && main.plex ? (
+                <>
+                  <MediaServersSection type="plex" />
+                  <MediaServersSection type="jellyfin" standalone />
+                  <MediaServersSection type="emby" />
+                </>
+              ) : (
+                <ServiceCard s={s} index={i} />
+              )}
               {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              {id === 'jellyfin' && s.configured && (
+              {id === 'jellyfin' && !main.plex && s.configured && (
                 <>
                   <MediaServersSection type="jellyfin" />
                   <MediaServersSection type="emby" />
@@ -523,7 +533,7 @@ function ServicesTab() {
           );
         })}
       </ul>
-      <MoonfinSection />
+      {!main.plex && <MoonfinSection />}
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
       </p>
@@ -533,13 +543,14 @@ function ServicesTab() {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const main = useMainServer();
   const { section = '' } = useParams();
   const updates = useUpdates(!!user?.isAdmin);
 
   if (!user?.isAdmin) {
     return (
       <Card>
-        <EmptyState icon={ShieldAlert} title="Administrators only" description="Ask a Jellyfin administrator to change StreamForge's settings." />
+        <EmptyState icon={ShieldAlert} title="Administrators only" description="Ask an administrator to change StreamForge's settings." />
       </Card>
     );
   }
@@ -558,7 +569,7 @@ export default function SettingsPage() {
         {tab.path === 'access' && (
           <>
             <MembersSection />
-            <SsoSection />
+            {!main.plex && <SsoSection />}
           </>
         )}
         {tab.path === 'system' && (

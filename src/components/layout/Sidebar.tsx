@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useCanSee, useHealth, useJellyfinServers, useNowPlaying, useServiceConfig } from '@/hooks/queries';
+import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
@@ -94,7 +94,11 @@ export function Sidebar({
   const streams = playing.data?.length ?? 0;
   // Emby and Plex get their own entries, right after Jellyfin, once a server of that kind is added.
   const servers = useJellyfinServers();
-  const extraTypes = (['emby', 'plex'] as MediaServerType[]).filter((t) => servers.some((s) => s.type === t) && (config.data?.enabled?.jellyfin ?? true));
+  const main = useMainServer();
+  const mediaOn = config.data?.enabled?.jellyfin ?? true;
+  // The sign-in server's kind comes first; Jellyfin only shows when there's a Jellyfin server.
+  const mediaTypes = (main.plex ? ['plex', 'jellyfin', 'emby'] : ['jellyfin', 'emby', 'plex']) as MediaServerType[];
+  const shownTypes = mediaTypes.filter((t) => mediaOn && (t === 'jellyfin' ? !main.plex || servers.some((s) => s.type === 'jellyfin') : servers.some((s) => s.type === t)));
   const RANK: Record<ServiceHealth['status'], number> = { offline: 3, degraded: 2, unconfigured: 1, healthy: 0 };
   const worstOf = (type: MediaServerType) =>
     health.data?.services.filter((s) => s.serverType === type).sort((a, b) => RANK[b.status] - RANK[a.status])[0];
@@ -198,8 +202,8 @@ export function Sidebar({
           );
           if (id !== 'jellyfin') return [item];
           return [
-            item,
-            ...extraTypes.map((t) => {
+            ...shownTypes.map((t) => {
+              if (t === 'jellyfin' && !main.plex) return item;
               const m = MEDIA_SERVERS[t];
               const h = worstOf(t);
               return (

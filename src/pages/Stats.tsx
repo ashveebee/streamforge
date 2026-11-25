@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BarChart3, Clock, MonitorSmartphone, Play, Repeat2, Users } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { usePlaybackStats } from '@/hooks/queries';
+import { useMainServer, usePlaybackStats } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import { pct } from '@/lib/format';
 import type { PlaybackStats } from '@/lib/types';
@@ -21,6 +21,7 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const shortDate = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 function DailyChart({ d }: { d: PlaybackStats }) {
+  const main = useMainServer();
   const hasMethod = d.daily.some((x) => x.direct || x.transcode);
   return (
     <Card>
@@ -28,7 +29,7 @@ function DailyChart({ d }: { d: PlaybackStats }) {
         icon={BarChart3}
         accent={SERIES.plays}
         title="Plays per day"
-        subtitle={hasMethod ? 'Split by how the stream was delivered' : 'From the Jellyfin activity log'}
+        subtitle={hasMethod ? 'Split by how the stream was delivered' : main.plex ? 'From Plex watch history' : 'From the Jellyfin activity log'}
         action={
           hasMethod ? (
             <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} />
@@ -141,10 +142,11 @@ function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Use
 export default function StatsPage() {
   const [days, setDays] = useState<number>(30);
   const q = usePlaybackStats(days);
+  const main = useMainServer();
   return (
     <>
       <PageHeader
-        eyebrow="Jellyfin"
+        eyebrow={main.name}
         title="Playback stats"
         description="Who watches what, when, and how it gets to them."
         actions={

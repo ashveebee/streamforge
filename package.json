@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.8.0",
   "type": "module",
-  "description": "A unified control centre for your Jellyfin media server ecosystem, with Emby and Plex servers alongside.",
+  "description": "A unified control centre for your Jellyfin or Plex media server ecosystem, with Emby servers alongside.",
   "license": "GPL-2.0-only",
   "repository": {
     "type": "git",

@@ -8,7 +8,7 @@ import { useJellyfin } from '@/hooks/queries';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
-import { MediaServerTabs, useSelectedMediaServer } from '@/components/layout/InstanceTabs';
+import { MediaServerTabs, useSelectedMediaServer, useServersOfType } from '@/components/layout/InstanceTabs';
 import { Link } from 'react-router';
 import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
 import { EmptyState } from '@/components/ui/States';
@@ -58,12 +58,14 @@ export default function MediaServerPage({ type = 'jellyfin' }: { type?: MediaSer
 
 function ServerView({ type, server }: { type: MediaServerType; server: string }) {
   const extra = server !== 'jellyfin' ? server : undefined;
+  // The sign-in server (main Jellyfin, or main Plex) gets scans and play history.
+  const isMain = useServersOfType(type).find((s) => s.id === server)?.primary ?? server === 'jellyfin';
   const typeName = MEDIA_SERVERS[type].name;
   const accent = MEDIA_SERVERS[type].color;
   const q = useJellyfin(server);
   const { user } = useAuth();
   // Scans, tasks and play history are only available for the main server.
-  const admin = !!user?.isAdmin && !extra;
+  const admin = !!user?.isAdmin && isMain;
   const scan = useLibraryScan();
   return (
     <>
@@ -155,14 +157,14 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
             <RecentlyAddedWidget server={server} serverType={type} />
 
             <div className="grid gap-5 xl:grid-cols-3">
-              {!extra && <div className="xl:col-span-2"><PlaysWidget /></div>}
-              <Card className={extra ? 'xl:col-span-3' : undefined}>
+              {isMain && <div className="xl:col-span-2"><PlaysWidget /></div>}
+              <Card className={!isMain ? 'xl:col-span-3' : undefined}>
                 <CardHeader icon={Users} title="Users" subtitle="Most recently active first" />
                 <CardBody>
                   <ul className="space-y-1">
                     {d.users.list.slice(0, 8).map((u) => (
                       <li key={u.id} className="flex items-center gap-3 rounded-lg px-1.5 py-1.5 hover:bg-white/[0.03]">
-                        <Avatar src={type === 'plex' ? undefined : jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
+                        <Avatar src={jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-medium">{u.name}</div>
                           <div className="text-[11px] text-ink-4">{u.lastActivity ? `Active ${relative(u.lastActivity)}` : 'Never active'}</div>
@@ -174,7 +176,7 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                 </CardBody>
               </Card>
             </div>
-            {admin && <JellyfinTasks />}
+            {admin && type === 'jellyfin' && <JellyfinTasks />}
             <ActivityWidget limit={15} server={server} serverType={type} />
           </div>
         )}

@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { PlayCircle, Radar, Repeat, Zap } from 'lucide-react';
-import { useJellyfinServers, useNowPlaying } from '@/hooks/queries';
+import { useJellyfinServers, useMainServer, useNowPlaying } from '@/hooks/queries';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StreamCard } from '@/components/widgets/StreamCard';
 import { streamKey } from '@/components/widgets/playback';
@@ -17,6 +17,7 @@ import { PlaybackGuardCard } from '@/components/widgets/PlaybackGuardCard';
 export default function NowPlayingPage() {
   const q = useNowPlaying();
   const servers = useJellyfinServers().length;
+  const main = useMainServer();
   const { user } = useAuth();
   const streams = q.data ?? [];
   const transcodes = streams.filter((s) => s.state.playMethod === 'Transcode').length;
@@ -39,15 +40,15 @@ export default function NowPlayingPage() {
         <Card className="py-6">
           <Loader
             label="Finding who’s watching"
-            hint="Asking Jellyfin for every active stream…"
-            slowHint="Jellyfin is taking a while to answer. Streams will appear as soon as it does."
+            hint={`Asking ${main.name} for every active stream…`}
+            slowHint={`${main.name} is taking a while to answer. Streams will appear as soon as it does.`}
           />
         </Card>
       ) : q.isError && !q.data ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
       ) : streams.length === 0 ? (
         <Card className="py-10">
-          <EmptyState icon={PlayCircle} title="Nothing is playing" description="When someone starts watching or listening on any Jellyfin client, the stream will appear here instantly." />
+          <EmptyState icon={PlayCircle} title="Nothing is playing" description={`When someone starts watching or listening on any ${main.name} app, the stream will appear here instantly.`} />
         </Card>
       ) : (
         <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">

@@ -1,5 +1,5 @@
 import { BookOpen, Clapperboard, Disc3, Film, Library, Tv, Users } from 'lucide-react';
-import { useJellyfin } from '@/hooks/queries';
+import { useJellyfin, useMainServer } from '@/hooks/queries';
 import { compact } from '@/lib/format';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { StatTile } from '../ui/Stat';
@@ -14,9 +14,10 @@ export const LIBRARY_ICONS: Record<string, typeof Film> = {
 
 export function LibraryWidget() {
   const q = useJellyfin();
+  const main = useMainServer();
   return (
     <Card className="h-full">
-      <CardHeader icon={Library} accent="var(--color-jellyfin)" title="Library" subtitle={q.data ? `${q.data.libraries.length} libraries on ${q.data.server.name}` : 'Jellyfin'} />
+      <CardHeader icon={Library} accent={main.plex ? 'var(--color-plex)' : 'var(--color-jellyfin)'} title="Library" subtitle={q.data ? `${q.data.libraries.length} libraries on ${q.data.server.name}` : main.name} />
       <CardBody>
         <QueryState query={q} skeleton={<div className="grid grid-cols-2 gap-3">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>}>
           {(d) => (

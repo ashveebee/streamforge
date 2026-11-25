@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Radar, Server, ShieldCheck, User } from 'lucide-react';
+import { ArrowRight, Clapperboard, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Projector, Radar, Server, ShieldCheck, User } from 'lucide-react';
+import type { User as AppUser } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
 import { LogoMark } from '@/components/layout/Logo';
@@ -18,12 +19,206 @@ function Field({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElem
   );
 }
 
-type ServerInfo = { name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
+type ServerInfo = { type?: 'jellyfin' | 'plex'; name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
+
+type PlexResult = { pending?: boolean; servers?: { id: string; name: string; version?: string }[]; user?: AppUser; mfaRequired?: boolean; challenge?: string };
+
+/**
+ * "Sign in with Plex": opens Plex's own sign-in page in a window and waits
+ * until it's approved. Plex never shares the password with StreamForge.
+ */
+function usePlexSignIn() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [handle, setHandle] = useState<string>();
+
+  async function start(): Promise<PlexResult | undefined> {
+    setBusy(true);
+    setError(undefined);
+    // Open the window straight away, inside the click, so pop-up blockers allow it.
+    const popup = window.open('about:blank', 'plex-sign-in', 'width=600,height=720');
+    try {
+      const { handle: h, authUrl } = await api<{ handle: string; authUrl: string }>('/auth/plex/start', { method: 'POST' });
+      setHandle(h);
+      if (popup) popup.location.href = authUrl;
+      else window.open(authUrl, '_blank', 'noopener');
+      // Plex approves within seconds; give up after ten minutes, or soon after the window closes.
+      let closedFor = 0;
+      for (let i = 0; i < 400; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const r = await api<PlexResult>('/auth/plex/poll', { method: 'POST', body: { handle: h } });
+        if (!r.pending) {
+          popup?.close();
+          setBusy(false);
+          return { ...r, pending: false };
+        }
+        if (popup?.closed && ++closedFor > 3) throw new Error('The Plex window was closed before you finished signing in.');
+      }
+      throw new Error('Sign-in timed out. Try again.');
+    } catch (err) {
+      popup?.close();
+      setError(err instanceof Error ? err.message : 'Could not sign in with Plex');
+      setBusy(false);
+      return undefined;
+    }
+  }
+  return { start, busy, error, setError, handle };
+}
+
+/** The Plex-branded button. */
+function PlexButton({ busy, onClick, label = 'Sign in with Plex' }: { busy: boolean; onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#e5a00d] text-sm font-semibold text-black shadow-[0_12px_32px_-12px_rgb(229_160_13/0.8)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
+    >
+      {busy ? (
+        <>
+          <LoaderCircle className="size-4 animate-spin" /> Waiting for Plex…
+        </>
+      ) : (
+        <>
+          <Projector className="size-4" /> {label}
+        </>
+      )}
+    </button>
+  );
+}
+
+const ErrorNote = ({ children }: { children: React.ReactNode }) => (
+  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="mt-3 rounded-lg border border-bad/25 bg-bad/10 px-3 py-2 text-xs text-bad">
+    {children}
+  </motion.p>
+);
+
+/** First run, Plex: sign in with the owner's Plex account, then pick which of their servers to use. */
+function PlexSetup({ onBack }: { onBack: () => void }) {
+  const { signedIn } = useAuth();
+  const plex = usePlexSignIn();
+  const [servers, setServers] = useState<PlexResult['servers']>();
+  const [saving, setSaving] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  async function use(id: string) {
+    setSaving(id);
+    setError(undefined);
+    try {
+      const r = await api<PlexResult>('/auth/plex/setup', { method: 'POST', body: { handle: plex.handle, server: id } });
+      if (r.user) signedIn(r.user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not connect to that server');
+      setSaving(undefined);
+    }
+  }
+
+  async function signIn() {
+    const r = await plex.start();
+    if (!r?.servers) return;
+    setServers(r.servers);
+  }
+
+  return (
+    <div className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      {!servers ? (
+        <>
+          <p className="mb-4 text-sm leading-relaxed text-ink-2">
+            Sign in with the Plex account that owns your server. StreamForge finds your servers, and everyone you share with can then sign in with their own Plex account.
+          </p>
+          <PlexButton busy={plex.busy} onClick={() => void signIn()} />
+          {plex.error && <ErrorNote>{plex.error}</ErrorNote>}
+        </>
+      ) : servers.length === 0 ? (
+        <>
+          <p className="text-sm leading-relaxed text-ink-2">This Plex account doesn’t own any servers. Sign in with the account that runs your Plex server.</p>
+          <div className="mt-4">
+            <PlexButton busy={plex.busy} onClick={() => void signIn()} label="Use a different Plex account" />
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mb-3 text-sm leading-relaxed text-ink-2">Which server should StreamForge use?</p>
+          <ul className="space-y-1.5" aria-label="Your Plex servers">
+            {servers.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => void use(s.id)}
+                  disabled={!!saving}
+                  className="flex w-full items-center gap-3 rounded-xl border border-line bg-white/[0.02] px-3 py-2.5 text-left transition hover:bg-white/[0.05] disabled:opacity-60"
+                >
+                  <Server className="size-4 shrink-0 text-[#e5a00d]" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{s.name}</span>
+                  <span className="shrink-0 text-[11px] text-ink-4">{saving === s.id ? <LoaderCircle className="size-3.5 animate-spin" /> : s.version ? `v${s.version}` : ''}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {error && <ErrorNote>{error}</ErrorNote>}
+        </>
+      )}
+      <button type="button" onClick={onBack} className="mt-4 w-full text-center text-xs text-ink-4 hover:text-ink-2">
+        Use Jellyfin instead
+      </button>
+    </div>
+  );
+}
+
+/** First run: which media server do people sign in with? */
+function ChooseServer({ onPick }: { onPick: (t: 'jellyfin' | 'plex') => void }) {
+  const card = 'flex w-full items-center gap-3 rounded-2xl border border-line bg-white/[0.02] p-4 text-left transition hover:border-line-strong hover:bg-white/[0.05]';
+  return (
+    <div className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <p className="mb-4 text-sm leading-relaxed text-ink-2">Which media server do you use? People will sign in to StreamForge with their account on it.</p>
+      <div className="space-y-2.5">
+        <button type="button" className={card} onClick={() => onPick('plex')}>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e5a00d]/15"><Projector className="size-5 text-[#e5a00d]" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">Plex</span>
+            <span className="block text-xs text-ink-3">Sign in with your Plex account</span>
+          </span>
+          <ArrowRight className="size-4 text-ink-4" />
+        </button>
+        <button type="button" className={card} onClick={() => onPick('jellyfin')}>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#aa5cc3]/15"><Clapperboard className="size-5 text-[#aa5cc3]" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">Jellyfin</span>
+            <span className="block text-xs text-ink-3">Sign in with your Jellyfin account</span>
+          </span>
+          <ArrowRight className="size-4 text-ink-4" />
+        </button>
+      </div>
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Run both, or Emby too? Pick one for sign-in and add the others from Settings.</p>
+    </div>
+  );
+}
+
+/** Plex sign-in, once Plex is the sign-in server. */
+function PlexLogin({ server, initialError, onChallenge }: { server?: ServerInfo; initialError?: string; onChallenge: (c: string) => void }) {
+  const { signedIn } = useAuth();
+  const plex = usePlexSignIn();
+  async function signIn() {
+    const r = await plex.start();
+    if (r?.mfaRequired && r.challenge) onChallenge(r.challenge);
+    else if (r?.user) signedIn(r.user);
+  }
+  return (
+    <div className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <PlexButton busy={plex.busy} onClick={() => void signIn()} />
+      {(plex.error ?? initialError) && <ErrorNote>{plex.error ?? initialError}</ErrorNote>}
+      <div className="mt-5 flex items-center justify-center gap-2 text-xs text-ink-4">
+        <span className={`size-1.5 rounded-full ${server === undefined ? 'bg-idle' : server.online ? 'bg-ok shadow-[0_0_8px_var(--color-ok)]' : 'bg-bad'}`} />
+        {server === undefined ? 'Contacting server…' : server.online ? `${server.name} · Plex ${server.version ?? ''}` : 'Plex server unreachable'}
+      </div>
+    </div>
+  );
+}
 
 type Found = { id: string; name: string; url: string; version?: string; reachable: boolean };
 
 /** First run: no Jellyfin server is configured yet, so ask for one (or find it on the network). */
-function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
+function Setup({ onDone, onBack }: { onDone: (s: ServerInfo) => void; onBack: () => void }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -126,9 +321,10 @@ function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
       >
         {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Connect <ArrowRight className="size-4" /></>}
       </button>
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">
-        Sign-in uses Jellyfin. Once you're in, add Emby and Plex servers, Sonarr, Radarr and the rest from Settings.
-      </p>
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Once you're in, add Emby and Plex servers, Sonarr, Radarr and the rest from Settings.</p>
+      <button type="button" onClick={onBack} className="mt-3 w-full text-center text-xs text-ink-4 hover:text-ink-2">
+        Use Plex instead
+      </button>
     </form>
   );
 }
@@ -195,7 +391,9 @@ export default function Login() {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [server, setServer] = useState<ServerInfo>();
+  const [setupType, setSetupType] = useState<'jellyfin' | 'plex'>();
   const needsSetup = server?.configured === false;
+  const plexSignIn = server?.type === 'plex';
   // ?password forces the password form, in case single sign-on is broken.
   const hidePassword = !!server?.sso?.hidePassword && !new URLSearchParams(location.search).has('password');
 
@@ -252,11 +450,27 @@ export default function Login() {
             <div className="relative"><LogoMark size={56} /></div>
           </motion.div>
           <h1 className="mt-6 text-[28px] font-semibold tracking-tight">Welcome to StreamForge</h1>
-          <p className="mt-1.5 text-sm text-ink-3">{needsSetup ? 'Let’s connect your Jellyfin server' : 'Sign in with your Jellyfin account'}</p>
+          <p className="mt-1.5 text-sm text-ink-3">
+            {needsSetup
+              ? setupType === 'plex'
+                ? 'Let’s connect your Plex server'
+                : setupType === 'jellyfin'
+                  ? 'Let’s connect your Jellyfin server'
+                  : 'Let’s connect your media server'
+              : plexSignIn
+                ? 'Sign in with your Plex account'
+                : 'Sign in with your Jellyfin account'}
+          </p>
         </div>
 
-        {needsSetup ? (
-          <Setup onDone={setServer} />
+        {needsSetup && !challenge ? (
+          setupType === 'plex' ? (
+            <PlexSetup onBack={() => setSetupType('jellyfin')} />
+          ) : setupType === 'jellyfin' ? (
+            <Setup onDone={setServer} onBack={() => setSetupType('plex')} />
+          ) : (
+            <ChooseServer onPick={setSetupType} />
+          )
         ) : challenge ? (
           <MfaStep
             challenge={challenge}
@@ -265,6 +479,8 @@ export default function Login() {
               setError(msg);
             }}
           />
+        ) : plexSignIn ? (
+          <PlexLogin server={server} initialError={error} onChallenge={setChallenge} />
         ) : (
           <form onSubmit={submit} className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
             {server?.sso && (
@@ -330,7 +546,9 @@ export default function Login() {
             </div>
           </form>
         )}
-        <p className="mt-6 text-center text-[11px] text-ink-4">Credentials are sent directly to your Jellyfin server and never stored.</p>
+        {!(needsSetup && !setupType) && <p className="mt-6 text-center text-[11px] text-ink-4">
+          {plexSignIn || setupType === 'plex' ? 'You sign in on plex.tv. StreamForge never sees your Plex password.' : 'Credentials are sent directly to your Jellyfin server and never stored.'}
+        </p>}
       </motion.div>
     </div>
   );

@@ -65,7 +65,7 @@ function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }
   if (area && !canSee(area)) {
     return (
       <Card>
-        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask a Jellyfin administrator if you need it." />
+        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask an administrator if you need it." />
       </Card>
     );
   }

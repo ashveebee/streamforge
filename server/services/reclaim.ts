@@ -3,7 +3,9 @@ import { db, readPref, writePref } from '../lib/db.js';
 import { HttpError } from '../lib/handle.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
-import { jf, libraryItems, serverToken, type JfCtx } from './jellyfin.js';
+import { jf, serverToken, type JfCtx } from './jellyfin.js';
+import { mainLibraryItems, mainPlex } from './mainServer.js';
+import * as plex from './plex.js';
 
 /*
  * Cleanup suggestions: big movies and series that nobody has watched in a
@@ -56,6 +58,12 @@ interface JfPlayed {
 
 /** Jellyfin item id (movie or series) → last time anyone played it. */
 async function lastPlayed(ctx: JfCtx) {
+  // Plex: the owner's library listing carries when each title was last watched.
+  const p = mainPlex();
+  if (p) {
+    const items = await plex.libraryItems(p);
+    return new Map(items.filter((i) => i.lastPlayed).map((i) => [i.id, i.lastPlayed!] as const));
+  }
   return cache.get('jf:lastplayed', 30 * 60_000, async () => {
     const token = serverToken(ctx);
     const users = await jf<{ Id: string; Policy?: { IsDisabled?: boolean } }[]>('/Users', token, ctx.deviceId);
@@ -127,7 +135,7 @@ export interface Suggestion {
 export async function reclaimSuggestions(ctx: JfCtx, days: number) {
   return cache.get(`reclaim:${days}`, 10 * 60_000, async () => {
     const cutoff = Date.now() - days * 86_400_000;
-    const [jfItems, played] = await Promise.all([libraryItems(ctx), lastPlayed(ctx)]);
+    const [jfItems, played] = await Promise.all([mainLibraryItems(ctx), lastPlayed(ctx)]);
     const recorded = recordedPlays();
     const byTmdb = new Map<string, string>();
     const byTvdb = new Map<string, string>();

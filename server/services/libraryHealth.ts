@@ -1,8 +1,8 @@
 import { cache } from '../lib/cache.js';
-import { isConfigured } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
-import * as jellyfin from './jellyfin.js';
+import type * as jellyfin from './jellyfin.js';
+import { mainLibraryItems, mediaReady, plexMode } from './mainServer.js';
 
 /*
  * Library health: things that are quietly wrong across Sonarr, Radarr and
@@ -75,7 +75,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
   const [seriesLists, movieLists, jf] = await Promise.all([
     Promise.all(sonarrs.map((i) => cache.get(`${i.id}:series`, 60_000, () => i.client.get<Series[]>('/api/v3/series')).then((list) => ({ i, list })))),
     Promise.all(radarrs.map((i) => cache.get(`${i.id}:movies`, 60_000, () => i.client.get<Movie[]>('/api/v3/movie')).then((list) => ({ i, list })))),
-    isConfigured('jellyfin') ? jellyfin.libraryItems(ctx).catch(() => undefined) : Promise.resolve(undefined),
+    mediaReady() ? mainLibraryItems(ctx).catch(() => undefined) : Promise.resolve(undefined),
   ]);
   const tag = (i: ArrInstance) => ({ instance: i.id, instanceName: i.primary ? undefined : i.name });
 
@@ -149,7 +149,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
       unmanaged.push({
         title: j.name,
         year: j.year,
-        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : 'No metadata ids — identify it in Jellyfin',
+        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : `No metadata ids — identify it in ${plexMode() ? 'Plex' : 'Jellyfin'}`,
       });
     }
     unmanaged.sort((a, b) => a.title.localeCompare(b.title));
@@ -162,6 +162,8 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
     hasSonarr: sonarrs.length > 0,
     hasRadarr: radarrs.length > 0,
     hasJellyfin: !!jf,
+    /** Which server the library cross-checks compare with. */
+    server: plexMode() ? 'Plex' : 'Jellyfin',
     incomplete: section(incomplete),
     upgrades,
     notInJellyfin: section(notInJellyfin),

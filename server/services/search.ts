@@ -4,6 +4,8 @@ import { isConfigured } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, type JfCtx } from './jellyfin.js';
+import { mainPlex } from './mainServer.js';
+import * as plex from './plex.js';
 import { creatorName, musicLibrary } from './music.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
@@ -19,7 +21,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g
 
 export interface SearchHit {
   key: string;
-  source: 'jellyfin' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
+  source: 'jellyfin' | 'plex' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
   title: string;
   subtitle?: string;
   year?: number;
@@ -200,7 +202,9 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
       return [] as SearchHit[];
     });
   const jobs: Record<string, Promise<SearchHit[]>> = {};
-  if (isConfigured('jellyfin')) jobs.library = settle('Jellyfin')(jellyfinHits(ctx, q));
+  const main = mainPlex();
+  if (main) jobs.library = settle('Plex')(plex.search(main, q, PER_SOURCE * 2));
+  else if (isConfigured('jellyfin')) jobs.library = settle('Jellyfin')(jellyfinHits(ctx, q));
   const managed: Promise<SearchHit[]>[] = [];
   for (const inst of arrInstances()) if (can(inst.kind)) managed.push(settle(inst.primary ? inst.name : `${inst.kind} ${inst.name}`)(arrHits(inst, q)));
   for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(k === 'lidarr' ? 'Lidarr' : 'Readarr')(musicHits(k, q)));

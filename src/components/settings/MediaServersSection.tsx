@@ -145,7 +145,8 @@ function ServerRow({ srv, draft, onDone }: { srv?: MediaServerView; draft?: Draf
             <span className="text-ink-4">{help.hint}</span>
           )}
         </div>
-        {srv && (
+        {srv?.main && <Pill tone="brand">Sign-in server</Pill>}
+        {srv && !srv.main && (
           <>
             <Switch
               checked={srv.enabled}
@@ -236,11 +237,14 @@ const INTRO: Record<MediaServerType, string> = {
   plex: 'Monitor Plex servers: health, outage alerts, their streams on Now Playing and a Plex page with a tab per server.',
 };
 
+const MAIN_INTRO = 'People sign in with their Plex account on your server. Add more Plex servers to watch them here too.';
+const INTRO_STANDALONE_JELLYFIN = 'Monitor Jellyfin servers: health, outage alerts, their streams on Now Playing and a Jellyfin page with a tab per server.';
+
 /**
  * Media servers of one kind. Extra Jellyfin servers sit under the main
  * Jellyfin card; Emby and Plex get cards of their own.
  */
-export function MediaServersSection({ type }: { type: MediaServerType }) {
+export function MediaServersSection({ type, standalone = type !== 'jellyfin' }: { type: MediaServerType; standalone?: boolean }) {
   const q = useMediaServerSettings();
   const discover = useDiscoverMediaServers();
   const name = SERVER_TYPE_NAMES[type];
@@ -257,18 +261,18 @@ export function MediaServersSection({ type }: { type: MediaServerType }) {
   return (
     <li>
       <Card>
-        <header className={cn('flex flex-wrap items-center gap-3', type === 'jellyfin' ? 'px-5 py-3' : 'p-5')}>
-          {type !== 'jellyfin' && <ServiceIcon id={type} size={40} />}
+        <header className={cn('flex flex-wrap items-center gap-3', standalone ? 'p-5' : 'px-5 py-3')}>
+          {standalone && <ServiceIcon id={type} size={40} />}
           <div className="min-w-[12rem] flex-1">
-            <h3 className={type === 'jellyfin' ? 'text-[13px] font-semibold' : 'text-[15px] font-semibold'}>
-              {type === 'jellyfin' ? 'More Jellyfin servers' : name}
-              {type !== 'jellyfin' && list.length > 0 && (
+            <h3 className={standalone ? 'text-[15px] font-semibold' : 'text-[13px] font-semibold'}>
+              {standalone ? name : 'More Jellyfin servers'}
+              {standalone && list.length > 0 && (
                 <span className="ml-2 text-[11px] font-normal text-ink-4">
                   {list.length} server{list.length === 1 ? '' : 's'}
                 </span>
               )}
             </h3>
-            <p className="text-[11px] text-ink-4">{INTRO[type]}</p>
+            <p className="text-[11px] text-ink-4">{list.some((s) => s.main) ? MAIN_INTRO : standalone && type === 'jellyfin' ? INTRO_STANDALONE_JELLYFIN : INTRO[type]}</p>
           </div>
           <Button size="sm" disabled={discover.isPending} onClick={() => discover.mutate()}>
             {discover.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}

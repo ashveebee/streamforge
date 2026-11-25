@@ -2,6 +2,8 @@ import { db } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
 import { isConfigured } from '../settings.js';
 import { jf, type JfCtx } from './jellyfin.js';
+import { mainPlex } from './mainServer.js';
+import * as plex from './plex.js';
 import { userRequests } from './seerr.js';
 
 /* The signed-in user's own activity: what to watch next, history and requests. */
@@ -57,7 +59,10 @@ function card(i: JfItem) {
 
 const FIELDS = 'PrimaryImageAspectRatio,ParentBackdropItemId,ParentBackdropImageTags,BackdropImageTags';
 
-export async function myOverview(ctx: JfCtx) {
+/** Continue watching and next up: from Plex's On Deck when Plex is the sign-in server. */
+async function upNext(ctx: JfCtx, serverToken?: string) {
+  const p = mainPlex();
+  if (p) return plex.onDeck(p, ctx.userId, serverToken).catch(() => ({ resume: [], nextUp: [] }));
   const [resume, nextUp] = await Promise.all([
     cache.get(`jf:resume:${ctx.userId}`, 30_000, () =>
       jf<{ Items: JfItem[] }>(`/Users/${ctx.userId}/Items/Resume`, ctx.token, ctx.deviceId, { Limit: 12, MediaTypes: 'Video', Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
@@ -66,6 +71,11 @@ export async function myOverview(ctx: JfCtx) {
       jf<{ Items: JfItem[] }>('/Shows/NextUp', ctx.token, ctx.deviceId, { UserId: ctx.userId, Limit: 12, Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
     ).catch(() => ({ Items: [] })),
   ]);
+  return { resume: (resume.Items ?? []).map(card), nextUp: (nextUp.Items ?? []).map(card) };
+}
+
+export async function myOverview(ctx: JfCtx, serverToken?: string) {
+  const { resume, nextUp } = await upNext(ctx, serverToken);
 
   // History comes from StreamForge's own recorder (needs a Jellyfin API key).
   const since = Date.now() - 30 * 86_400_000;
@@ -78,8 +88,8 @@ export async function myOverview(ctx: JfCtx) {
   };
 
   return {
-    resume: (resume.Items ?? []).map(card),
-    nextUp: (nextUp.Items ?? []).map(card),
+    resume,
+    nextUp,
     history: rows
       .filter((r) => r.watched_ms >= 60_000)
       .map((r) => ({

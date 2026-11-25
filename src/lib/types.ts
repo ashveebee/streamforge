@@ -463,6 +463,8 @@ export interface JellyfinServerRef {
 export interface MediaServerView {
   id: string;
   type: MediaServerType;
+  /** The server people sign in with (can't be switched off or removed). */
+  main?: boolean;
   name: string;
   url: string;
   publicUrl: string;

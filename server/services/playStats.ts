@@ -1,6 +1,8 @@
 import { db } from '../lib/db.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
+import { canWatchInBackground, mainNowPlaying, mainPlex } from './mainServer.js';
+import * as plex from './plex.js';
 
 /*
  * Playback statistics.
@@ -33,7 +35,7 @@ const insert = db.prepare(
 const touch = db.prepare('UPDATE plays SET last_seen = ?, watched_ms = watched_ms + ?, method = ? WHERE id = ?');
 
 export async function recordSample() {
-  const streams = await jellyfin.serverNowPlaying().catch(() => undefined);
+  const streams = await mainNowPlaying().catch(() => undefined);
   if (!streams) return;
   const now = Date.now();
   const seen = new Set<string>();
@@ -111,6 +113,9 @@ function fromRecorder(since: number): Play[] {
 }
 
 async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
+  // Plex: its watch history has who played what and when, like Jellyfin's activity log.
+  const p = mainPlex();
+  if (p) return (await plex.playsSince(p, since)).map((x) => ({ user: x.user, title: x.title, group: x.group, at: x.at }));
   const entries = await jellyfin.playbackEntries(ctx, new Date(since));
   const out: Play[] = [];
   for (const e of entries) {
@@ -178,7 +183,7 @@ export async function playbackStats(ctx: JfCtx, days: number) {
   return {
     days,
     source,
-    recording: jellyfin.hasServerKey(),
+    recording: canWatchInBackground(),
     recordingSince: firstRecorded ? new Date(firstRecorded).toISOString() : undefined,
     totals: {
       plays: plays.length,

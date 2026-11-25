@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMainServer } from '@/hooks/queries';
 import { BookmarkCheck, Check, CircleAlert, EyeOff, LoaderCircle, Recycle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useReclaim, useReclaimAction, type ReclaimItem } from '@/hooks/useServices';
@@ -63,6 +64,7 @@ function Row({ i }: { i: ReclaimItem }) {
 
 /** Large movies and series nobody has watched in a while. */
 export function ReclaimCard() {
+  const main = useMainServer();
   const [days, setDays] = useState(365);
   const q = useReclaim(days);
   return (
@@ -99,7 +101,7 @@ export function ReclaimCard() {
           <>
             <ul className="max-h-[520px] divide-y divide-line overflow-y-auto">{q.data.items.map((i) => <Row key={i.key} i={i} />)}</ul>
             <p className="mt-2 text-[11px] text-ink-4">
-              Based on every Jellyfin user’s play history. Titles added in this period are skipped.{q.data.kept ? ` ${q.data.kept} kept title${q.data.kept === 1 ? '' : 's'} hidden.` : ''}
+              {main.plex ? 'Based on your Plex watch history.' : 'Based on every Jellyfin user’s play history.'} Titles added in this period are skipped.{q.data.kept ? ` ${q.data.kept} kept title${q.data.kept === 1 ? '' : 's'} hidden.` : ''}
               {q.data.total > q.data.items.length && <> Showing the largest {q.data.items.length}.</>}
             </p>
             {q.data.items.length > 0 && <Pill className="mt-2">Checked {relative(q.data.checkedAt)}</Pill>}

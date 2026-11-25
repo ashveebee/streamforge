@@ -13,6 +13,10 @@ import { beginSetup, disable as disableMfa, finishSetup, mfaEnabled, mfaInfo, ve
 import { authorizeUrl, finishLogin, oidcReady, oidcSettings } from './services/oidc.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
+import { mainPlex, mediaReady, plexMode, setMainPlex } from './services/mainServer.js';
+import { addServer, describeServers, getStoredServer, updateServer } from './services/mediaServers.js';
+import * as plexAuth from './services/plexAuth.js';
+import * as plex from './services/plex.js';
 import { discoverWithStatus, urlField } from './settingsRoutes.js';
 
 declare module 'express-serve-static-core' {
@@ -49,18 +53,18 @@ export function publicUser(s: Session) {
   };
 }
 
-/** Restricts a route to Jellyfin administrators. Use after requireAuth. */
+/** Restricts a route to administrators (of the main Jellyfin or Plex server). Use after requireAuth. */
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.isAdmin) {
-    res.status(403).json({ error: 'forbidden', message: 'Only Jellyfin administrators can do this.' });
+    res.status(403).json({ error: 'forbidden', message: 'Only administrators can do this.' });
     return;
   }
   next();
 }
 
 export const ctxOf = (s: Session): jellyfin.JfCtx => ({
-  // Single sign-on sessions have no Jellyfin token of their own.
-  token: s.method === 'oidc' ? (jellyfin.serverApiKey() ?? '') : s.token,
+  // Single sign-on sessions have no Jellyfin token of their own; Plex sessions use their server token.
+  token: s.method === 'oidc' ? (jellyfin.serverApiKey() ?? '') : s.method === 'plex' ? (s.serverToken ?? '') : s.token,
   deviceId: s.deviceId,
   userId: s.userId,
 });
@@ -76,6 +80,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   if (Date.now() - session.lastValidatedAt > REVALIDATE_MS) {
+    if (session.method === 'plex') {
+      if (!(await revalidatePlex(req, res, session))) return;
+      sessions.touch(session, req.get('user-agent'));
+      req.session = session;
+      next();
+      return;
+    }
     try {
       const user = session.method === 'oidc' ? await jellyfin.serverUser(session.userId) : await jellyfin.currentUser(session.token, session.deviceId);
       session.lastValidatedAt = Date.now();
@@ -98,6 +109,32 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   sessions.touch(session, req.get('user-agent'));
   req.session = session;
   next();
+}
+
+/**
+ * Re-checks a Plex sign-in: the account token still works and the account
+ * still has access to the main Plex server. False after answering 401.
+ */
+async function revalidatePlex(req: Request, res: Response, session: Session) {
+  const srv = mainPlex();
+  try {
+    if (!srv?.serverId) throw new UpstreamError('Plex is no longer the sign-in server', 401);
+    const access = await plexAuth.accessTo(session.token, srv.serverId);
+    if (!access || (!access.isAdmin && !membersCanSignIn())) throw new UpstreamError('Access revoked', 401);
+    session.isAdmin = access.isAdmin;
+    session.serverToken = access.serverToken ?? session.serverToken;
+    session.lastValidatedAt = Date.now();
+    sessions.save(session);
+  } catch (err) {
+    if (err instanceof UpstreamError && (err.status === 401 || err.status === 403)) {
+      sessions.destroy(session.id);
+      res.clearCookie(SESSION_COOKIE, cookieOptions(req));
+      res.status(401).json({ error: 'unauthenticated', message: 'Your Plex sign-in has ended' });
+      return false;
+    }
+    // plex.tv temporarily unreachable: keep the session, try again later.
+  }
+  return true;
 }
 
 /** A stable, non-secret handle for a session (the real id is the cookie). */
@@ -140,7 +177,8 @@ function startSession(req: Request, res: Response, data: SessionData) {
 /** Password sign-ins waiting for a two-factor code. */
 const challenges = new Map<string, { data: SessionData; expires: number; attempts: number }>();
 
-const ssoInfo = () => (oidcReady() ? { label: oidcSettings().label, hidePassword: oidcSettings().hidePassword } : undefined);
+// Single sign-on matches people to Jellyfin users, so it's off while Plex is the sign-in server.
+const ssoInfo = () => (oidcReady() && !plexMode() ? { label: oidcSettings().label, hidePassword: oidcSettings().hidePassword } : undefined);
 
 const loginBody = z.object({
   username: z.string().trim().min(1).max(256),
@@ -150,15 +188,25 @@ const loginBody = z.object({
 export const authRouter = Router();
 
 authRouter.get('/server', async (_req, res) => {
+  const p = mainPlex();
+  if (p) {
+    try {
+      const info = await plex.probe({ url: p.url, apiKey: p.apiKey });
+      res.json({ type: 'plex', name: info.meta?.server ?? p.name, version: info.version, online: true, configured: true });
+    } catch {
+      res.json({ type: 'plex', name: p.name, online: false, configured: true });
+    }
+    return;
+  }
   if (!isConfigured('jellyfin')) {
     res.json({ online: false, configured: false });
     return;
   }
   try {
     const info = await jellyfin.publicInfo();
-    res.json({ name: info.ServerName, version: info.Version, online: true, configured: true, sso: ssoInfo() });
+    res.json({ type: 'jellyfin', name: info.ServerName, version: info.Version, online: true, configured: true, sso: ssoInfo() });
   } catch {
-    res.json({ online: false, configured: true, sso: ssoInfo() });
+    res.json({ type: 'jellyfin', online: false, configured: true, sso: ssoInfo() });
   }
 });
 
@@ -176,7 +224,7 @@ const setupLimiter = rateLimit({
  * administrator can change it (from Settings).
  */
 authRouter.post('/setup', setupLimiter, async (req, res) => {
-  if (isConfigured('jellyfin')) {
+  if (mediaReady()) {
     res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
     return;
   }
@@ -188,7 +236,7 @@ authRouter.post('/setup', setupLimiter, async (req, res) => {
   const { url } = parsed.data;
   try {
     const info = await jellyfin.probe({ url });
-    if (isConfigured('jellyfin')) {
+    if (mediaReady()) {
       res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
       return;
     }
@@ -205,18 +253,176 @@ authRouter.post('/setup', setupLimiter, async (req, res) => {
  * address can be picked instead of typed. Only while nothing is configured.
  */
 authRouter.post('/setup/discover', setupLimiter, async (_req, res) => {
-  if (isConfigured('jellyfin')) {
-    res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
+  if (mediaReady()) {
+    res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
     return;
   }
   const servers = await discoverWithStatus();
   res.json({ servers: servers.map(({ id, name, url, version, reachable }) => ({ id, name, url, version, reachable })) });
 });
 
+/* ------------------------------ Plex sign-in ------------------------------ */
+
+const plexLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 300,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'rate_limited', message: 'Too many attempts. Try again in a few minutes.' },
+});
+
+const handleBody = z.object({ handle: z.string().min(16).max(100) }).strict();
+
+/** Starts "Sign in with Plex": the browser opens `authUrl` and polls with `handle`. */
+authRouter.post('/plex/start', setupLimiter, async (_req, res) => {
+  if (mediaReady() && !plexMode()) {
+    res.status(409).json({ error: 'not_plex', message: 'Sign in with your Jellyfin account.' });
+    return;
+  }
+  try {
+    res.json(await plexAuth.startPin());
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach plex.tv: ${(err as Error).message}` });
+  }
+});
+
+/** Sets up the account's servers for a first-run pick, or signs in to the main Plex server. */
+authRouter.post('/plex/poll', plexLimiter, async (req, res) => {
+  const b = handleBody.safeParse(req.body ?? {});
+  if (!b.success) {
+    res.status(400).json({ error: 'bad_request', message: 'Invalid request' });
+    return;
+  }
+  let token: string | undefined;
+  try {
+    token = await plexAuth.pollPin(b.data.handle);
+  } catch (err) {
+    const e = err as UpstreamError;
+    res.status(e.status === 410 ? 410 : 502).json({ error: e.status === 410 ? 'expired' : 'upstream', message: e.message });
+    return;
+  }
+  if (!token) {
+    res.json({ pending: true });
+    return;
+  }
+  try {
+    // First run: list the servers this account owns, to pick the main one.
+    if (!mediaReady()) {
+      const owned = (await plexAuth.servers(token)).filter((s) => s.owned);
+      res.json({ servers: owned.map((s) => ({ id: s.clientIdentifier, name: s.name, version: s.productVersion })) });
+      return;
+    }
+    await signInWithPlex(req, res, token);
+    plexAuth.finishPin(b.data.handle);
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach plex.tv: ${(err as Error).message}` });
+  }
+});
+
+/** First run: makes one of the account's Plex servers the main server, and signs the owner in. */
+authRouter.post('/plex/setup', setupLimiter, async (req, res) => {
+  const b = handleBody.extend({ server: z.string().min(1).max(100) }).safeParse(req.body ?? {});
+  if (!b.success) {
+    res.status(400).json({ error: 'bad_request', message: 'Pick a server' });
+    return;
+  }
+  if (mediaReady()) {
+    res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+    return;
+  }
+  try {
+    const token = await plexAuth.pollPin(b.data.handle);
+    if (!token) {
+      res.status(400).json({ error: 'bad_request', message: 'Sign in with Plex first.' });
+      return;
+    }
+    const r = (await plexAuth.servers(token)).find((s) => s.owned && s.clientIdentifier === b.data.server);
+    if (!r?.accessToken) {
+      res.status(404).json({ error: 'not_found', message: 'That server isn’t one of yours on this Plex account.' });
+      return;
+    }
+    const url = await plexAuth.reachableUri(r);
+    if (!url) {
+      res.status(502).json({
+        error: 'unreachable',
+        message: `StreamForge can’t reach “${r.name}” at any of its addresses. Make sure it’s on and reachable from where StreamForge runs.`,
+      });
+      return;
+    }
+    if (mediaReady()) {
+      res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+      return;
+    }
+    const existing = describeServers().find((s) => s.type === 'plex' && s.url === url);
+    const srv = existing
+      ? updateServer(existing.id, { apiKey: r.accessToken, serverId: r.clientIdentifier, enabled: true })!
+      : addServer({ type: 'plex', name: r.name, url, apiKey: r.accessToken, serverId: r.clientIdentifier });
+    setMainPlex(srv.id);
+    audit({ ip: req.ip }, `[settings] Plex server “${r.name}” (${url}) set as the sign-in server during first-run setup`);
+    await signInWithPlex(req, res, token);
+    plexAuth.finishPin(b.data.handle);
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach plex.tv: ${(err as Error).message}` });
+  }
+});
+
+/** Signs a Plex account in to the main Plex server, with two-factor when it's on. */
+async function signInWithPlex(req: Request, res: Response, token: string) {
+  const srv = mainPlex();
+  if (!srv) {
+    res.status(409).json({ error: 'not_plex', message: 'Plex isn’t the sign-in server.' });
+    return;
+  }
+  // Older setups may not know the server's own id yet: ask the server.
+  if (!srv.serverId) {
+    const id = await plex.identity(srv.url);
+    if (id) updateServer(srv.id, { serverId: id });
+  }
+  const serverId = getStoredServer(srv.id)?.serverId;
+  const [who, access] = await Promise.all([plexAuth.account(token), serverId ? plexAuth.accessTo(token, serverId) : undefined]);
+  const name = who.username || who.title || who.email || 'Plex user';
+  if (!access) {
+    audit({ userId: String(who.id), userName: name, ip: req.ip }, '[auth] Plex sign-in refused: no access to the server', false);
+    res.status(403).json({ error: 'forbidden', message: `Your Plex account doesn’t have access to “${srv.name}”.` });
+    return;
+  }
+  if (!access.isAdmin && !membersCanSignIn()) {
+    audit({ userId: String(who.id), userName: name, ip: req.ip }, '[auth] sign-in refused: member access is off', false);
+    res.status(403).json({ error: 'forbidden', message: 'StreamForge is restricted to the server’s owner.' });
+    return;
+  }
+  if (who.thumb) plex.rememberAvatar(String(who.id), who.thumb);
+  const data: SessionData = {
+    userId: String(who.id),
+    userName: name,
+    isAdmin: access.isAdmin,
+    primaryImageTag: who.thumb ? 'plex' : undefined,
+    avatarUrl: who.thumb,
+    token,
+    serverToken: access.serverToken,
+    deviceId: newDeviceId(),
+    serverId,
+    method: 'plex',
+  };
+  if (mfaEnabled(data.userId)) {
+    const challenge = randomBytes(24).toString('base64url');
+    challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
+    res.json({ mfaRequired: true, challenge });
+    return;
+  }
+  const session = startSession(req, res, data);
+  audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Plex');
+  res.json({ user: publicUser(session) });
+}
+
 authRouter.post('/login', loginLimiter, async (req, res) => {
   const body = loginBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: 'bad_request', message: 'Username is required' });
+    return;
+  }
+  if (plexMode()) {
+    res.status(409).json({ error: 'plex', message: 'Sign in with your Plex account.' });
     return;
   }
   if (!isConfigured('jellyfin')) {
@@ -250,7 +456,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
       const challenge = randomBytes(24).toString('base64url');
       for (const [k, c] of challenges) if (c.expires < Date.now()) {
         challenges.delete(k);
-        void jellyfin.logout(c.data.token, c.data.deviceId);
+        if (c.data.method === 'password') void jellyfin.logout(c.data.token, c.data.deviceId);
       }
       challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
       res.json({ mfaRequired: true, challenge });
@@ -274,7 +480,7 @@ authRouter.post('/logout', async (req, res) => {
   const session = sessions.get(readCookie(req, SESSION_COOKIE));
   if (session) {
     sessions.destroy(session.id);
-    if (session.method !== 'oidc') await jellyfin.logout(session.token, session.deviceId);
+    if (session.method === 'password' || !session.method) await jellyfin.logout(session.token, session.deviceId);
     audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed out');
   }
   res.clearCookie(SESSION_COOKIE, cookieOptions(req));
@@ -312,7 +518,7 @@ authRouter.delete('/sessions/:id', requireAuth, async (req, res) => {
     return;
   }
   sessions.destroy(target.id);
-  if (target.method !== 'oidc') await jellyfin.logout(target.token, target.deviceId);
+  if (target.method === 'password' || !target.method) await jellyfin.logout(target.token, target.deviceId);
   res.json({ ok: true });
 });
 
@@ -339,7 +545,7 @@ authRouter.post('/mfa/verify', mfaLimiter, async (req, res) => {
   if (!how) {
     if (++c.attempts >= 5) {
       challenges.delete(b.data.challenge);
-      await jellyfin.logout(c.data.token, c.data.deviceId);
+      if (c.data.method === 'password') await jellyfin.logout(c.data.token, c.data.deviceId);
     }
     audit({ userId: c.data.userId, userName: c.data.userName, ip: req.ip }, '[auth] sign-in failed: wrong two-factor code', false);
     res.status(401).json({ error: 'invalid_code', message: 'That code didn’t work. Check your authenticator app and try again.' });
@@ -394,7 +600,7 @@ function publicBase(req: Request) {
 const loginError = (res: Response, message: string) => res.redirect(302, `/login?error=${encodeURIComponent(message)}`);
 
 authRouter.get('/oidc/start', setupLimiter, async (req, res) => {
-  if (!oidcReady()) return loginError(res, 'Single sign-on isn’t set up.');
+  if (!oidcReady() || plexMode()) return loginError(res, 'Single sign-on isn’t set up.');
   try {
     res.redirect(302, await authorizeUrl(`${publicBase(req)}/api/auth/oidc/callback`));
   } catch (err) {
@@ -403,7 +609,7 @@ authRouter.get('/oidc/start', setupLimiter, async (req, res) => {
 });
 
 authRouter.get('/oidc/callback', setupLimiter, async (req, res) => {
-  if (!oidcReady()) return loginError(res, 'Single sign-on isn’t set up.');
+  if (!oidcReady() || plexMode()) return loginError(res, 'Single sign-on isn’t set up.');
   const { code, state, error, error_description: desc } = req.query as Record<string, string | undefined>;
   if (error) return loginError(res, desc ?? error);
   if (!code || !state) return loginError(res, 'Sign-in was cancelled.');

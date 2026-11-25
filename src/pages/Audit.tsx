@@ -34,7 +34,7 @@ export default function AuditPage() {
   const audit = useAudit({ category, user: who, q });
 
   if (!user?.isAdmin) {
-    return <Card><EmptyState icon={ShieldAlert} title="Administrators only" description="Only Jellyfin administrators can see the audit log." /></Card>;
+    return <Card><EmptyState icon={ShieldAlert} title="Administrators only" description="Only administrators can see the audit log." /></Card>;
   }
   const first = audit.data?.pages[0];
   const entries = audit.data?.pages.flatMap((p) => p.entries) ?? [];

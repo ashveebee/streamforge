@@ -60,7 +60,7 @@ export default function DiagnosePage() {
   }, [first, question]);
 
   if (!user?.isAdmin) {
-    return <Card><EmptyState icon={ShieldAlert} title="Administrators only" description="Only Jellyfin administrators can diagnose streams." /></Card>;
+    return <Card><EmptyState icon={ShieldAlert} title="Administrators only" description="Only administrators can diagnose streams." /></Card>;
   }
   if (status.isError) return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
   if (!status.data) return <PageLoader label="Loading the diagnosis" />;

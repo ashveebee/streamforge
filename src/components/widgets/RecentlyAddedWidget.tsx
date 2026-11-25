@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Sparkles, Star } from 'lucide-react';
-import { useLatest } from '@/hooks/queries';
+import { useLatest, useMainServer } from '@/hooks/queries';
 import { jfImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { Card, CardHeader } from '../ui/Card';
@@ -13,10 +13,12 @@ import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
 import type { MediaServerType } from '@/lib/types';
 
 /** `server` picks an extra media server; the main one by default. */
-export function RecentlyAddedWidget({ server, serverType = 'jellyfin' }: { server?: string; serverType?: MediaServerType } = {}) {
+export function RecentlyAddedWidget({ server, serverType: given }: { server?: string; serverType?: MediaServerType } = {}) {
+  const main = useMainServer();
+  const serverType = given ?? main.type;
   const q = useLatest(server);
-  // Title pages read the main server, so an extra server's titles don't link.
-  const linkTo = (id: string) => (server && server !== 'jellyfin' ? undefined : `/media/jellyfin/${id}`);
+  // Title pages read the main Jellyfin server, so other servers' titles don't link.
+  const linkTo = (id: string) => ((server && server !== 'jellyfin') || main.plex ? undefined : `/media/jellyfin/${id}`);
   const scroller = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: 'smooth' });
 

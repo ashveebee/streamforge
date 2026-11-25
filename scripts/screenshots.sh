@@ -4,6 +4,8 @@
 #   npm run demo                 # in one terminal
 #   (DEMO_SETUP=1 npm run demo shows the first-run screen, for setup.jpg:
 #    open /login and click "Find servers on my network" before capturing.)
+#   (DEMO_MAIN=plex npm run demo shows a Plex-only household, for plex-only.jpg;
+#    with DEMO_SETUP=1 too, pick Plex and click Sign in with Plex for setup-plex.jpg.)
 #   ./scripts/screenshots.sh     # in another
 #
 # Needs Google Chrome (or set CHROME=/path/to/chrome), plus sips (macOS) or

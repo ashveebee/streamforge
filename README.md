@@ -1,10 +1,11 @@
 # StreamForge
 
-A modern control centre for a Jellyfin media server and the services around it:
-**Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
+A modern control centre for a **Jellyfin or Plex** media server and the
+services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
 Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
-NZBGet). Run more than one media server? StreamForge can also watch extra
-**Jellyfin, Emby and Plex** servers next to your main one.
+NZBGet). Run more than one media server? StreamForge also watches extra
+**Jellyfin, Emby and Plex** servers next to your main one. Only have Plex? See
+[Plex-only households](#plex-only-households).
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
@@ -62,9 +63,10 @@ server.
 
 ## Features
 
-- **Jellyfin sign-in.** Users sign in with their Jellyfin account. The server
-  keeps the Jellyfin token, and the browser only holds an opaque HttpOnly session
-  cookie. The user's profile and avatar come from Jellyfin.
+- **Jellyfin or Plex sign-in.** Users sign in with their Jellyfin account, or
+  with **Sign in with Plex** when Plex is your main server. The server keeps
+  the token, and the browser only holds an opaque HttpOnly session cookie. The
+  user's profile and avatar come from Jellyfin or Plex.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:
@@ -100,9 +102,9 @@ server.
     Jellyfin and Emby streams can be paused, messaged and stopped. Plex
     streams can only be stopped, with a reason the viewer sees (stopping
     needs Plex Pass). Plex has no activity log, so its tab shows recent plays
-    from Plex's watch history instead. Sign-in, title pages, stats, playback
-    alerts and the buffering diagnosis use the main Jellyfin server, so a
-    Jellyfin server is still needed to sign in.
+    from Plex's watch history instead. Sign-in, stats, your page, search,
+    library health, playback alerts and the buffering diagnosis use the main
+    server (the one people sign in with).
   - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
     missing-episodes list with search buttons.
   - *Radarr:* movie stats, queue, cinema/digital/physical release dates,
@@ -288,16 +290,51 @@ docker run -d --name streamforge \
 The `/data` volume holds the settings database. Keep it, or you'll need to set
 everything up again after an upgrade.
 
-### 2. Connect Jellyfin
+### 2. Connect your media server
 
-Open **http://your-server:4000**. On first launch StreamForge asks for your
-Jellyfin server address (for example `https://jellyfin.example.com` or
-`http://192.168.1.10:8096`), or click **Find servers on my network** to pick
-one. It checks that the server is reachable, then you sign in with a
-**Jellyfin administrator** account. Sign-in always goes through Jellyfin; Emby
-and Plex servers are added from Settings afterwards.
+Open **http://your-server:4000**. On first launch StreamForge asks which media
+server you use. People sign in to StreamForge with their account on it.
 
-<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="640" alt="First-run setup: asks for the Jellyfin server address and lists Jellyfin servers found on the network"></a>
+- **Plex:** click **Sign in with Plex** and approve it in the Plex window
+  that opens, using the account that owns your server. Pick the server, and
+  you're in. StreamForge finds the server's address itself, preferring the
+  local one. Everyone you share the server with can then sign in with their
+  own Plex account.
+- **Jellyfin:** enter your Jellyfin server address (for example
+  `https://jellyfin.example.com` or `http://192.168.1.10:8096`), or click
+  **Find servers on my network** to pick one. Then sign in with a **Jellyfin
+  administrator** account.
+
+You can add Emby servers, and more Jellyfin or Plex servers, from Settings
+afterwards.
+
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="49%" alt="First-run setup: pick Plex or Jellyfin"></a>
+<a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="49%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
+
+### Plex-only households
+
+With Plex as the main server, the whole app runs on Plex. Jellyfin isn't
+needed at all.
+
+<a href="docs/screenshots/plex-only.jpg"><img src="docs/screenshots/plex-only.jpg" alt="The dashboard of a Plex-only install: streams from two Plex servers, a Plex sidebar entry and service health"></a>
+
+- **Sign-in:** **Sign in with Plex**. The server's owner is an administrator.
+  People the server is shared with are members, and can sign in when Settings
+  → Access allows it. Two-factor sign-in works as usual. StreamForge never
+  sees anyone's Plex password; plex.tv handles the sign-in.
+- **Works the same:** dashboard, Now Playing (with stop), the Plex page with
+  libraries, users, recently added and scans, Stats, your page (On Deck from
+  Plex), ⌘K search, Library health, cleanup suggestions, the weekly digest,
+  rules, playback alerts and the buffering diagnosis. Seerr requests are
+  matched to Plex accounts.
+- **Differences:** Plex streams can be stopped (with a reason, needs Plex
+  Pass) but not paused or messaged, so the 4K alert only notifies you. Stats
+  for the time before StreamForge started recording come from Plex's watch
+  history, which has no watch time or transcode details. Title pages show
+  details from Seerr and the *arr apps, without per-episode file info. Single
+  sign-on and Moonfin are Jellyfin features and are hidden.
+- **Needs:** the StreamForge server must be able to reach `plex.tv` (for
+  sign-in) and your Plex server.
 
 ### 3. Connect your other services
 
@@ -410,6 +447,13 @@ default for **Member access** in Settings. See `.env.example` for the full list.
   it under Settings → Sign-in security. If you're the only admin, start the
   container once with `STREAMFORGE_RESET_2FA=<your Jellyfin user name>`, sign
   in, and remove the variable again.
+- **"Sign in with Plex" says your account doesn't have access:** the account
+  must own the server or have it shared with it. Sharing happens in Plex
+  (Settings → Users & Sharing). If it's shared, check that member sign-in is
+  on under Settings → Access.
+- **Plex setup says it can't reach the server:** StreamForge tries every
+  address plex.tv lists for the server, local ones first. In Docker, make sure
+  the container can reach the server's LAN address (or use host networking).
 - **Single sign-on says there's no Jellyfin user:** the username claim
   (`preferred_username` by default) must match a Jellyfin user name. Change the
   claim under Settings → Sign-in security if your provider sends something else.

@@ -122,11 +122,12 @@ async function normalise(r: SeerrRequest) {
   };
 }
 
-/** The Seerr user linked to a Jellyfin user (Seerr stores the Jellyfin id). */
+/** The Seerr user linked to a Jellyfin user (Seerr stores the Jellyfin id) or a Plex account (numeric id). */
 export async function seerrUserFor(jellyfinUserId: string) {
   const users = await cache.get('seerr:users', 10 * 60_000, () =>
-    seerr()!.get<{ results: { id: number; jellyfinUserId?: string; displayName?: string }[] }>('/api/v1/user', { take: 1000 }),
+    seerr()!.get<{ results: { id: number; jellyfinUserId?: string; plexId?: number; displayName?: string }[] }>('/api/v1/user', { take: 1000 }),
   );
+  if (/^\d+$/.test(jellyfinUserId)) return users.results.find((u) => u.plexId === Number(jellyfinUserId));
   const id = jellyfinUserId.replace(/-/g, '').toLowerCase();
   return users.results.find((u) => u.jellyfinUserId?.replace(/-/g, '').toLowerCase() === id);
 }

@@ -59,9 +59,26 @@ export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
     queryFn: () =>
-      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; jellyfinServers?: JellyfinServerRef[]; access: Area[] | null; downloadClients?: boolean; moonfin?: { openIn: 'web' | 'app'; web?: string } }>('/config'),
+      api<{
+        services: Record<ServiceId, boolean>;
+        enabled: Record<ServiceId, boolean>;
+        instances: ArrInstanceRef[];
+        jellyfinServers?: JellyfinServerRef[];
+        /** The server people sign in with. */
+        mainServer?: 'jellyfin' | 'plex';
+        access: Area[] | null;
+        downloadClients?: boolean;
+        moonfin?: { openIn: 'web' | 'app'; web?: string };
+      }>('/config'),
     staleTime: Infinity,
   });
+
+/** The server people sign in with, and its name for labels ("Plex", "Jellyfin"). */
+export function useMainServer() {
+  const { data } = useServiceConfig();
+  const type = data?.mainServer ?? 'jellyfin';
+  return { type, name: type === 'plex' ? 'Plex' : 'Jellyfin', plex: type === 'plex' };
+}
 
 export function useConfigured(id: ServiceId) {
   const { data } = useServiceConfig();

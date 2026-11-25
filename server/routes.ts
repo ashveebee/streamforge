@@ -18,6 +18,8 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
+import { mainPlex, mainType, mediaReady, plexMode } from './services/mainServer.js';
+import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
@@ -48,21 +50,18 @@ api.get('/config', (req, res) => {
   res.json({
     // Sonarr/Radarr count as configured when any instance is set up.
     services: Object.fromEntries(
-      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id))]),
+      // `jellyfin` stands for the media server area: true with Plex as the sign-in server too.
+      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : id === 'jellyfin' ? mediaReady() : isConfigured(id))]),
     ),
     // A service the user can't see counts as switched off for them.
     enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id) && canSee(req, id)])),
     instances: arrInstances()
       .filter((i) => canSee(req, i.kind))
       .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
-    /** Media servers (Jellyfin, Emby, Plex), main one first; only listed when there's more than one. */
-    jellyfinServers:
-      canSee(req, 'jellyfin') && mediaServers().length
-        ? [
-            { id: 'jellyfin', type: 'jellyfin', name: mainServerName(), primary: true },
-            ...mediaServers().map((s) => ({ id: s.id, type: s.type, name: s.name, primary: false })),
-          ]
-        : [],
+    /** Media servers (Jellyfin, Emby, Plex), the main one first and marked `primary`. */
+    jellyfinServers: canSee(req, 'jellyfin') ? mediaServerList() : [],
+    /** Which kind of server people sign in with; its data backs the dashboard, stats and your page. */
+    mainServer: mainType(),
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
     downloadClients: hasClients() && canSee(req, 'downloads'),
@@ -156,16 +155,32 @@ function mainServerName() {
   return name || 'Main server';
 }
 
+/** Every media server, main one first. Empty when the main Jellyfin server is the only one. */
+function mediaServerList() {
+  const main = mainPlex();
+  const rest = mediaServers()
+    .filter((s) => s.id !== main?.id)
+    .map((s) => ({ id: s.id, type: s.type, name: s.name, primary: false }));
+  if (main) return [{ id: main.id, type: 'plex' as const, name: main.name, primary: true }, ...rest];
+  return rest.length ? [{ id: 'jellyfin', type: 'jellyfin' as const, name: mainServerName(), primary: true }, ...rest] : [];
+}
+
 /**
- * The extra media server (Jellyfin, Emby or Plex) a request addresses with
- * `instance` (query or body), or undefined for the main Jellyfin server.
+ * The media server a request addresses with `instance` (query or body). With
+ * none given, the main server: undefined for the main Jellyfin server, or the
+ * main Plex server when Plex is the sign-in server.
  */
 function extraServer(req: Request): MediaServer | undefined {
   const raw = (req.body as { instance?: unknown } | undefined)?.instance ?? req.query.instance ?? req.query.server;
-  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return undefined;
+  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return raw === 'jellyfin' ? undefined : mainPlex();
   const srv = mediaServer(raw);
   if (!srv) throw new HttpError(404, 'Unknown media server', 'not_found');
   return srv;
+}
+
+/** Jellyfin-only features (title pages, scheduled tasks) answer this when Plex is the sign-in server. */
+function needJellyfin() {
+  if (plexMode() && !isConfigured('jellyfin')) throw new HttpError(404, 'This needs a Jellyfin server.', 'not_configured');
 }
 
 /* Calls for an extra server, by type. Emby speaks Jellyfin's API. */
@@ -180,7 +195,7 @@ api.get(
   handle('jellyfin', async (req) => {
     const extras = mediaServers();
     const [main, ...rest] = await Promise.allSettled([
-      jellyfin.nowPlaying(ctxOf(req.session!)),
+      isConfigured('jellyfin') ? jellyfin.nowPlaying(ctxOf(req.session!)) : Promise.resolve([] as jellyfin.NowPlaying[]),
       ...extras.map(remoteNowPlaying),
     ]);
     if (main!.status === 'rejected' && (!extras.length || rest.every((r) => r.status === 'rejected'))) throw main!.reason;
@@ -212,7 +227,13 @@ api.get(
     return srv ? remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
   }),
 );
-api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/plays',
+  handle('jellyfin', (req) => {
+    const p = mainPlex();
+    return p ? plex.playsPerDay(p) : jellyfin.playbackHistory(ctxOf(req.session!));
+  }),
+);
 api.get(
   '/jellyfin/stats',
   handle('jellyfin', (req) => {
@@ -278,7 +299,14 @@ api.put(
 );
 
 /* Scheduled tasks and library scans (admins). */
-api.get('/jellyfin/tasks', requireAdmin, handle('jellyfin', (req) => scheduledTasks(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/tasks',
+  requireAdmin,
+  handle('jellyfin', (req) => {
+    needJellyfin();
+    return scheduledTasks(ctxOf(req.session!));
+  }),
+);
 api.post(
   '/jellyfin/tasks/:id/:op',
   requireAdmin,
@@ -296,11 +324,20 @@ api.post(
   '/jellyfin/scan',
   requireAdmin,
   handle('jellyfin', async (req) => {
-    const b = z.object({ library: z.string().optional(), name: z.string().max(120).optional(), full: z.boolean().optional() }).strict().safeParse(req.body ?? {});
-    if (!b.success || (b.data.library && !jellyfin.isValidId(b.data.library))) throw new HttpError(400, 'Invalid request');
-    if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
-    else await scanAll(ctxOf(req.session!));
-    audit(req, `[jellyfin] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}`);
+    const b = z
+      .object({ library: z.string().max(64).optional(), name: z.string().max(120).optional(), full: z.boolean().optional(), instance: z.string().max(64).optional() })
+      .strict()
+      .safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const srv = extraServer(req);
+    if (srv && srv.type !== 'plex') throw new HttpError(400, 'Scans from StreamForge work on the main Jellyfin server and on Plex servers.');
+    if (srv) await plex.scan(srv, b.data.library, !!b.data.full);
+    else {
+      if (b.data.library && !jellyfin.isValidId(b.data.library)) throw new HttpError(400, 'Invalid request');
+      if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
+      else await scanAll(ctxOf(req.session!));
+    }
+    audit(req, `[${srv ? 'plex' : 'jellyfin'}] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}${srv ? ` on ${srv.name}` : ''}`);
     return { ok: true };
   }),
 );
@@ -346,8 +383,16 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
   const id = String(req.params.id);
   const srv = imageServer(req, res);
   if (srv === null) return;
-  // Plex avatars live on plex.tv, so there's nothing to proxy.
-  if (!jellyfin.isValidId(id) || srv?.type === 'plex') {
+  // Plex avatars live on plex.tv; they're proxied from addresses Plex gave us.
+  if (srv?.type === 'plex') {
+    if (!/^\d{1,12}$/.test(id)) {
+      res.status(400).end();
+      return;
+    }
+    void pipeImage(res, plex.avatar(id, sessions.forUser(id)[0]?.avatarUrl));
+    return;
+  }
+  if (!jellyfin.isValidId(id)) {
     res.status(400).end();
     return;
   }
@@ -425,6 +470,7 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
 api.get(
   '/media/jellyfin/:id',
   handle('jellyfin', async (req) => {
+    needJellyfin();
     const id = String(req.params.id);
     if (!jellyfin.isValidId(id)) throw new HttpError(400, 'Invalid id');
     return jellyfinMedia(ctxOf(req.session!), id, !!req.session!.isAdmin);
@@ -433,6 +479,7 @@ api.get(
 api.get(
   '/media/jellyfin/:id/seasons/:season/episodes',
   handle('jellyfin', async (req) => {
+    needJellyfin();
     const id = String(req.params.id);
     const season = String(req.params.season);
     if (!jellyfin.isValidId(id) || !jellyfin.isValidId(season)) throw new HttpError(400, 'Invalid id');
@@ -481,7 +528,7 @@ api.post(
 
 /* ---------------------------------- me ---------------------------------- */
 
-api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!))));
+api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken)));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
 
 /* --------------------------------- digest -------------------------------- */

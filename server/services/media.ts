@@ -4,6 +4,7 @@ import { isConfigured, publicUrl } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
 import { jf, libraryItems, type JfCtx } from './jellyfin.js';
+import { plexMode } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
 /*
@@ -145,7 +146,8 @@ function jellyfinUrl(itemId: string) {
 }
 
 export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, opts: { isAdmin: boolean; can: (area: string) => boolean }) {
-  const [s, lib] = await Promise.all([seerrDetails(type, tmdbId), libraryItems(ctx).catch(() => [])]);
+  // Title pages read Jellyfin's library; with Plex as the sign-in server they use Seerr and the *arr apps.
+  const [s, lib] = await Promise.all([seerrDetails(type, tmdbId), plexMode() ? [] : libraryItems(ctx).catch(() => [])]);
   const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === (type === 'movie' ? 'Movie' : 'Series'));
   const [arr, library] = await Promise.all([
     arrEntries(type, tmdbId, s?.externalIds?.tvdbId, opts.can),
@@ -553,7 +555,7 @@ export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
  * playback from Jellyfin, merged by episode number.
  */
 export async function seasonEpisodes(ctx: JfCtx, tmdbId: number, season: number, opts: { isAdmin: boolean; can: (area: string) => boolean }) {
-  const [s, lib] = await Promise.all([seerrDetails('tv', tmdbId), libraryItems(ctx).catch(() => [])]);
+  const [s, lib] = await Promise.all([seerrDetails('tv', tmdbId), plexMode() ? [] : libraryItems(ctx).catch(() => [])]);
   const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === 'Series');
   const arr = await arrEntries('tv', tmdbId, s?.externalIds?.tvdbId, opts.can);
   const sonarr = arr.find((a) => a.series);

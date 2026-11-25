@@ -1,5 +1,5 @@
 import { CircleAlert, History, Info, LogIn, Play, Square, TriangleAlert } from 'lucide-react';
-import { useActivity } from '@/hooks/queries';
+import { useActivity, useMainServer } from '@/hooks/queries';
 import { relative } from '@/lib/format';
 import type { MediaServerType } from '@/lib/types';
 import { MEDIA_SERVERS } from '../ui/ServiceIcon';
@@ -16,7 +16,9 @@ function iconFor(type: string, severity: string) {
 }
 
 /** `server` picks an extra media server; the main one by default. */
-export function ActivityWidget({ limit = 8, server, serverType = 'jellyfin' }: { limit?: number; server?: string; serverType?: MediaServerType }) {
+export function ActivityWidget({ limit = 8, server, serverType: given }: { limit?: number; server?: string; serverType?: MediaServerType }) {
+  const main = useMainServer();
+  const serverType = given ?? main.type;
   const q = useActivity(server);
   return (
     <Card className="h-full">

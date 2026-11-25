@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StreamForge — one dashboard for your Jellyfin media stack</title>
+  <title>StreamForge — one dashboard for your Jellyfin or Plex media stack</title>
   <meta name="description" content="A self-hosted control centre for Jellyfin (plus extra Emby and Plex servers), Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="StreamForge — one dashboard for your Jellyfin media stack">
+  <meta property="og:title" content="StreamForge — one dashboard for your Jellyfin or Plex media stack">
   <meta property="og:description" content="Live streams, service health, downloads, requests, search and automation for Jellyfin and the *arr stack, in one self-hosted dashboard.">
   <meta property="og:image" content="https://ashveebee.github.io/streamforge/screenshots/dashboard.jpg">
   <meta name="twitter:card" content="summary_large_image">
@@ -347,7 +347,7 @@
       <div class="wrap">
         <span class="pill"><span class="dot"></span> Self-hosted · Free and open source</span>
         <h1>Your whole media stack, <span class="grad-text">one dashboard.</span></h1>
-        <p class="lede">StreamForge brings Jellyfin, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
+        <p class="lede">StreamForge brings Jellyfin or Plex, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
         <div class="cta">
           <a class="btn btn-primary" href="#install">Get started <svg class="i"><use href="#i-arrow"/></svg></a>
           <a class="btn btn-ghost" href="https://github.com/ashveebee/streamforge"><svg class="i"><use href="#i-github"/></svg> View on GitHub</a>
@@ -716,12 +716,13 @@
           <a class="shot" href="screenshots/plex.jpg"><img src="screenshots/plex.jpg" width="2880" height="1800" loading="lazy" alt="Plex page with libraries, server details and recently added items"></a>
           <div class="txt">
             <div class="eyebrow">Plex</div>
-            <h3>Plex servers too</h3>
-            <p>Connect a Plex server with its owner's token and keep an eye on it from the same dashboard as everything else.</p>
+            <h3>Only have Plex? That works too</h3>
+            <p>Make Plex your main server: everyone signs in with their Plex account, and the dashboard, stats, search, your page and alerts all run on Plex. No Jellyfin needed.</p>
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Libraries, episode and track counts</li>
               <li><svg class="i"><use href="#i-check"/></svg>Recently added and recent plays from Plex's watch history</li>
               <li><svg class="i"><use href="#i-check"/></svg>Stop a Plex stream with a reason the viewer sees</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign in with Plex, for you and everyone you share with</li>
               <li><svg class="i"><use href="#i-check"/></svg>As many Plex servers as you run, each in its own tab</li>
             </ul>
           </div>
@@ -866,7 +867,7 @@
       <div class="wrap">
         <div class="eyebrow">Install</div>
         <h2>Up and running in a minute</h2>
-        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Jellyfin server.</p>
+        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Plex or Jellyfin server.</p>
 
         <div class="code reveal">
           <header><span>docker-compose.yml</span><button class="copy" type="button" data-copy="compose"><svg class="i"><use href="#i-copy"/></svg><span>Copy</span></button></header>
@@ -890,8 +891,8 @@
             <p>Save the file above and run <code>docker compose up -d</code>, or use the one-line <code>docker run</code> from the README.</p>
           </div>
           <div class="card step reveal">
-            <h3>Connect Jellyfin</h3>
-            <p>Open <code>http://your-server:4000</code>, enter your Jellyfin address and sign in with a Jellyfin administrator account.</p>
+            <h3>Connect Plex or Jellyfin</h3>
+            <p>Open <code>http://your-server:4000</code> and pick your media server. Plex: click Sign in with Plex and choose your server. Jellyfin: enter its address and sign in as an administrator.</p>
           </div>
           <div class="card step reveal">
             <h3>Add your services</h3>
@@ -908,7 +909,7 @@
         <h2>Your keys never leave the server</h2>
         <div class="trust">
           <div class="card reveal"><div class="ico" style="--c:var(--ok)"><svg class="i"><use href="#i-key"/></svg></div><h3>Server-side credentials</h3><p>API keys and Jellyfin tokens stay on the server. The browser only gets an opaque, HttpOnly session cookie.</p></div>
-          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Jellyfin sign-in</h3><p>Sign in with your existing Jellyfin account. Only administrators get in by default; you choose which pages the rest of the household sees.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Plex or Jellyfin sign-in</h3><p>Sign in with your existing Plex or Jellyfin account. Only the server's owner or administrators get in by default; you choose which pages the rest of the household sees.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Hardened by default</h3><p>CSRF protection, rate-limited login, a strict content security policy and artwork proxied through validated routes.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--radarr)"><svg class="i"><use href="#i-box"/></svg></div><h3>Signed images</h3><p>Every release image ships with an SBOM and build provenance you can verify with <code>gh attestation verify</code>.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--seerr)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Single sign-on and two-factor</h3><p>Sign in through Authentik, Authelia, Keycloak or any OpenID Connect provider, and protect password sign-ins with authenticator-app codes.</p></div>

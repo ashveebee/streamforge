@@ -3,6 +3,7 @@ import { cache } from '../lib/cache.js';
 import { UpstreamError } from '../lib/http.js';
 import { publicUrl } from '../settings.js';
 import { jf, type JfCtx } from './jellyfin.js';
+import { plexMode } from './mainServer.js';
 
 /*
  * Moonfin (https://github.com/Moonfin-Client) is a Jellyfin client. Its
@@ -41,7 +42,8 @@ export function moonfinWebUrl() {
 
 /** What the browser needs to build Moonfin links; undefined when switched off. */
 export function moonfinClientConfig() {
-  if (!settings.enabled) return undefined;
+  // Moonfin is a Jellyfin plugin: nothing to open when Plex is the sign-in server.
+  if (!settings.enabled || plexMode()) return undefined;
   return { openIn: settings.openIn, web: moonfinWebUrl() };
 }
 

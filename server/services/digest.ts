@@ -1,8 +1,9 @@
 import { db, readPref, writePref } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
-import { isConfigured } from '../settings.js';
 import { emit } from './notify.js';
 import { jf, serverApiKey } from './jellyfin.js';
+import { canWatchInBackground, mainPlex, mediaReady } from './mainServer.js';
+import * as plex from './plex.js';
 import { storageForecast } from './storage.js';
 
 /*
@@ -38,7 +39,7 @@ export interface DigestSettings {
 }
 const DEFAULTS: DigestSettings = { enabled: false, day: 0, hour: 18 };
 let settings: DigestSettings = { ...DEFAULTS, ...readPref<Partial<DigestSettings>>('digest', {}) };
-export const digestSettings = () => ({ ...settings, lastSent: readPref<string | null>('digestLastSent', null), canSend: !!serverApiKey() });
+export const digestSettings = () => ({ ...settings, lastSent: readPref<string | null>('digestLastSent', null), canSend: canWatchInBackground() });
 export function updateDigest(p: Partial<DigestSettings>) {
   settings = { ...settings, ...p };
   writePref('digest', settings);
@@ -53,6 +54,8 @@ export interface Who {
 }
 
 async function added(who: Who, since: number) {
+  const p = mainPlex();
+  if (p) return plex.addedSince(p, since);
   const res = await jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, {
     userId: who.userId,
     Recursive: true,
@@ -147,9 +150,9 @@ export function digestText(d: Awaited<ReturnType<typeof buildDigest>>) {
 
 export async function sendDigest() {
   const key = serverApiKey();
-  if (!key) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
+  if (!key && !mainPlex()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
   cache.delete('jf:digest:server');
-  const d = await buildDigest({ token: key, deviceId: 'streamforge-server' });
+  const d = await buildDigest({ token: key ?? '', deviceId: 'streamforge-server' });
   const count = d.added.movies.length + d.added.shows.length + d.added.other.length;
   emit('weekly_digest', { title: count ? `This week: ${count} new title${count === 1 ? '' : 's'}` : 'Your weekly StreamForge digest', message: digestText(d), url: '/digest' });
   writePref('digestLastSent', new Date().toISOString());
@@ -157,7 +160,7 @@ export async function sendDigest() {
 }
 
 function due(now = new Date()) {
-  if (!settings.enabled || !isConfigured('jellyfin')) return false;
+  if (!settings.enabled || !mediaReady()) return false;
   if (now.getDay() !== settings.day || now.getHours() !== settings.hour) return false;
   const last = readPref<string | null>('digestLastSent', null);
   return !last || now.getTime() - Date.parse(last) > 2 * 86_400_000;

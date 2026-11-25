@@ -4,7 +4,8 @@ import { config } from '../../config.js';
 import { downloadSnapshot, healthSnapshot } from '../../health.js';
 import { hostSnapshot } from '../../host.js';
 import { clientTotals } from '../clients/index.js';
-import * as jellyfin from '../jellyfin.js';
+import type * as jellyfin from '../jellyfin.js';
+import { canWatchInBackground, mainNowPlaying } from '../mainServer.js';
 import { observeStreams, prunePlays } from '../playability/index.js';
 import { analyse, findIncidents, type Incident, type PlayMethod, type StreamPoint, type Tick } from './analyse.js';
 
@@ -62,7 +63,7 @@ let lastError: string | undefined;
 export async function recordTick() {
   let streams: Awaited<ReturnType<typeof jellyfin.serverNowPlaying>>;
   try {
-    streams = await jellyfin.serverNowPlaying();
+    streams = await mainNowPlaying();
     lastError = undefined;
   } catch (err) {
     lastError = (err as Error).message;
@@ -147,7 +148,7 @@ function load() {
 
 export function diagnosisStatus() {
   const { ticks, incidents } = load();
-  const hasKey = jellyfin.hasServerKey();
+  const hasKey = canWatchInBackground();
   // Streams seen recently, for "check a moment someone reported".
   const sessions = new Map<string, { id: string; user: string; title: string; device?: string; remote: boolean; first: number; last: number }>();
   for (const t of ticks) {

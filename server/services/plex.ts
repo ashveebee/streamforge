@@ -132,6 +132,12 @@ export async function probe(target: { url: string; apiKey?: string }): Promise<H
   return result;
 }
 
+/** The server's own id (machineIdentifier); needs no token. */
+export async function identity(url: string) {
+  const ident = await requestJson<Container<PlexIdentity>>(buildUrl(base(url), '/identity'), { headers: { Accept: 'application/json' }, service: 'jellyfin' }).catch(() => undefined);
+  return ident?.MediaContainer?.machineIdentifier;
+}
+
 /* ------------------------------- now playing ------------------------------ */
 
 const TYPE: Record<string, string> = { movie: 'Movie', episode: 'Episode', track: 'Audio', clip: 'Video', season: 'Season', show: 'Series', album: 'MusicAlbum' };
@@ -189,9 +195,10 @@ function normalise(m: PlexMetadata, srv: JfServerTarget): NowPlaying {
   const range = rangeOf(video);
   const hw = t?.transcodeHwEncoding || t?.transcodeHwDecoding || (t?.transcodeHwFullPipeline ? 'hardware' : undefined);
 
+  if (m.User?.id && m.User.thumb) rememberAvatar(m.User.id, m.User.thumb);
   return {
     sessionId: m.Session?.id ?? m.ratingKey,
-    user: { id: m.User?.id, name: m.User?.title ?? 'Unknown user', imageTag: undefined },
+    user: { id: m.User?.id, name: m.User?.title ?? 'Unknown user', imageTag: m.User?.thumb ? 'plex' : undefined },
     client: m.Player?.product,
     device: m.Player?.title ?? m.Player?.platform,
     deviceId: m.Player?.machineIdentifier,
@@ -309,7 +316,9 @@ const accounts = (srv: JfServerTarget) =>
   cache.get(`plex:${srv.id}:accounts`, 5 * 60_000, async () => {
     const res = await plex<Container<{ Account?: PlexAccount[] }>>(srv, '/accounts').catch(() => undefined);
     // Account 0 is a placeholder for local, signed-out playback.
-    return (res?.MediaContainer.Account ?? []).filter((a) => a.id > 0 && a.name);
+    const list = (res?.MediaContainer.Account ?? []).filter((a) => a.id > 0 && a.name);
+    for (const a of list) if (a.thumb) rememberAvatar(String(a.id), a.thumb);
+    return list;
   });
 
 const history = (srv: JfServerTarget, limit: number) =>
@@ -391,7 +400,7 @@ export async function overview(srv: JfServerTarget) {
       list: users
         .map((u) => {
           const seen = lastSeen.get(u.id);
-          return { id: String(u.id), name: u.name!, imageTag: undefined, isAdmin: u.id === 1, lastActivity: seen ? new Date(seen).toISOString() : undefined };
+          return { id: String(u.id), name: u.name!, imageTag: u.thumb ? 'plex' : undefined, isAdmin: u.id === 1, lastActivity: seen ? new Date(seen).toISOString() : undefined };
         })
         .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? '')),
     },
@@ -483,4 +492,228 @@ export function image(srv: JfServerTarget, id: string, type: string, opts: { tag
 export async function stopSession(srv: JfServerTarget, sessionId: string, reason?: string) {
   await plex(srv, '/status/sessions/terminate', { sessionId, reason: reason || 'Stopped by the server admin' });
   cache.delete(`plex:${srv.id}:sessions`);
+}
+
+/* ------------------------------- avatars ------------------------------- */
+
+/*
+ * Plex avatars live on plex.tv. We remember each account's avatar address as
+ * we see it (sessions, the account list, sign-in) and proxy it, so the browser
+ * never talks to plex.tv and only plex.tv addresses are ever fetched.
+ */
+const avatars = new Map<string, string>();
+
+export function rememberAvatar(userId: string, url: string) {
+  if (isPlexTvUrl(url)) avatars.set(userId, url);
+}
+
+function isPlexTvUrl(url: string) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && (u.hostname === 'plex.tv' || u.hostname.endsWith('.plex.tv'));
+  } catch {
+    return false;
+  }
+}
+
+export function avatar(userId: string, fallback?: string) {
+  const url = avatars.get(userId) ?? (fallback && isPlexTvUrl(fallback) ? fallback : undefined);
+  if (!url) return Promise.resolve(new Response(null, { status: 404 }));
+  return requestRaw(url, { headers: { Accept: 'image/*' }, service: 'jellyfin' });
+}
+
+/* --------------------------- library and history --------------------------- */
+
+interface PlexLibraryItem {
+  ratingKey: string;
+  title: string;
+  type: string;
+  year?: number;
+  viewCount?: number;
+  lastViewedAt?: number;
+  Guid?: { id: string }[];
+}
+
+/** Movies and shows with their TMDB/TVDB/IMDb ids, like `jellyfin.libraryItems`. */
+export async function libraryItems(srv: JfServerTarget) {
+  return cache.get(`plex:${srv.id}:libitems`, 10 * 60_000, async () => {
+    const res = await plex<Container<{ Directory?: PlexSection[] }>>(srv, '/library/sections');
+    const sections = (res.MediaContainer.Directory ?? []).filter((d) => d.type === 'movie' || d.type === 'show');
+    const lists = await Promise.all(
+      sections.map((d) =>
+        plex<Container<{ Metadata?: PlexLibraryItem[] }>>(srv, `/library/sections/${d.key}/all`, { includeGuids: 1 })
+          .then((r) => r.MediaContainer.Metadata ?? [])
+          .catch(() => [] as PlexLibraryItem[]),
+      ),
+    );
+    return lists.flat().map((i) => {
+      const id = (scheme: string) => i.Guid?.find((g) => g.id.startsWith(`${scheme}://`))?.id.slice(scheme.length + 3);
+      return {
+        id: i.ratingKey,
+        name: i.title,
+        type: (i.type === 'show' ? 'Series' : 'Movie') as 'Series' | 'Movie',
+        year: i.year,
+        tvdb: id('tvdb'),
+        tmdb: id('tmdb'),
+        imdb: id('imdb'),
+        lastPlayed: i.lastViewedAt ? i.lastViewedAt * 1000 : undefined,
+      };
+    });
+  });
+}
+
+/** Plays from Plex's watch history since a time, for stats (no watch time or transcode data). */
+export async function playsSince(srv: JfServerTarget, since: number) {
+  const [items, users] = await Promise.all([
+    cache.get(`plex:${srv.id}:history:big`, 5 * 60_000, async () => {
+      const res = await plex<Container<{ Metadata?: PlexHistory[] }>>(srv, '/status/sessions/history/all', {
+        sort: 'viewedAt:desc',
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 5000,
+      });
+      return res.MediaContainer.Metadata ?? [];
+    }),
+    accounts(srv),
+  ]);
+  const names = new Map(users.map((u) => [u.id, u.name!]));
+  return items
+    .filter((h) => h.viewedAt && h.viewedAt * 1000 >= since)
+    .map((h) => {
+      const title = h.type === 'episode' && h.grandparentTitle ? `${h.grandparentTitle} - S${String(h.parentIndex ?? 0).padStart(2, '0')}E${String(h.index ?? 0).padStart(2, '0')} - ${h.title}` : (h.title ?? 'Unknown');
+      return {
+        user: (h.accountID && names.get(h.accountID)) || 'Someone',
+        userId: h.accountID ? String(h.accountID) : undefined,
+        title,
+        group: h.type === 'episode' ? (h.grandparentTitle ?? title) : title,
+        at: h.viewedAt! * 1000,
+      };
+    });
+}
+
+/** Plays per day, like `jellyfin.playbackHistory`. */
+export async function playsPerDay(srv: JfServerTarget, days = 14) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const since = start.getTime() - (days - 1) * 86_400_000;
+  const plays = await playsSince(srv, since);
+  const buckets = new Map<string, { date: string; plays: number; users: Set<string> }>();
+  for (let i = 0; i < days; i++) {
+    const key = new Date(since + i * 86_400_000 + 3_600_000).toISOString().slice(0, 10);
+    buckets.set(key, { date: key, plays: 0, users: new Set() });
+  }
+  for (const p of plays) {
+    const b = buckets.get(new Date(p.at).toISOString().slice(0, 10));
+    if (!b) continue;
+    b.plays++;
+    b.users.add(p.user);
+  }
+  return [...buckets.values()].map((b) => ({ date: b.date, plays: b.plays, users: b.users.size }));
+}
+
+/* ------------------------------ your page ------------------------------ */
+
+/**
+ * A user's On Deck: what they're part-way through and the next episodes.
+ * Uses that user's own server token, so it's their progress, not the owner's.
+ */
+export async function onDeck(srv: JfServerTarget, userId: string, userToken?: string) {
+  const target = { ...srv, apiKey: userToken || srv.apiKey };
+  const res = await cache.get(`plex:${srv.id}:deck:${userId}`, 30_000, () =>
+    plex<Container<{ Metadata?: PlexMetadata[] }>>(target, '/library/onDeck', { 'X-Plex-Container-Start': 0, 'X-Plex-Container-Size': 24 }),
+  );
+  const cards = (res.MediaContainer.Metadata ?? []).map((m) => {
+    const a = artworkFor(m, srv.id);
+    const ep = m.type === 'episode' ? `S${String(m.parentIndex ?? 0).padStart(2, '0')}E${String(m.index ?? 0).padStart(2, '0')}` : undefined;
+    const runtime = m.duration;
+    const position = m.viewOffset;
+    return {
+      inProgress: !!position,
+      card: {
+        id: m.ratingKey,
+        title: m.type === 'episode' ? (m.grandparentTitle ?? m.title) : m.title,
+        subtitle: m.type === 'episode' ? [ep, m.title].filter(Boolean).join(' · ') : m.year ? String(m.year) : undefined,
+        progress: runtime && position ? position / runtime : undefined,
+        remainingMs: runtime && position ? Math.max(0, runtime - position) : undefined,
+        lastPlayed: undefined as string | undefined,
+        image: a.backdrop ?? a.thumb ?? a.poster,
+      },
+    };
+  });
+  return { resume: cards.filter((c) => c.inProgress).map((c) => c.card), nextUp: cards.filter((c) => !c.inProgress).map((c) => c.card) };
+}
+
+/* -------------------------------- search -------------------------------- */
+
+const SEARCH_TYPES = new Set(['movie', 'show', 'episode', 'artist', 'album']);
+
+/** Library search, in the same shape as the other search sources. */
+export async function search(srv: JfServerTarget, q: string, limit = 12) {
+  const res = await plex<Container<{ Hub?: { type: string; Metadata?: PlexMetadata[] }[] }>>(srv, '/hubs/search', { query: q, limit });
+  const items = (res.MediaContainer.Hub ?? []).filter((h) => SEARCH_TYPES.has(h.type)).flatMap((h) => h.Metadata ?? []);
+  return items.slice(0, limit).map((m) => {
+    const a = artworkFor(m, srv.id);
+    const kind = TYPE[m.type] ?? m.type;
+    return {
+      key: `plex:${srv.id}:${m.ratingKey}`,
+      source: 'plex' as const,
+      title: m.title,
+      subtitle: [m.type === 'episode' ? m.grandparentTitle : m.type === 'album' ? m.parentTitle : undefined, kind === 'Series' ? 'Series' : kind].filter(Boolean).join(' · '),
+      year: m.year,
+      image: a.poster ? `/api/jellyfin/image/items/${a.poster.itemId}/Primary?w=120&tag=${a.poster.tag}&server=${encodeURIComponent(srv.id)}` : undefined,
+      status: 'available' as const,
+      path: '/plex',
+    };
+  });
+}
+
+/* --------------------------------- scans -------------------------------- */
+
+/** Scans one library (or all of them) for new files; `full` also refreshes metadata. */
+export async function scan(srv: JfServerTarget, section?: string, full = false) {
+  if (section && !/^\d{1,8}$/.test(section)) throw new UpstreamError('Unknown library', 400, 'jellyfin');
+  await plex(srv, `/library/sections/${section ?? 'all'}/refresh`, full ? { force: 1 } : undefined);
+  cache.delete(`plex:${srv.id}:libraries`);
+}
+
+/* -------------------------------- digest -------------------------------- */
+
+/** What was added since a time, in the weekly digest's shape. */
+export async function addedSince(srv: JfServerTarget, since: number) {
+  const res = await plex<Container<{ Directory?: PlexSection[] }>>(srv, '/library/sections');
+  const sections = res.MediaContainer.Directory ?? [];
+  // Newest first per section: movies (1), episodes (4) and albums (9).
+  const jobs = sections.flatMap((d) => {
+    const type = d.type === 'movie' ? 1 : d.type === 'show' ? 4 : d.type === 'artist' ? 9 : undefined;
+    if (!type) return [];
+    return [
+      plex<Container<{ Metadata?: PlexMetadata[] }>>(srv, `/library/sections/${d.key}/all`, {
+        type,
+        sort: 'addedAt:desc',
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 300,
+      })
+        .then((r) => r.MediaContainer.Metadata ?? [])
+        .catch(() => [] as PlexMetadata[]),
+    ];
+  });
+  const items = (await Promise.all(jobs)).flat().filter((m) => (m.addedAt ?? 0) * 1000 >= since);
+  const img = (path: string | undefined) => {
+    const a = art(path, srv.id);
+    return a ? `/api/jellyfin/image/items/${a.itemId}/Primary?w=200&tag=${a.tag}&server=${encodeURIComponent(srv.id)}` : undefined;
+  };
+  const movies: { id: string; title: string; year?: number; image?: string }[] = [];
+  const shows = new Map<string, { id: string; title: string; episodes: number; image?: string }>();
+  const other: { id: string; title: string; kind: string }[] = [];
+  let runtimeMs = 0;
+  for (const m of items) {
+    runtimeMs += m.duration ?? 0;
+    if (m.type === 'movie') movies.push({ id: m.ratingKey, title: m.title, year: m.year, image: img(m.thumb) });
+    else if (m.type === 'episode') {
+      const key = m.grandparentTitle ?? m.title;
+      const s = shows.get(key) ?? { id: m.ratingKey, title: key, episodes: 0, image: img(m.grandparentThumb) };
+      s.episodes++;
+      shows.set(key, s);
+    } else other.push({ id: m.ratingKey, title: m.parentTitle ? `${m.parentTitle} – ${m.title}` : m.title, kind: 'Album' });
+  }
+  return { movies, shows: [...shows.values()].sort((a, b) => b.episodes - a.episodes), other, runtimeMs };
 }

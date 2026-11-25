@@ -934,6 +934,62 @@ if (FRESH) {
     ],
   })));
 }
+// DEMO_MAIN=plex shows a household that only runs Plex: people sign in with Plex and every page reads Plex.
+const PLEX_ONLY = process.env.DEMO_MAIN === 'plex';
+const PLEX_HOME = { id: 'plex-home', name: 'Home', type: 'plex' as const };
+// DEMO_SIGNED_OUT=1 shows the sign-in screen of a set-up install.
+if (process.env.DEMO_SIGNED_OUT === '1') app.get('/api/auth/me', (_req, res) => res.status(401).json({ error: 'unauthenticated', message: 'Sign in' }));
+if (PLEX_ONLY) {
+  if (FRESH) {
+    app.post('/api/auth/plex/start', json(() => ({ handle: 'demo-handle-0123456789abcdef', authUrl: 'about:blank' })));
+    app.post('/api/auth/plex/poll', json(() => ({ servers: [{ id: 'm1', name: 'Home', version: '1.41.2' }, { id: 'm2', name: 'Cabin', version: '1.41.2' }] })));
+  } else {
+    app.get('/api/auth/server', json(() => ({ type: 'plex', name: 'Home', version: '1.41.2', online: true, configured: true })));
+  }
+  const plexStream = (s: NowPlaying): NowPlaying => ({
+    ...s,
+    server: s.server ?? PLEX_HOME.id,
+    serverName: s.serverName ?? PLEX_HOME.name,
+    serverType: 'plex',
+    client: s.client?.replace('Jellyfin', 'Plex for'),
+    appVersion: '8.45',
+    item: {
+      ...s.item,
+      poster: s.item.poster && { ...s.item.poster, server: s.server ?? PLEX_HOME.id },
+      backdrop: s.item.backdrop && { ...s.item.backdrop, server: s.server ?? PLEX_HOME.id },
+      thumb: s.item.thumb && { ...s.item.thumb, server: s.server ?? PLEX_HOME.id },
+    },
+  });
+  app.get('/api/jellyfin/now-playing', json(() => nowPlaying().filter((s) => s.serverType !== 'emby').map(plexStream)));
+  const home = (req: express.Request) => !req.query.instance || req.query.instance === PLEX_HOME.id;
+  app.get('/api/jellyfin/overview', (req, res) => {
+    if (!home(req)) return res.json(extraOverview(PLEX));
+    const o = jellyfinOverview();
+    res.json({ ...o, server: { ...o.server, name: 'Home', version: '1.41.2', os: 'Linux 6.8', architecture: undefined }, libraries: o.libraries.map((l) => ({ ...l, image: l.image && { ...l.image, server: PLEX_HOME.id } })) });
+  });
+  app.get('/api/jellyfin/latest', (req, res) => res.json(home(req) ? latest().map((i) => ({ ...i, poster: i.poster && { ...i.poster, server: PLEX_HOME.id } })) : latest(PLEX.id)));
+  app.get('/api/jellyfin/activity', (req, res) => {
+    if (!home(req)) return res.json(extraActivity(PLEX));
+    res.json(
+      STREAMS.filter((s) => !s.server)
+        .map((s, i) => ({ id: 900 - i, name: `${s.user.name} watched ${s.title}${s.episode ? ` S${s.episode.season}·E${s.episode.number}` : ''}`, type: 'VideoPlayback', severity: 'Information', date: iso(s.startedMinAgo * MIN), userId: s.user.id })),
+    );
+  });
+  app.get('/api/health', json(() => {
+    const h = enabledHealth();
+    const jf = h.services.find((s) => s.id === 'jellyfin')!;
+    const homeRow: ServiceHealth = { ...jf, id: PLEX_HOME.id, instance: PLEX_HOME.id, serverType: 'plex', name: 'Plex · Home', version: '1.41.2', latencyMs: 34, meta: { server: 'Home' }, publicUrl: 'https://app.plex.tv' };
+    const rest = h.services.filter((s) => s.id !== 'jellyfin' && s.serverType !== 'emby');
+    return { ...h, services: [homeRow, ...rest] };
+  }));
+  app.get('/api/settings/media-servers', json(() => ({
+    servers: [
+      { id: PLEX_HOME.id, type: 'plex', name: 'Home', url: 'http://192.168.1.10:32400', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••K2pa', createdAt: '2026-08-01T10:00:00.000Z', main: true },
+      { id: PLEX.id, type: 'plex', name: 'Cabin', url: 'http://192.168.1.40:32400', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••Zq7x', createdAt: '2026-10-14T18:30:00.000Z' },
+    ],
+  })));
+}
+
 app.get('/api/auth/me', json(() => ({ user: demoUser })));
 app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));
@@ -947,11 +1003,14 @@ app.get('/api/config', json(() => ({
     { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
-  jellyfinServers: [
-    { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
-    { ...EMBY, primary: false },
-    { ...PLEX, primary: false },
-  ],
+  jellyfinServers: PLEX_ONLY
+    ? [{ ...PLEX_HOME, primary: true }, { ...PLEX, primary: false }]
+    : [
+        { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
+        { ...EMBY, primary: false },
+        { ...PLEX, primary: false },
+      ],
+  mainServer: PLEX_ONLY ? 'plex' : 'jellyfin',
   access: null,
   downloadClients: true,
   moonfin: moonfin.enabled ? { openIn: moonfin.openIn, web: 'https://jellyfin.example.com/Moonfin/Web/' } : undefined,

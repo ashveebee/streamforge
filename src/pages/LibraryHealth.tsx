@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowUpCircle, Check, FileQuestion, FolderX, LoaderCircle, Search, Stethoscope, TvMinimalPlay } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useLibraryHealth, useSearchUpgrades } from '@/hooks/queries';
+import { useLibraryHealth, useMainServer, useSearchUpgrades } from '@/hooks/queries';
 import { relative } from '@/lib/format';
 import type { LibraryHealth, LibraryHealthItem } from '@/lib/types';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -81,19 +81,20 @@ function Upgrades({ d }: { d: LibraryHealth }) {
 export default function LibraryHealthPage() {
   const q = useLibraryHealth();
   const { user } = useAuth();
+  const { name, plex } = useMainServer();
   return (
     <>
       <PageHeader
         eyebrow="Library"
         title="Library health"
         description={
-          q.data ? `Cross-checks Sonarr, Radarr and Jellyfin · checked ${relative(q.data.checkedAt)}` : 'Cross-checks Sonarr, Radarr and Jellyfin'
+          q.data ? `Cross-checks Sonarr, Radarr and ${name} · checked ${relative(q.data.checkedAt)}` : `Cross-checks Sonarr, Radarr and ${name}`
         }
       />
-      <QueryState query={q} skeleton={<PageLoader label="Checking library health" hint="Cross-checking Sonarr, Radarr and Jellyfin…" />}>
+      <QueryState query={q} skeleton={<PageLoader label="Checking library health" hint={`Cross-checking Sonarr, Radarr and ${name}…`} />}>
         {(d) =>
           !d.hasSonarr && !d.hasRadarr ? (
-            <Card><EmptyState icon={Stethoscope} title="Connect Sonarr or Radarr" description="Library health compares what Sonarr and Radarr manage with what Jellyfin has." /></Card>
+            <Card><EmptyState icon={Stethoscope} title="Connect Sonarr or Radarr" description={`Library health compares what Sonarr and Radarr manage with what ${name} has.`} /></Card>
           ) : (
             <div className="space-y-5">
               <div className="grid items-start gap-5 xl:grid-cols-2">
@@ -109,26 +110,27 @@ export default function LibraryHealthPage() {
                 <div className="grid items-start gap-5 xl:grid-cols-2">
                   {d.notInJellyfin && (
                     <Card>
-                      <CardHeader icon={FolderX} accent="var(--color-warn)" title="Downloaded but not in Jellyfin" subtitle="Check library paths, or run a library scan" />
-                      <CardBody><ItemList {...d.notInJellyfin} empty="Everything Sonarr and Radarr have downloaded shows up in Jellyfin." /></CardBody>
+                      <CardHeader icon={FolderX} accent="var(--color-warn)" title={`Downloaded but not in ${name}`} subtitle="Check library paths, or run a library scan" />
+                      <CardBody><ItemList {...d.notInJellyfin} empty={`Everything Sonarr and Radarr have downloaded shows up in ${name}.`} /></CardBody>
                     </Card>
                   )}
                   {d.unmanaged && (
                     <Card>
-                      <CardHeader icon={FileQuestion} accent="var(--color-jellyfin)" title="In Jellyfin but not managed" subtitle="Won’t get upgrades or new episodes" />
-                      <CardBody><ItemList {...d.unmanaged} empty="Everything in Jellyfin is managed by Sonarr or Radarr." /></CardBody>
+                      <CardHeader icon={FileQuestion} accent={plex ? "var(--color-plex)" : "var(--color-jellyfin)"} title={`In ${name} but not managed`} subtitle="Won’t get upgrades or new episodes" />
+                      <CardBody><ItemList {...d.unmanaged} empty={`Everything in ${name} is managed by Sonarr or Radarr.`} /></CardBody>
                     </Card>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-ink-4">Jellyfin couldn’t be reached, so the Jellyfin cross-checks are skipped.</p>
+                <p className="text-xs text-ink-4">{name} couldn’t be reached, so the {name} cross-checks are skipped.</p>
               )}
               {d.hasJellyfin && <ReclaimCard />}
             </div>
           )
         }
       </QueryState>
-      {user?.isAdmin && <div className="mt-5"><DevicePlaybackCard /></div>}
+      {/* Device playback learning reads Jellyfin's media details. */}
+      {user?.isAdmin && !plex && <div className="mt-5"><DevicePlaybackCard /></div>}
     </>
   );
 }

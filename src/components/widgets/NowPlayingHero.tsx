@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight, Laptop, MonitorSmartphone, Pause, Play, Smartphone, Sparkles, Tv } from 'lucide-react';
-import { useLatest, useNowPlaying } from '@/hooks/queries';
+import { useLatest, useMainServer, useNowPlaying } from '@/hooks/queries';
 import { useNow } from '@/hooks/useNow';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { clock, duration } from '@/lib/format';
@@ -134,7 +134,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <span className="flex items-center gap-2">
-            <Avatar src={s.serverType === 'plex' ? undefined : jfUserImage(s.user.id, s.user.imageTag, 64, s.server)} name={s.user.name} size={26} />
+            <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 64, s.server)} name={s.user.name} size={26} />
             <span className="font-medium text-ink">{s.user.name}</span>
           </span>
           <span className="flex items-center gap-2 text-ink-2">
@@ -182,6 +182,7 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
 
 function IdleHero() {
   const latest = useLatest();
+  const main = useMainServer();
   const feature = useMemo(() => latest.data?.find((i) => i.backdrop), [latest.data]);
   return (
     <div className="relative flex h-full items-end p-6 sm:p-8">
@@ -194,7 +195,7 @@ function IdleHero() {
           {feature ? (
             <>Recently added to your library: <span className="font-medium text-ink">{feature.title}</span>{feature.year ? ` (${feature.year})` : ''}</>
           ) : (
-            'Active streams from every Jellyfin client will appear here in real time.'
+            `Active streams from every ${main.name} app will appear here in real time.`
           )}
         </p>
       </div>
