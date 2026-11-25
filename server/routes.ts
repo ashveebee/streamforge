@@ -26,6 +26,7 @@ import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { deviceReport, PlayabilityError, playabilityStatus, titlePlayability } from './services/playability/index.js';
 import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
@@ -546,6 +547,31 @@ api.put(
     updateDiagnosisPrefs(b.data);
     audit(req, b.data.uploadMbps ? `[diagnosis] upload speed set to ${b.data.uploadMbps} Mbps` : '[diagnosis] upload speed cleared');
     return diagnosisStatus();
+  }),
+);
+
+/* ------------------------------ playability ------------------------------ */
+
+const playabilityError = (err: unknown): never => {
+  if (err instanceof PlayabilityError) throw new HttpError(400, err.message);
+  throw err;
+};
+api.get('/playability', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(playabilityStatus()));
+api.get(
+  '/playability/device',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const key = typeof req.query.key === 'string' && req.query.key.length <= 300 ? req.query.key : '';
+    return deviceReport(key).catch(playabilityError);
+  }),
+);
+api.get(
+  '/playability/title/:id',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    if (!/^[a-f0-9-]{32,36}$/i.test(id)) throw new HttpError(400, 'Invalid item id');
+    return titlePlayability(id).catch(playabilityError);
   }),
 );
 

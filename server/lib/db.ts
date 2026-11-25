@@ -87,6 +87,17 @@ const migrations = [
      t     INTEGER PRIMARY KEY,
      data  TEXT NOT NULL
    );`,
+  // One row per play with the file's formats and how it was delivered,
+  // for learning what each device can play (see services/playability).
+  `CREATE TABLE device_plays (
+     id          TEXT PRIMARY KEY,
+     device_key  TEXT NOT NULL,
+     item_id     TEXT NOT NULL,
+     title       TEXT NOT NULL,
+     at          INTEGER NOT NULL,
+     data        TEXT NOT NULL
+   );
+   CREATE INDEX device_plays_at ON device_plays(at);`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */

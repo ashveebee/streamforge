@@ -12,6 +12,7 @@ import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { ReclaimCard } from '@/components/widgets/ReclaimCard';
+import { DevicePlaybackCard } from '@/components/widgets/DevicePlaybackCard';
 
 function ItemList({ items, total, empty }: { items: LibraryHealthItem[]; total: number; empty: string }) {
   if (!items.length) return <EmptyState icon={Check} title="All good" description={empty} />;
@@ -79,6 +80,7 @@ function Upgrades({ d }: { d: LibraryHealth }) {
 
 export default function LibraryHealthPage() {
   const q = useLibraryHealth();
+  const { user } = useAuth();
   return (
     <>
       <PageHeader
@@ -126,6 +128,7 @@ export default function LibraryHealthPage() {
           )
         }
       </QueryState>
+      {user?.isAdmin && <div className="mt-5"><DevicePlaybackCard /></div>}
     </>
   );
 }

@@ -49,6 +49,7 @@ import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
 import { JellyfinEpisodeList, SeasonEpisodeList } from '@/components/media/Episodes';
 import { WatchLink } from '@/components/media/WatchLink';
+import { WillItPlay } from '@/components/media/WillItPlay';
 import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts';
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
@@ -562,6 +563,7 @@ function DetailsView({ d }: { d: Details }) {
         </div>
         <div className="min-w-0 space-y-5">
           {d.library && <YourLibrary lib={d.library} />}
+          {d.library && <WillItPlay itemId={d.library.itemId} />}
           {d.library && <TitleInfo lib={d.library} />}
           <InYourApps d={d} />
           <Requests d={d} />
@@ -629,6 +631,7 @@ export function JellyfinMediaPage() {
             </div>
             <div className="min-w-0 space-y-5">
               <YourLibrary lib={j.library} />
+              <WillItPlay itemId={j.itemId} />
               <TitleInfo lib={j.library} />
             </div>
           </div>

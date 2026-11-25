@@ -155,6 +155,20 @@ server.
   signed-in devices and two-factor settings.
 - **Weekly digest.** A "This week" page shows what was added and what got
   watched. Admins can send it every week through the notification channels.
+- **Will it play on your devices?** Every play teaches StreamForge what
+  that device can handle: which file types, video and audio formats, HDR
+  and subtitles it plays directly, and which make Jellyfin convert (from
+  Jellyfin's own transcode reasons). From that it predicts, for any file,
+  whether a device plays it directly, needs it repackaged, converts the
+  audio, or converts the video (the heavy one).
+  - Title pages show **Will it play?** for each device people watch on,
+    with the reason and, for movies with several versions, which version
+    to use.
+  - Library health shows how the whole library plays on each device: how
+    much plays directly, what makes the rest convert ("Dolby TrueHD audio:
+    21 files") and which titles are affected.
+  Profiles build up from new plays (a few plays per device is enough to
+  start). Admins only; needs a Jellyfin API key.
 - **Cleanup suggestions.** Library health lists big movies and series nobody
   has watched in 3–24 months, with the space each would free. Keep, stop
   monitoring, or delete them from there.

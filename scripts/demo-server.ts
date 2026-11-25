@@ -11,6 +11,8 @@
 import express from 'express';
 import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js';
 import { demoTicks } from './demo-diagnosis.js';
+import { demoLibrary, demoProfiles } from './demo-playability.js';
+import { libraryReport, statusOf, titleReport } from '../server/services/playability/report.js';
 import type {
   ActivityEntry,
   AutoImportEntry,
@@ -1041,6 +1043,17 @@ app.get('/api/diagnosis/explain', (req, res) => {
   if (near) return void res.json({ incident: near, ...analyse(diagTicks, { from: near.start, to: near.end, session }, opts) });
   res.json({ ...analyse(diagTicks, { from: at - 60_000, to: at + 30_000, session }, opts) });
 });
+
+// Device playability from simulated plays (see demo-playability.ts).
+const playProfiles = demoProfiles();
+const playLibrary = demoLibrary([...MOVIES, ...SERIES].map((t) => ({ title: t.title, kind: t.kind === 'series' ? 'series' : 'movie', year: t.year })), slug);
+app.get('/api/playability', json(() => statusOf(playProfiles, true)));
+app.get('/api/playability/device', (req, res) => {
+  const p = playProfiles.find((x) => x.key === req.query.key);
+  if (!p) return void res.status(400).json({ error: 'bad_request', message: 'StreamForge hasn’t seen this device play anything' });
+  res.json(libraryReport(p, playLibrary, Date.now() - 40 * 60_000));
+});
+app.get('/api/playability/title/:id', (req, res) => res.json(titleReport(playProfiles, playLibrary.filter((f) => f.titleId === req.params.id))));
 
 app.get('/api/audit', json(() => ({
   entries: [

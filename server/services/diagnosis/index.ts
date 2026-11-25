@@ -5,6 +5,7 @@ import { downloadSnapshot, healthSnapshot } from '../../health.js';
 import { hostSnapshot } from '../../host.js';
 import { clientTotals } from '../clients/index.js';
 import * as jellyfin from '../jellyfin.js';
+import { observeStreams, prunePlays } from '../playability/index.js';
 import { analyse, findIncidents, type Incident, type PlayMethod, type StreamPoint, type Tick } from './analyse.js';
 
 /*
@@ -68,6 +69,8 @@ export async function recordTick() {
     streams = [];
   }
   if (streams === undefined) return;
+  // The same sample teaches StreamForge what each device can play.
+  observeStreams(streams);
   const t = Date.now();
   const points: StreamPoint[] = streams
     .filter((s) => s.item.mediaType !== 'Audio')
@@ -113,7 +116,10 @@ export async function recordTick() {
 
 export function startDiagnosisRecorder() {
   setInterval(() => void recordTick().catch(() => undefined), SAMPLE_MS).unref();
-  setInterval(() => prune.run(Date.now() - KEEP_MS), 3600_000).unref();
+  setInterval(() => {
+    prune.run(Date.now() - KEEP_MS);
+    prunePlays();
+  }, 3600_000).unref();
   prune.run(Date.now() - KEEP_MS);
 }
 
