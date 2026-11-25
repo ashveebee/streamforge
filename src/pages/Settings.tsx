@@ -35,6 +35,7 @@ import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { Pill, StatusBadge } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
 import { InstancesSection } from '@/components/settings/InstancesSection';
+import { JellyfinServersSection } from '@/components/settings/JellyfinServersSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
@@ -511,6 +512,7 @@ function ServicesTab() {
             <Fragment key={id}>
               <ServiceCard s={s} index={i} />
               {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
+              {id === 'jellyfin' && s.configured && <JellyfinServersSection />}
             </Fragment>
           );
         })}

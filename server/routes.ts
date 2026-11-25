@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { audit, auditEntries } from './lib/audit.js';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ import { moonfinClientConfig } from './services/moonfin.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
+import { jellyfinServer, jellyfinServers, type JellyfinServer } from './services/jellyfinServers.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
@@ -53,6 +54,14 @@ api.get('/config', (req, res) => {
     instances: arrInstances()
       .filter((i) => canSee(req, i.kind))
       .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
+    /** Jellyfin servers, main one first; only listed when there's more than one. */
+    jellyfinServers:
+      canSee(req, 'jellyfin') && jellyfinServers().length
+        ? [
+            { id: 'jellyfin', name: mainServerName(), primary: true },
+            ...jellyfinServers().map((s) => ({ id: s.id, name: s.name, primary: false })),
+          ]
+        : [],
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
     downloadClients: hasClients() && canSee(req, 'downloads'),
@@ -139,10 +148,63 @@ api.post(
 
 /* -------------------------------- jellyfin ------------------------------ */
 
-api.get('/jellyfin/now-playing', handle('jellyfin', (req) => jellyfin.nowPlaying(ctxOf(req.session!))));
-api.get('/jellyfin/overview', handle('jellyfin', (req) => jellyfin.overview(ctxOf(req.session!))));
-api.get('/jellyfin/latest', handle('jellyfin', (req) => jellyfin.latest(ctxOf(req.session!))));
-api.get('/jellyfin/activity', handle('jellyfin', (req) => jellyfin.activity(ctxOf(req.session!))));
+/** The main server's name as Jellyfin reports it, for tabs and labels. */
+function mainServerName() {
+  const meta = healthSnapshot().services.find((s) => s.id === 'jellyfin')?.meta;
+  const name = meta && typeof meta.server === 'string' ? meta.server : undefined;
+  return name || 'Main server';
+}
+
+/**
+ * The extra Jellyfin server a request addresses with `instance` (query or
+ * body), or undefined for the main server.
+ */
+function extraServer(req: Request): JellyfinServer | undefined {
+  const raw = (req.body as { instance?: unknown } | undefined)?.instance ?? req.query.instance ?? req.query.server;
+  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return undefined;
+  const srv = jellyfinServer(raw);
+  if (!srv) throw new HttpError(404, 'Unknown Jellyfin server', 'not_found');
+  return srv;
+}
+
+/* Streams from the main server and every extra one. An extra server that's down doesn't hide the rest. */
+api.get(
+  '/jellyfin/now-playing',
+  handle('jellyfin', async (req) => {
+    const extras = jellyfinServers();
+    const [main, ...rest] = await Promise.allSettled([
+      jellyfin.nowPlaying(ctxOf(req.session!)),
+      ...extras.map((srv) => jellyfin.remoteNowPlaying(srv)),
+    ]);
+    if (main!.status === 'rejected' && (!extras.length || rest.every((r) => r.status === 'rejected'))) throw main!.reason;
+    const streams = [
+      ...(main!.status === 'fulfilled' ? main!.value : []),
+      ...rest.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
+    ];
+    return streams.sort((a, b) => Number(a.state.isPaused) - Number(b.state.isPaused));
+  }),
+);
+api.get(
+  '/jellyfin/overview',
+  handle('jellyfin', (req) => {
+    const srv = extraServer(req);
+    return srv ? jellyfin.remoteOverview(srv) : jellyfin.overview(ctxOf(req.session!));
+  }),
+);
+api.get(
+  '/jellyfin/latest',
+  handle('jellyfin', (req) => {
+    const srv = extraServer(req);
+    return srv ? jellyfin.remoteLatest(srv) : jellyfin.latest(ctxOf(req.session!));
+  }),
+);
+api.get(
+  '/jellyfin/activity',
+  handle('jellyfin', (req) => {
+    const srv = extraServer(req);
+    return srv ? jellyfin.remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
+  }),
+);
 api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
 api.get(
   '/jellyfin/stats',
@@ -153,7 +215,12 @@ api.get(
 );
 
 const sessionBody = z
-  .object({ command: z.enum(['pause', 'unpause', 'stop', 'message']), text: z.string().trim().max(500).optional() })
+  .object({
+    command: z.enum(['pause', 'unpause', 'stop', 'message']),
+    text: z.string().trim().max(500).optional(),
+    /** An extra Jellyfin server's id, for streams playing there. */
+    instance: z.string().max(64).optional(),
+  })
   .strict();
 api.post(
   '/jellyfin/sessions/:id/control',
@@ -163,10 +230,13 @@ api.post(
     const b = sessionBody.safeParse(req.body ?? {});
     if (!jellyfin.SESSION_ID_RE.test(id) || !b.success) throw new HttpError(400, 'Invalid request');
     if (b.data.command === 'message' && !b.data.text) throw new HttpError(400, 'Enter a message');
+    const srv = extraServer(req);
+    const send = (command: jellyfin.SessionCommand, text?: string) =>
+      srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
     // A stop can carry a message explaining why, shown before playback ends.
-    if (b.data.command === 'stop' && b.data.text) await jellyfin.controlSession(ctxOf(req.session!), id, 'message', b.data.text);
-    await jellyfin.controlSession(ctxOf(req.session!), id, b.data.command, b.data.text);
-    audit(req, `[jellyfin] stream ${id}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
+    if (b.data.command === 'stop' && b.data.text) await send('message', b.data.text);
+    await send(b.data.command, b.data.text);
+    audit(req, `[jellyfin] stream ${id}${srv ? ` on ${srv.name}` : ''}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
     return { ok: true };
   }),
 );
@@ -227,6 +297,16 @@ function imageOpts(req: Request) {
   return { tag, maxWidth: Number.isFinite(w) && w > 0 ? Math.min(Math.round(w), 2400) : undefined };
 }
 
+/** The extra server an image lives on (`?server=`); null after answering 404 for an unknown one. */
+function imageServer(req: Request, res: Response): JellyfinServer | undefined | null {
+  try {
+    return extraServer(req);
+  } catch {
+    res.status(404).end();
+    return null;
+  }
+}
+
 api.get('/jellyfin/image/items/:id/:type', (req, res) => {
   const id = String(req.params.id);
   const type = String(req.params.type);
@@ -234,7 +314,9 @@ api.get('/jellyfin/image/items/:id/:type', (req, res) => {
     res.status(400).end();
     return;
   }
-  void pipeImage(res, jellyfin.image(ctxOf(req.session!), 'Items', id, type, imageOpts(req)));
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Items', id, type, imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Items', id, type, imageOpts(req)));
 });
 
 api.get('/jellyfin/image/users/:id', (req, res) => {
@@ -243,7 +325,9 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
     res.status(400).end();
     return;
   }
-  void pipeImage(res, jellyfin.image(ctxOf(req.session!), 'Users', id, 'Primary', imageOpts(req)));
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Users', id, 'Primary', imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Users', id, 'Primary', imageOpts(req)));
 });
 
 /* ---------------------------------- arr --------------------------------- */

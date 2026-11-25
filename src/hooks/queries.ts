@@ -6,6 +6,9 @@ import type {
   Area,
   MemberAccess,
   ArrInstanceView,
+  DiscoveredServer,
+  JellyfinServerRef,
+  JellyfinServerView,
   ArrKind,
   ChannelInput,
   MissingPage,
@@ -55,7 +58,7 @@ export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
     queryFn: () =>
-      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; access: Area[] | null; downloadClients?: boolean; moonfin?: { openIn: 'web' | 'app'; web?: string } }>('/config'),
+      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; jellyfinServers?: JellyfinServerRef[]; access: Area[] | null; downloadClients?: boolean; moonfin?: { openIn: 'web' | 'app'; web?: string } }>('/config'),
     staleTime: Infinity,
   });
 
@@ -84,11 +87,22 @@ export const useNowPlaying = () => {
   const on = useCanSee()('now-playing');
   return useQuery(poll<NowPlaying[]>(['jellyfin', 'now-playing'], '/jellyfin/now-playing', 5 * SECOND, on));
 };
-export const useJellyfin = () =>
-  useQuery(poll<JellyfinOverview>(['jellyfin', 'overview'], '/jellyfin/overview', 30 * SECOND));
-export const useLatest = () => useQuery(poll<LatestItem[]>(['jellyfin', 'latest'], '/jellyfin/latest', 120 * SECOND));
-export const useActivity = () =>
-  useQuery(poll<ActivityEntry[]>(['jellyfin', 'activity'], '/jellyfin/activity', 20 * SECOND));
+/** Jellyfin servers, main first. Empty when there's only the main one. */
+export function useJellyfinServers(): JellyfinServerRef[] {
+  const { data } = useServiceConfig();
+  return data?.jellyfinServers ?? [];
+}
+
+/** `?instance=` for an extra Jellyfin server; nothing for the main one. */
+const jfq = (server?: string) => (server && server !== 'jellyfin' ? `?instance=${encodeURIComponent(server)}` : '');
+const jfKey = (server?: string) => server && server !== 'jellyfin' ? server : 'main';
+
+export const useJellyfin = (server?: string) =>
+  useQuery(poll<JellyfinOverview>(['jellyfin', 'overview', jfKey(server)], `/jellyfin/overview${jfq(server)}`, 30 * SECOND));
+export const useLatest = (server?: string) =>
+  useQuery(poll<LatestItem[]>(['jellyfin', 'latest', jfKey(server)], `/jellyfin/latest${jfq(server)}`, 120 * SECOND));
+export const useActivity = (server?: string) =>
+  useQuery(poll<ActivityEntry[]>(['jellyfin', 'activity', jfKey(server)], `/jellyfin/activity${jfq(server)}`, 20 * SECOND));
 export const usePlays = () => useQuery(poll<PlayDay[]>(['jellyfin', 'plays'], '/jellyfin/plays', 300 * SECOND));
 
 /** Sonarr/Radarr instances, primary first. Empty until /config has loaded. */
@@ -259,6 +273,47 @@ export function useRemoveInstance() {
   });
 }
 
+/* ------------------------- extra Jellyfin servers ------------------------- */
+
+export const useJellyfinServerSettings = () =>
+  useQuery({
+    queryKey: ['settings', 'jellyfin-servers'],
+    queryFn: ({ signal }) => api<{ servers: JellyfinServerView[] }>('/settings/jellyfin-servers', { signal }),
+  });
+
+export type JellyfinServerInput = { name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
+
+export const useTestJellyfinServer = () =>
+  useMutation({
+    mutationFn: (input: JellyfinServerInput & { id?: string }) =>
+      api<ConnectionTest>('/settings/jellyfin-servers/test', { method: 'POST', body: input }),
+  });
+
+export function useSaveJellyfinServer() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: ({ id, ...input }: JellyfinServerInput & { id?: string }) =>
+      id
+        ? api<{ server: JellyfinServerView }>(`/settings/jellyfin-servers/${id}`, { method: 'PUT', body: input })
+        : api<{ server: JellyfinServerView }>('/settings/jellyfin-servers', { method: 'POST', body: input }),
+    onSuccess: changed,
+  });
+}
+
+export function useRemoveJellyfinServer() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (id: string) => api<{ ok: true }>(`/settings/jellyfin-servers/${id}`, { method: 'DELETE' }),
+    onSuccess: changed,
+  });
+}
+
+/** Searches the local network for Jellyfin servers (takes a few seconds). */
+export const useDiscoverJellyfin = () =>
+  useMutation({
+    mutationFn: () => api<{ servers: DiscoveredServer[] }>('/settings/jellyfin/discover', { method: 'POST' }),
+  });
+
 /* ------------------------------ queue actions ----------------------------- */
 
 export type QueueActionName = 'remove' | 'remove-keep' | 'blocklist' | 'blocklist-search' | 'grab';
@@ -357,8 +412,8 @@ export function useDecideRequest() {
 export function useSessionControl() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, command, text }: { id: string; command: 'pause' | 'unpause' | 'stop' | 'message'; text?: string }) =>
-      api<{ ok: true }>(`/jellyfin/sessions/${encodeURIComponent(id)}/control`, { method: 'POST', body: { command, text } }),
+    mutationFn: ({ id, command, text, server }: { id: string; command: 'pause' | 'unpause' | 'stop' | 'message'; text?: string; server?: string }) =>
+      api<{ ok: true }>(`/jellyfin/sessions/${encodeURIComponent(id)}/control`, { method: 'POST', body: { command, text, instance: server } }),
     onSuccess: () => setTimeout(() => void qc.invalidateQueries({ queryKey: ['jellyfin', 'now-playing'] }), 800),
   });
 }

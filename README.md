@@ -68,6 +68,18 @@ server.
 - **Service integrations**
   - *Jellyfin:* server info, sessions, users, library statistics, recently added
     items, daily plays and the activity log.
+  - *Jellyfin server discovery:* on first run, or under Settings → Jellyfin,
+    **Find on network** lists the Jellyfin servers on your local network so you
+    can pick one instead of typing its address. It uses Jellyfin's own
+    auto-discovery (UDP port 7359). In Docker it only works with
+    `network_mode: host`, because broadcasts don't leave a bridge network.
+  - *Multiple Jellyfin servers:* add more Jellyfin servers under the main one in
+    Settings, each with its own API key (Jellyfin → Dashboard → API Keys). Each
+    one gets a health check and outage alerts on System Status, its streams on
+    Now Playing (labelled with the server, with pause, message and stop), and
+    its own tab on the Jellyfin page with libraries, users, recently added and
+    activity. Sign-in, title pages, stats, playback alerts and the buffering
+    diagnosis still use the main server.
   - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
     missing-episodes list with search buttons.
   - *Radarr:* movie stats, queue, cinema/digital/physical release dates,

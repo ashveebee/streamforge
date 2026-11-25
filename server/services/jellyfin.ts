@@ -252,6 +252,8 @@ export interface ArtworkRef {
   itemId: string;
   type: 'Primary' | 'Backdrop' | 'Thumb' | 'Logo';
   tag?: string;
+  /** Set for artwork on an extra Jellyfin server (its id). */
+  server?: string;
 }
 
 function resolutionLabel(w?: number, h?: number) {
@@ -646,17 +648,21 @@ export type SessionCommand = 'pause' | 'unpause' | 'stop' | 'message';
 /** Controls a playback session. Needs an administrator token. */
 export async function controlSession(ctx: JfCtx, sessionId: string, command: SessionCommand, text?: string) {
   const token = serverToken(ctx);
+  await sendSessionCommand(base(), token, ctx.deviceId, sessionId, command, text);
+  cache.delete('jf:sessions:');
+}
+
+function sendSessionCommand(url: string, token: string, deviceId: string, sessionId: string, command: SessionCommand, text?: string) {
   const path =
     command === 'message'
       ? `/Sessions/${sessionId}/Message`
       : `/Sessions/${sessionId}/Playing/${command === 'pause' ? 'Pause' : command === 'unpause' ? 'Unpause' : 'Stop'}`;
-  await requestJson(buildUrl(base(), path), {
+  return requestJson(buildUrl(url, path), {
     method: 'POST',
-    headers: authHeader(token, ctx.deviceId),
+    headers: authHeader(token, deviceId),
     body: command === 'message' ? { Header: 'Message from the server admin', Text: text ?? '', TimeoutMs: 15_000 } : undefined,
     service: 'jellyfin',
   });
-  cache.delete('jf:sessions:');
 }
 
 /* ------------------------------------------------------------------ */
@@ -728,4 +734,182 @@ export async function libraryItems(ctx: JfCtx) {
       imdb: i.ProviderIds?.Imdb,
     }));
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Extra servers (monitored with their own API key)                    */
+/* ------------------------------------------------------------------ */
+
+/** What's needed to talk to an extra Jellyfin server. */
+export interface JfServerTarget {
+  id: string;
+  name: string;
+  url: string;
+  apiKey: string;
+}
+
+const REMOTE_DEVICE = 'streamforge-server';
+
+function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
+  return requestJson<T>(buildUrl(srv.url, path, query), { headers: authHeader(srv.apiKey, REMOTE_DEVICE), service: 'jellyfin' });
+}
+
+/** Points every artwork reference at the server it lives on. */
+function onServer<T extends Record<string, unknown>>(obj: T, server: string): T {
+  const out: Record<string, unknown> = { ...obj };
+  for (const [k, v] of Object.entries(out)) {
+    if (v && typeof v === 'object' && 'itemId' in v && 'type' in v) out[k] = { ...(v as ArtworkRef), server };
+  }
+  return out as T;
+}
+
+/** Active streams on an extra server, tagged with where they're playing. */
+export async function remoteNowPlaying(srv: JfServerTarget) {
+  const list = await cache.get(`jfx:${srv.id}:sessions`, 2_000, () =>
+    remote<JfSession[]>(srv, '/Sessions', { ActiveWithinSeconds: 960 }),
+  );
+  return list
+    .filter((s) => s.NowPlayingItem)
+    .map(normaliseSession)
+    .map((s) => ({ ...s, item: onServer(s.item, srv.id), server: srv.id, serverName: srv.name }));
+}
+
+/** The same shape as `overview`, for an extra server. */
+export async function remoteOverview(srv: JfServerTarget) {
+  const p = `jfx:${srv.id}:`;
+  const [info, counts, folders, users, sessionList] = await Promise.all([
+    cache.get(`${p}sysinfo`, 30_000, () => remote<JfSystemInfo>(srv, '/System/Info')),
+    cache.get(`${p}counts`, 60_000, () => remote<JfCounts>(srv, '/Items/Counts')),
+    cache.get(`${p}libraries`, 5 * 60_000, async () => {
+      const list = await remote<JfVirtualFolder[]>(srv, '/Library/VirtualFolders');
+      return Promise.all(
+        list.map(async (f) => {
+          const types = f.CollectionType ? COLLECTION_ITEM_TYPES[f.CollectionType] : undefined;
+          const count = await remote<{ TotalRecordCount: number }>(srv, '/Items', {
+            ParentId: f.ItemId,
+            Recursive: true,
+            Limit: 0,
+            IncludeItemTypes: types,
+          }).catch(() => undefined);
+          return {
+            id: f.ItemId,
+            name: f.Name,
+            type: f.CollectionType ?? 'mixed',
+            locations: f.Locations,
+            itemCount: count?.TotalRecordCount,
+            refreshing: f.RefreshStatus === 'Active',
+            refreshProgress: f.RefreshProgress,
+            image: { itemId: f.ItemId, type: 'Primary' as const, server: srv.id },
+          };
+        }),
+      );
+    }),
+    cache.get(`${p}users`, 60_000, () => remote<JfUser[]>(srv, '/Users')),
+    cache.get(`${p}sessions`, 2_000, () => remote<JfSession[]>(srv, '/Sessions', { ActiveWithinSeconds: 960 })),
+  ]);
+
+  const dayAgo = Date.now() - 86_400_000;
+  const streams = sessionList.filter((s) => s.NowPlayingItem);
+  const active = users.filter((u) => !u.Policy?.IsDisabled);
+  return {
+    server: {
+      id: srv.id,
+      name: info.ServerName,
+      version: info.Version,
+      os: info.OperatingSystemDisplayName ?? info.OperatingSystem,
+      architecture: info.SystemArchitecture,
+      hasUpdateAvailable: !!info.HasUpdateAvailable,
+      hasPendingRestart: !!info.HasPendingRestart,
+    },
+    counts: {
+      movies: counts.MovieCount,
+      series: counts.SeriesCount,
+      episodes: counts.EpisodeCount,
+      albums: counts.AlbumCount,
+      songs: counts.SongCount,
+      artists: counts.ArtistCount,
+      books: counts.BookCount,
+      musicVideos: counts.MusicVideoCount,
+      collections: counts.BoxSetCount,
+    },
+    libraries: folders,
+    users: {
+      total: active.length,
+      active24h: users.filter((u) => u.LastActivityDate && Date.parse(u.LastActivityDate) > dayAgo).length,
+      list: active
+        .map((u) => ({ id: u.Id, name: u.Name, imageTag: u.PrimaryImageTag, isAdmin: !!u.Policy?.IsAdministrator, lastActivity: u.LastActivityDate }))
+        .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? '')),
+    },
+    sessions: {
+      active: sessionList.length,
+      streams: streams.length,
+      transcoding: streams.filter((s) => s.PlayState?.PlayMethod === 'Transcode').length,
+      directPlay: streams.filter((s) => s.PlayState?.PlayMethod !== 'Transcode').length,
+    },
+  };
+}
+
+/** Newest movies and episodes on an extra server (there's no user to ask for "latest"). */
+export async function remoteLatest(srv: JfServerTarget, limit = 20) {
+  return cache.get(`jfx:${srv.id}:latest:${limit}`, 60_000, async () => {
+    const res = await remote<{ Items: JfItem[] }>(srv, '/Items', {
+      Recursive: true,
+      IncludeItemTypes: 'Movie,Episode,MusicAlbum',
+      SortBy: 'DateCreated',
+      SortOrder: 'Descending',
+      Limit: limit,
+      Fields: 'PrimaryImageAspectRatio,ProductionYear,DateCreated,Overview,Genres,CommunityRating',
+      EnableImageTypes: 'Primary,Backdrop,Thumb',
+      ImageTypeLimit: 1,
+    });
+    return res.Items.map((i) =>
+      onServer(
+        {
+          id: i.Id,
+          type: i.Type,
+          title: i.Type === 'Episode' ? (i.SeriesName ?? i.Name) : i.Name,
+          subtitle:
+            i.Type === 'Episode' ? `S${i.ParentIndexNumber ?? 0}·E${i.IndexNumber ?? 0} — ${i.Name}` : i.Type === 'MusicAlbum' ? i.AlbumArtist : undefined,
+          year: i.ProductionYear,
+          added: i.DateCreated,
+          rating: i.CommunityRating,
+          ...artworkFor(i),
+        },
+        srv.id,
+      ),
+    );
+  });
+}
+
+export async function remoteActivity(srv: JfServerTarget, limit = 25) {
+  return cache.get(`jfx:${srv.id}:activity:${limit}`, 15_000, async () => {
+    const res = await remote<{ Items: JfActivity[] }>(srv, '/System/ActivityLog/Entries', { limit, startIndex: 0 });
+    return res.Items.map((a) => ({
+      id: a.Id,
+      name: a.Name,
+      overview: a.ShortOverview ?? a.Overview,
+      type: a.Type,
+      date: a.Date,
+      severity: a.Severity,
+      userId: a.UserId,
+    }));
+  });
+}
+
+export function remoteImage(
+  srv: JfServerTarget,
+  kind: 'Items' | 'Users',
+  id: string,
+  type: string,
+  opts: { tag?: string; maxWidth?: number; quality?: number },
+) {
+  return requestRaw(buildUrl(srv.url, `/${kind}/${id}/Images/${type}`, { tag: opts.tag, maxWidth: opts.maxWidth, quality: opts.quality ?? 90 }), {
+    headers: { ...authHeader(srv.apiKey, REMOTE_DEVICE), Accept: 'image/*' },
+    service: 'jellyfin',
+  });
+}
+
+export async function controlRemoteSession(srv: JfServerTarget, sessionId: string, command: SessionCommand, text?: string) {
+  await sendSessionCommand(srv.url, srv.apiKey, REMOTE_DEVICE, sessionId, command, text);
+  cache.delete(`jfx:${srv.id}:sessions`);
 }

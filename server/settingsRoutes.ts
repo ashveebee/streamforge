@@ -34,6 +34,8 @@ import { hasServerKey } from './services/jellyfin.js';
 import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
 import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
+import { addServer, describeServers, getStoredServer, knownOrigins, originOf, removeServer, updateServer } from './services/jellyfinServers.js';
+import { discoverJellyfin } from './services/jellyfinDiscovery.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
   describe,
@@ -333,6 +335,90 @@ settingsRouter.delete('/instances/:id', (req, res) => {
   const id = String(req.params.id);
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
   audit(req, `[settings] instance ${id} removed`);
+  res.json({ ok: true });
+});
+
+/* ------------------------- extra Jellyfin servers ------------------------- */
+
+const jfServerBody = z
+  .object({
+    name: z.string().trim().min(1, 'Give the server a name').max(40).optional(),
+    url: urlField.optional(),
+    publicUrl: urlField.optional(),
+    apiKey: z.string().trim().max(1024).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+/** Looks for Jellyfin servers on the local network and says which are already set up. */
+let discovering: Promise<Awaited<ReturnType<typeof discoverJellyfin>>> | undefined;
+export async function discoverWithStatus() {
+  // One scan at a time; concurrent callers share it.
+  discovering ??= discoverJellyfin().finally(() => (discovering = undefined));
+  const found = await discovering;
+  const known = knownOrigins();
+  return found.map((s) => ({ ...s, added: known.has(originOf(s.url)) }));
+}
+
+settingsRouter.post('/jellyfin/discover', async (req, res) => {
+  const servers = await discoverWithStatus();
+  audit(req, `[settings] searched the network for Jellyfin servers (${servers.length} found)`);
+  res.json({ servers });
+});
+
+settingsRouter.get('/jellyfin-servers', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ servers: describeServers() });
+});
+
+/** Tests candidate details; reuses the saved key when `id` is given and no key is. */
+settingsRouter.post('/jellyfin-servers/test', async (req, res) => {
+  const parsed = jfServerBody.extend({ id: z.string().max(64).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  const saved = b.id ? getStoredServer(b.id) : undefined;
+  const url = b.url || saved?.url;
+  const apiKey = b.apiKey || saved?.apiKey;
+  if (!url || !apiKey) return res.json({ ok: false, message: 'Enter the server address and an API key (Dashboard → API Keys in Jellyfin).' });
+  if (saved && !b.apiKey && origin(url) !== origin(saved.url)) {
+    return res.json({ ok: false, message: 'Re-enter the API key when changing the server address.' });
+  }
+  res.json(await runTest('jellyfin', { url, apiKey }));
+});
+
+settingsRouter.post('/jellyfin-servers', (req, res) => {
+  const parsed = jfServerBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const { name, url, publicUrl, apiKey } = parsed.data;
+  if (!name) return badRequest(res, 'Give the server a name', 'name');
+  if (!url) return badRequest(res, 'Enter the server address', 'url');
+  if (!apiKey) return badRequest(res, 'Enter an API key from Dashboard → API Keys in Jellyfin', 'apiKey');
+  if (knownOrigins().has(originOf(url))) return badRequest(res, 'That Jellyfin server is already set up.', 'url');
+  const srv = addServer({ name, url, publicUrl, apiKey });
+  audit(req, `[settings] Jellyfin server "${name}" added`);
+  res.json({ server: describeServers().find((s) => s.id === srv.id) });
+});
+
+settingsRouter.put('/jellyfin-servers/:id', (req, res) => {
+  const id = String(req.params.id);
+  const cur = getStoredServer(id);
+  if (!cur) return res.status(404).json({ error: 'not_found', message: 'Unknown Jellyfin server' });
+  const parsed = jfServerBody.safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
+  const b = parsed.data;
+  // Never send a saved key to a different server unless it was re-entered.
+  if (b.url && !b.apiKey && origin(b.url) !== origin(cur.url)) {
+    return badRequest(res, 'Re-enter the API key when changing the server address.', 'apiKey');
+  }
+  updateServer(id, { name: b.name, url: b.url, publicUrl: b.publicUrl, apiKey: b.apiKey || undefined, enabled: b.enabled });
+  audit(req, `[settings] Jellyfin server "${b.name ?? cur.name}" updated`);
+  res.json({ server: describeServers().find((s) => s.id === id) });
+});
+
+settingsRouter.delete('/jellyfin-servers/:id', (req, res) => {
+  const id = String(req.params.id);
+  const cur = getStoredServer(id);
+  if (!cur || !removeServer(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown Jellyfin server' });
+  audit(req, `[settings] Jellyfin server "${cur.name}" removed`);
   res.json({ ok: true });
 });
 
