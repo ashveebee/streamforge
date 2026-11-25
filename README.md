@@ -102,9 +102,15 @@ server.
     Jellyfin and Emby streams can be paused, messaged and stopped. Plex
     streams can only be stopped, with a reason the viewer sees (stopping
     needs Plex Pass). Plex has no activity log, so its tab shows recent plays
-    from Plex's watch history instead. Sign-in, stats, your page, search,
-    library health, playback alerts and the buffering diagnosis use the main
-    server (the one people sign in with).
+    from Plex's watch history instead.
+
+    **Every server counts.** Plays are recorded from every server, so Stats,
+    your history, the weekly digest and cleanup suggestions include them all.
+    Title pages show **Available on** with every server that has the title
+    and an Open link for each. ⌘K search covers every server's library.
+    Library health only flags a download as missing when no server has it.
+    Sign-in, continue watching, playback alerts and the buffering diagnosis
+    use the main server (the one people sign in with).
   - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
     missing-episodes list with search buttons.
   - *Radarr:* movie stats, queue, cinema/digital/physical release dates,
@@ -608,12 +614,16 @@ To add an integration:
   digest notification, single sign-on, the active-streams and ended-series
   rules, and watch history all work in the background, so they use the
   Jellyfin API key (Settings → Jellyfin).
-- **Cleanup suggestions** count a title as watched when any Jellyfin user has
-  played or started it, or StreamForge recorded a play. Results are cached for
-  ten minutes.
-- **Playback stats.** With a Jellyfin API key set (Settings → Jellyfin), a
-  recorder samples active sessions every 30 seconds and stores each play,
-  including watch time and whether it transcoded. Without a key, or for days
+- **Cleanup suggestions** count a title as watched when it was played on any
+  media server: any Jellyfin user played or started it on the main Jellyfin
+  server, any account watched it on a Plex server (from Plex's watch history),
+  or StreamForge recorded a play on any server. Results are cached for ten
+  minutes.
+- **Playback stats.** A recorder samples active sessions on every media
+  server every 30 seconds and stores each play, including watch time, whether
+  it transcoded and which server it was on. The main Jellyfin server needs a
+  Jellyfin API key for this (Settings → Jellyfin); extra servers, and a main
+  Plex or Emby server, already have one. Without a key, or for days
   before recording started, the Stats page uses Jellyfin's activity log, which
   has plays but no watch time or transcode data.
 - **Storage forecast.** Usage is sampled hourly from Infinidisk, the host and

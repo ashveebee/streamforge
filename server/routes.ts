@@ -529,7 +529,7 @@ api.post(
 
 /* ---------------------------------- me ---------------------------------- */
 
-api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken)));
+api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken, req.session!.userName)));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
 
 /* --------------------------------- digest -------------------------------- */

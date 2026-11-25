@@ -650,6 +650,10 @@ export interface LibraryHealth {
   hasSonarr: boolean;
   hasRadarr: boolean;
   hasJellyfin: boolean;
+  /** What the cross-checks compare with: "Plex", "Jellyfin", "Emby", or "your media servers". */
+  server?: string;
+  /** Media servers that couldn't be read this time. */
+  unreachable?: string[];
   incomplete?: Section;
   upgrades: { instance: string; instanceName?: string; kind: ArrKind; name: string; count: number }[];
   notInJellyfin?: Section;

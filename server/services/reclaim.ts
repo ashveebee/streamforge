@@ -4,7 +4,7 @@ import { HttpError } from '../lib/handle.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, serverToken, type JfCtx } from './jellyfin.js';
-import { mainEmby, mainLibraryItems, mainPlex } from './mainServer.js';
+import { allLibraryItems, idKeys, mainEmby, mainPlex } from './mainServer.js';
 import * as plex from './plex.js';
 
 /*
@@ -137,18 +137,19 @@ export interface Suggestion {
 export async function reclaimSuggestions(ctx: JfCtx, days: number) {
   return cache.get(`reclaim:${days}`, 10 * 60_000, async () => {
     const cutoff = Date.now() - days * 86_400_000;
-    const [jfItems, played] = await Promise.all([mainLibraryItems(ctx), lastPlayed(ctx)]);
+    // Every server counts: a title watched on any of them isn't "unwatched".
+    const [lib, played] = await Promise.all([allLibraryItems(ctx), lastPlayed(ctx)]);
     const recorded = recordedPlays();
-    const byTmdb = new Map<string, string>();
-    const byTvdb = new Map<string, string>();
-    const byImdb = new Map<string, string>();
-    for (const i of jfItems) {
-      if (i.tmdb) byTmdb.set(i.tmdb, i.id);
-      if (i.tvdb) byTvdb.set(i.tvdb, i.id);
-      if (i.imdb) byImdb.set(i.imdb, i.id);
+    const watchedByKey = new Map<string, number>();
+    for (const i of lib.items) {
+      // The main server's own play data is keyed by its item id; Plex servers report it per item.
+      const t = Math.max(i.server.main ? (played.get(i.id) ?? 0) : 0, i.lastPlayed ?? 0);
+      if (!t) continue;
+      for (const k of idKeys(i)) if (t > (watchedByKey.get(k) ?? 0)) watchedByKey.set(k, t);
     }
     const keep = keepList();
-    const watchedAt = (jfId: string | undefined, title: string) => Math.max(jfId ? (played.get(jfId) ?? 0) : 0, recorded.get(title.toLowerCase()) ?? 0) || undefined;
+    const watchedAt = (ids: { tmdb?: number; tvdb?: number; imdb?: string }, title: string) =>
+      Math.max(...idKeys(ids).map((k) => watchedByKey.get(k) ?? 0), recorded.get(title.toLowerCase()) ?? 0) || undefined;
 
     const out: Suggestion[] = [];
     let kept = 0;
@@ -169,8 +170,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
           const movies = await cache.get(`${inst.id}:movies`, 60_000, () => inst.client.get<Movie[]>('/api/v3/movie')).catch(() => [] as Movie[]);
           for (const m of movies) {
             if (!m.hasFile) continue;
-            const jfId = (m.tmdbId && byTmdb.get(String(m.tmdbId))) || (m.imdbId && byImdb.get(m.imdbId)) || undefined;
-            const t = watchedAt(jfId, m.title);
+            const t = watchedAt({ tmdb: m.tmdbId, imdb: m.imdbId }, m.title);
             consider(
               {
                 key: `${inst.id}:movie:${m.id}`,
@@ -192,8 +192,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
         } else {
           const series = await cache.get(`${inst.id}:series`, 60_000, () => inst.client.get<Series[]>('/api/v3/series')).catch(() => [] as Series[]);
           for (const s of series) {
-            const jfId = (s.tvdbId && byTvdb.get(String(s.tvdbId))) || (s.imdbId && byImdb.get(s.imdbId)) || undefined;
-            const t = watchedAt(jfId, s.title);
+            const t = watchedAt({ tvdb: s.tvdbId, imdb: s.imdbId }, s.title);
             consider(
               {
                 key: `${inst.id}:series:${s.id}`,

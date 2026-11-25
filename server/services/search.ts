@@ -5,6 +5,7 @@ import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, type JfCtx } from './jellyfin.js';
 import { mainEmby, mainPlex } from './mainServer.js';
+import { mediaServers } from './mediaServers.js';
 import { remote, type JfServerTarget } from './jellyfin.js';
 import * as plex from './plex.js';
 import { creatorName, musicLibrary } from './music.js';
@@ -50,8 +51,11 @@ interface JfItem {
   SeriesPrimaryImageTag?: string;
 }
 
-/** Library search on the main Jellyfin server, or on a main Emby server (`emby`) with the user's token. */
-async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget): Promise<SearchHit[]> {
+/**
+ * Library search on the main Jellyfin server, on a main Emby server (`emby`)
+ * with the user's token, or on an extra Jellyfin/Emby server with its API key (`asServer`).
+ */
+async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget, asServer = false): Promise<SearchHit[]> {
   const query = {
     userId: ctx.userId,
     searchTerm: q,
@@ -62,21 +66,25 @@ async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget): Promi
     EnableTotalRecordCount: false,
   };
   const res = emby
-    ? await remote<{ Items: JfItem[] }>({ ...emby, apiKey: ctx.token }, '/Items', query)
+    ? await remote<{ Items: JfItem[] }>(asServer ? emby : { ...emby, apiKey: ctx.token }, '/Items', asServer ? { ...query, userId: undefined } : query)
     : await jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, query);
   const on = emby ? `&server=${encodeURIComponent(emby.id)}` : '';
   return (res.Items ?? []).slice(0, PER_SOURCE * 2).map((i) => {
     const imgId = i.ImageTags?.Primary ? i.Id : i.SeriesId;
     const tag = i.ImageTags?.Primary ?? i.SeriesPrimaryImageTag;
     return {
-      key: `jf:${i.Id}`,
-      source: emby ? ('emby' as const) : ('jellyfin' as const),
+      key: emby ? `${emby.id}:${i.Id}` : `jf:${i.Id}`,
+      source: emby?.type === 'emby' ? ('emby' as const) : ('jellyfin' as const),
       title: i.Name,
       subtitle: [i.Type === 'Episode' ? i.SeriesName : i.AlbumArtist, (i.Type ?? '').replace(/([a-z])([A-Z])/g, '$1 $2')].filter(Boolean).join(' · '),
       year: i.ProductionYear,
       image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}${on}` : undefined,
       status: 'available',
-      path: emby ? '/emby' : ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type) ? `/media/jellyfin/${i.Id}` : '/jellyfin',
+      path: emby
+        ? `/${emby.type}${asServer ? `?instance=${encodeURIComponent(emby.id)}` : ''}`
+        : ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type)
+          ? `/media/jellyfin/${i.Id}`
+          : '/jellyfin',
     };
   });
 }
@@ -210,9 +218,17 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
   const jobs: Record<string, Promise<SearchHit[]>> = {};
   const main = mainPlex();
   const emby = mainEmby();
-  if (main) jobs.library = settle('Plex')(plex.search(main, q, PER_SOURCE * 2));
-  else if (emby) jobs.library = settle('Emby')(jellyfinHits(ctx, q, emby));
-  else if (isConfigured('jellyfin')) jobs.library = settle('Jellyfin')(jellyfinHits(ctx, q));
+  // The sign-in server first, then every other media server, each labelled with where it is.
+  const library: Promise<SearchHit[]>[] = [];
+  if (main) library.push(settle('Plex')(plex.search(main, q, PER_SOURCE * 2)));
+  else if (emby) library.push(settle('Emby')(jellyfinHits(ctx, q, emby)));
+  else if (isConfigured('jellyfin')) library.push(settle('Jellyfin')(jellyfinHits(ctx, q)));
+  const others = mediaServers().filter((s) => s.id !== (main ?? emby)?.id);
+  for (const srv of others) {
+    const hits = srv.type === 'plex' ? plex.search(srv, q, PER_SOURCE) : jellyfinHits(ctx, q, srv, true);
+    library.push(settle(srv.name)(hits.then((list) => list.slice(0, PER_SOURCE).map((h) => ({ ...h, subtitle: [h.subtitle, srv.name].filter(Boolean).join(' · ') })))));
+  }
+  if (library.length) jobs.library = Promise.all(library).then((l) => l.flat().slice(0, PER_SOURCE * 3));
   const managed: Promise<SearchHit[]>[] = [];
   for (const inst of arrInstances()) if (can(inst.kind)) managed.push(settle(inst.primary ? inst.name : `${inst.kind} ${inst.name}`)(arrHits(inst, q)));
   for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(k === 'lidarr' ? 'Lidarr' : 'Readarr')(musicHits(k, q)));

@@ -20,6 +20,7 @@ import {
   Plus,
   Search,
   Send,
+  Server,
   Star,
   Users,
   X,
@@ -53,7 +54,7 @@ import { WillItPlay } from '@/components/media/WillItPlay';
 import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts';
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
-import { SERVICES } from '@/components/ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 
 const AVAILABILITY: Record<Availability, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
   available: { label: 'Available', tone: 'ok' },
@@ -126,6 +127,33 @@ function Cast({ cast }: { cast: CastMember[] }) {
   );
 }
 
+/** Every media server the title is on, with a link to open it in that server's app. */
+function AvailableOnCard({ list }: { list: NonNullable<Details['availableOn']> }) {
+  return (
+    <Card>
+      <CardHeader icon={Server} title="Available on" subtitle={list.length === 1 ? '1 media server' : `${list.length} media servers`} />
+      <CardBody>
+        <ul className="space-y-1">
+          {list.map((a) => (
+            <li key={a.server} className="flex items-center gap-3 rounded-lg px-1.5 py-1.5">
+              <ServiceIcon id={a.type} size={30} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium">{a.name}</div>
+                <div className="text-[11px] text-ink-4">{MEDIA_SERVERS[a.type].name}{a.main ? ' · sign-in server' : ''}</div>
+              </div>
+              {a.url && /^https?:\/\//.test(a.url) && (
+                <a href={a.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 text-xs font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink">
+                  Open <ExternalLink className="size-3" />
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
 function Actions({ d }: { d: Details }) {
   const request = useRequestMedia();
   const add = useAddMedia();
@@ -136,6 +164,22 @@ function Actions({ d }: { d: Details }) {
   return (
     <>
       {d.jellyfin && <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />}
+      {/* Not on the main Jellyfin server: open it where it is instead. */}
+      {!d.jellyfin && d.availableOn?.find((a) => a.url) && (() => {
+        const a = d.availableOn.find((x) => x.url)!;
+        return (
+          <a
+            href={a.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
+            style={{ background: MEDIA_SERVERS[a.type].color }}
+          >
+            <Play className="size-4" /> Play on {MEDIA_SERVERS[a.type].name}
+            {d.availableOn.length > 1 && <span className="font-normal opacity-70">· {a.name}</span>}
+          </a>
+        );
+      })()}
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -562,6 +606,7 @@ function DetailsView({ d }: { d: Details }) {
           <Cast cast={d.cast} />
         </div>
         <div className="min-w-0 space-y-5">
+          {d.availableOn && d.availableOn.length > 0 && <AvailableOnCard list={d.availableOn} />}
           {d.library && <YourLibrary lib={d.library} />}
           {d.library && <WillItPlay itemId={d.library.itemId} />}
           {d.library && <TitleInfo lib={d.library} />}

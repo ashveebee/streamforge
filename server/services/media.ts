@@ -4,7 +4,7 @@ import { isConfigured, publicUrl } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
 import { jf, libraryItems, type JfCtx } from './jellyfin.js';
-import { notJellyfinMain } from './mainServer.js';
+import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
 /*
@@ -146,8 +146,12 @@ function jellyfinUrl(itemId: string) {
 }
 
 export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, opts: { isAdmin: boolean; can: (area: string) => boolean }) {
-  // Title pages read Jellyfin's library; with Plex or Emby as the sign-in server they use Seerr and the *arr apps.
-  const [s, lib] = await Promise.all([seerrDetails(type, tmdbId), notJellyfinMain() ? [] : libraryItems(ctx).catch(() => [])]);
+  // Title pages read Jellyfin's library for full details; every server is checked for where it's available.
+  const [s, lib, everywhere] = await Promise.all([
+    seerrDetails(type, tmdbId),
+    notJellyfinMain() ? [] : libraryItems(ctx).catch(() => []),
+    allLibraryItems(ctx).catch(() => ({ items: [] as LibraryEntry[] })),
+  ]);
   const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === (type === 'movie' ? 'Movie' : 'Series'));
   const [arr, library] = await Promise.all([
     arrEntries(type, tmdbId, s?.externalIds?.tvdbId, opts.can),
@@ -156,7 +160,15 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
   const look = s ? undefined : await arrLookup(type, tmdbId);
   const firstArr = arr[0]?.movie ?? arr[0]?.series;
   const meta = (look ?? firstArr) as (ArrMovie & ArrSeries) | undefined;
-  if (!s && !meta && !jfItem) throw new HttpError(404, 'StreamForge couldn’t find this title. Connect Seerr for full details of titles you don’t have yet.', 'not_found');
+  // Every server that has the title, matched by TMDB id (and TVDB/IMDb when Seerr knows them).
+  const wanted = new Set(idKeys({ tmdb: tmdbId, tvdb: s?.externalIds?.tvdbId, imdb: s?.externalIds?.imdbId }));
+  const kind = type === 'movie' ? 'Movie' : 'Series';
+  const availableOn = everywhere.items
+    .filter((i) => i.type === kind && idKeys(i).some((k) => wanted.has(k)))
+    .filter((i, n, all) => all.findIndex((x) => x.server.id === i.server.id) === n)
+    .sort((a, b) => Number(b.server.main) - Number(a.server.main) || a.server.name.localeCompare(b.server.name))
+    .map((i) => ({ server: i.server.id, type: i.server.type, name: i.server.name, main: i.server.main, itemId: i.id, url: openLink(i.server, i.id) }));
+  if (!s && !meta && !jfItem && !availableOn.length) throw new HttpError(404, 'StreamForge couldn’t find this title. Connect Seerr for full details of titles you don’t have yet.', 'not_found');
 
   const date = s?.releaseDate ?? s?.firstAirDate;
   const trailer = s?.relatedVideos?.find((v) => v.type === 'Trailer' && v.site === 'YouTube' && v.key) ?? undefined;
@@ -201,7 +213,7 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
       : undefined;
 
   let availability: Availability = s?.mediaInfo?.status ? (MEDIA_STATUS[s.mediaInfo.status] ?? 'none') : 'none';
-  if (jfItem && availability === 'none') availability = 'available';
+  if ((jfItem || availableOn.length) && availability === 'none') availability = 'available';
   if (type === 'movie' && arr.some((a) => a.movie?.hasFile)) availability = 'available';
   if (type === 'movie' && availability === 'none' && arr.some((a) => a.movie?.monitored && !a.movie.hasFile)) availability = 'missing';
   if (type === 'tv' && seasons?.length) {
@@ -250,6 +262,8 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     seasons,
     availability,
     jellyfin: jfItem ? { itemId: jfItem.id, url: jellyfinUrl(jfItem.id) } : undefined,
+    /** Every media server the title is on, the sign-in server first. */
+    availableOn,
     library: library ? { ...library, seasons: undefined, cast: undefined, overview: undefined, tagline: undefined, genres: undefined, certification: undefined } : undefined,
     arr: arr.map(({ inst, movie, series }) => ({
       kind: inst.kind,

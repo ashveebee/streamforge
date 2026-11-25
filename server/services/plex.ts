@@ -310,6 +310,8 @@ interface PlexHistory {
   type?: string;
   viewedAt?: number;
   accountID?: number;
+  /** Episodes: the show's key, `/library/metadata/<id>`. */
+  grandparentKey?: string;
 }
 
 const accounts = (srv: JfServerTarget) =>
@@ -539,13 +541,16 @@ export async function libraryItems(srv: JfServerTarget) {
   return cache.get(`plex:${srv.id}:libitems`, 10 * 60_000, async () => {
     const res = await plex<Container<{ Directory?: PlexSection[] }>>(srv, '/library/sections');
     const sections = (res.MediaContainer.Directory ?? []).filter((d) => d.type === 'movie' || d.type === 'show');
-    const lists = await Promise.all(
-      sections.map((d) =>
-        plex<Container<{ Metadata?: PlexLibraryItem[] }>>(srv, `/library/sections/${d.key}/all`, { includeGuids: 1 })
-          .then((r) => r.MediaContainer.Metadata ?? [])
-          .catch(() => [] as PlexLibraryItem[]),
+    const [lists, watched] = await Promise.all([
+      Promise.all(
+        sections.map((d) =>
+          plex<Container<{ Metadata?: PlexLibraryItem[] }>>(srv, `/library/sections/${d.key}/all`, { includeGuids: 1 })
+            .then((r) => r.MediaContainer.Metadata ?? [])
+            .catch(() => [] as PlexLibraryItem[]),
+        ),
       ),
-    );
+      lastWatchedByAnyone(srv).catch(() => new Map<string, number>()),
+    ]);
     return lists.flat().map((i) => {
       const id = (scheme: string) => i.Guid?.find((g) => g.id.startsWith(`${scheme}://`))?.id.slice(scheme.length + 3);
       return {
@@ -556,10 +561,31 @@ export async function libraryItems(srv: JfServerTarget) {
         tvdb: id('tvdb'),
         tmdb: id('tmdb'),
         imdb: id('imdb'),
-        lastPlayed: i.lastViewedAt ? i.lastViewedAt * 1000 : undefined,
+        // lastViewedAt is only the owner's viewing; the watch history covers every account.
+        lastPlayed: Math.max(i.lastViewedAt ? i.lastViewedAt * 1000 : 0, watched.get(i.ratingKey) ?? 0) || undefined,
       };
     });
   });
+}
+
+/** Movie or show id → the last time any account watched it, from the server's watch history. */
+async function lastWatchedByAnyone(srv: JfServerTarget) {
+  const items = await cache.get(`plex:${srv.id}:history:big`, 5 * 60_000, async () => {
+    const res = await plex<Container<{ Metadata?: PlexHistory[] }>>(srv, '/status/sessions/history/all', {
+      sort: 'viewedAt:desc',
+      'X-Plex-Container-Start': 0,
+      'X-Plex-Container-Size': 5000,
+    });
+    return res.MediaContainer.Metadata ?? [];
+  });
+  const out = new Map<string, number>();
+  for (const h of items) {
+    if (!h.viewedAt) continue;
+    const show = h.type === 'episode' ? h.grandparentKey?.match(/\/library\/metadata\/(\d+)/)?.[1] : undefined;
+    const key = show ?? h.ratingKey;
+    if (key && h.viewedAt * 1000 > (out.get(key) ?? 0)) out.set(key, h.viewedAt * 1000);
+  }
+  return out;
 }
 
 /** Plays from Plex's watch history since a time, for stats (no watch time or transcode data). */
@@ -661,7 +687,7 @@ export async function search(srv: JfServerTarget, q: string, limit = 12) {
       year: m.year,
       image: a.poster ? `/api/jellyfin/image/items/${a.poster.itemId}/Primary?w=120&tag=${a.poster.tag}&server=${encodeURIComponent(srv.id)}` : undefined,
       status: 'available' as const,
-      path: '/plex',
+      path: `/plex?instance=${encodeURIComponent(srv.id)}`,
     };
   });
 }

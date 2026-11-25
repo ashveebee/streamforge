@@ -90,15 +90,18 @@ async function upNext(ctx: JfCtx, serverToken?: string) {
   return { resume: (resume.Items ?? []).map(card), nextUp: (nextUp.Items ?? []).map(card) };
 }
 
-export async function myOverview(ctx: JfCtx, serverToken?: string) {
+export async function myOverview(ctx: JfCtx, serverToken?: string, userName = '') {
   const { resume, nextUp } = await upNext(ctx, serverToken);
 
   // History comes from StreamForge's own recorder (needs a Jellyfin API key).
   const since = Date.now() - 30 * 86_400_000;
   const rows = db
-    .prepare('SELECT title, series, type, client, device, method, started_at, watched_ms FROM plays WHERE user_id = ? ORDER BY started_at DESC LIMIT 40')
-    .all(ctx.userId) as { title: string; series: string | null; type: string | null; client: string | null; device: string | null; method: string; started_at: number; watched_ms: number }[];
-  const month = db.prepare('SELECT COUNT(*) AS plays, COALESCE(SUM(watched_ms), 0) AS ms FROM plays WHERE user_id = ? AND started_at >= ? AND watched_ms >= 60000').get(ctx.userId, since) as {
+    // Plays on other servers carry that server's user id, so the user's name matches them too.
+    .prepare('SELECT title, series, type, client, device, method, started_at, watched_ms, server_name FROM plays WHERE user_id = ? OR (user_name IS NOT NULL AND lower(user_name) = lower(?)) ORDER BY started_at DESC LIMIT 40')
+    .all(ctx.userId, userName) as { title: string; series: string | null; type: string | null; client: string | null; device: string | null; method: string; started_at: number; watched_ms: number; server_name: string | null }[];
+  const month = db
+    .prepare('SELECT COUNT(*) AS plays, COALESCE(SUM(watched_ms), 0) AS ms FROM plays WHERE (user_id = ? OR (user_name IS NOT NULL AND lower(user_name) = lower(?))) AND started_at >= ? AND watched_ms >= 60000')
+    .get(ctx.userId, userName, since) as {
     plays: number;
     ms: number;
   };
@@ -111,7 +114,7 @@ export async function myOverview(ctx: JfCtx, serverToken?: string) {
       .map((r) => ({
         title: r.series ?? r.title,
         subtitle: r.series ? r.title : undefined,
-        client: [r.client, r.device].filter(Boolean).join(' · ') || undefined,
+        client: [r.client, r.device, r.server_name].filter(Boolean).join(' · ') || undefined,
         transcoded: r.method === 'Transcode',
         at: new Date(r.started_at).toISOString(),
         watchedMs: r.watched_ms,

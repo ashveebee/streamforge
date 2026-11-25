@@ -90,7 +90,20 @@ export interface Season {
   jellyfin?: { id: string; episodes: number; unplayed?: number };
 }
 
+/** A media server a title is on, with a link to open it there. */
+export interface AvailableOn {
+  server: string;
+  type: 'jellyfin' | 'plex' | 'emby';
+  name: string;
+  /** The sign-in server. */
+  main: boolean;
+  itemId: string;
+  url?: string;
+}
+
 export interface MediaDetails {
+  /** Every media server the title is on, the sign-in server first. */
+  availableOn?: AvailableOn[];
   type: MediaType;
   tmdbId: number;
   title: string;

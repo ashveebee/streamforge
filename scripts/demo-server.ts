@@ -1567,6 +1567,13 @@ app.get('/api/media/:type/:id', (req, res) => {
     seasons,
     availability: !inLib ? (pending.length ? 'requested' : 'none') : tv && seasons!.some((x) => x.status !== 'available') ? 'partial' : 'available',
     jellyfin: inLib ? { itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' } : undefined,
+    // The same title on the main server and, for movies, on the Plex server too.
+    availableOn: inLib
+      ? [
+          { server: 'jellyfin', type: 'jellyfin', name: 'Homelab', main: true, itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' },
+          ...(t.kind === 'movie' ? [{ server: PLEX.id, type: 'plex', name: 'Cabin', main: false, itemId: '4512', url: 'https://plex.example.com/web/index.html' }] : []),
+        ]
+      : [],
     library: inLib
       ? {
           itemId: slug(t.title),

@@ -1,14 +1,15 @@
 import { db } from '../lib/db.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
-import { canWatchInBackground, mainEmby, mainNowPlaying, mainPlex } from './mainServer.js';
+import { canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
+import { mediaServers } from './mediaServers.js';
 import * as plex from './plex.js';
 
 /*
  * Playback statistics.
  *
- * With a Jellyfin API key set, a recorder samples active sessions every 30
- * seconds and stores one row per play: who, what, on which client, how it
+ * A recorder samples active sessions on every media server (the main one
+ * needs a Jellyfin API key when it's Jellyfin) every 30 seconds and stores one row per play: who, what, on which client, how it
  * was delivered (the "worst" method seen, so a play that ever transcoded
  * counts as a transcode) and how long it was actually watched.
  *
@@ -29,22 +30,39 @@ interface Active {
 const active = new Map<string, Active>();
 
 const insert = db.prepare(
-  `INSERT INTO plays (id, user_id, user_name, item_id, title, series, type, client, device, method, started_at, last_seen, watched_ms)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  `INSERT INTO plays (id, user_id, user_name, item_id, title, series, type, client, device, method, started_at, last_seen, watched_ms, server, server_name)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 );
 const touch = db.prepare('UPDATE plays SET last_seen = ?, watched_ms = watched_ms + ?, method = ? WHERE id = ?');
 
+/**
+ * Streams on every media server: the main one, plus each extra Jellyfin, Emby
+ * and Plex server. A server that's down is skipped; the rest still count.
+ */
+async function everyStream() {
+  const main = mainExtra();
+  const extras = mediaServers().filter((s) => s.id !== main?.id);
+  const lists = await Promise.all([
+    mainNowPlaying().catch(() => undefined),
+    ...extras.map((srv) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv)).catch(() => undefined)),
+  ]);
+  if (lists.every((l) => l === undefined)) return undefined;
+  return lists.flatMap((l) => l ?? []);
+}
+
 export async function recordSample() {
-  const streams = await mainNowPlaying().catch(() => undefined);
+  const streams = await everyStream();
   if (!streams) return;
   const now = Date.now();
   const seen = new Set<string>();
   for (const s of streams) {
-    seen.add(s.sessionId);
-    const cur = active.get(s.sessionId);
+    // Session ids are only unique within one server.
+    const key = `${s.server ?? 'main'}:${s.sessionId}`;
+    seen.add(key);
+    const cur = active.get(key);
     const method = s.state.playMethod;
     if (!cur || cur.itemId !== s.item.id) {
-      const rowId = `${s.sessionId}:${s.item.id}:${now}`;
+      const rowId = `${key}:${s.item.id}:${now}`;
       insert.run(
         rowId,
         s.user.id ?? null,
@@ -58,8 +76,10 @@ export async function recordSample() {
         method,
         now,
         now,
+        s.server ?? null,
+        s.serverName ?? null,
       );
-      active.set(s.sessionId, { rowId, itemId: s.item.id, method, lastSeen: now });
+      active.set(key, { rowId, itemId: s.item.id, method, lastSeen: now });
       continue;
     }
     // Count time only while playing, and never more than one interval (gaps = server was busy/asleep).
@@ -184,7 +204,7 @@ export async function playbackStats(ctx: JfCtx, days: number) {
   return {
     days,
     source,
-    recording: canWatchInBackground(),
+    recording: canWatchInBackground() || mediaServers().length > 0,
     recordingSince: firstRecorded ? new Date(firstRecorded).toISOString() : undefined,
     totals: {
       plays: plays.length,

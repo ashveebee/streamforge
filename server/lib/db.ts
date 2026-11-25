@@ -98,6 +98,9 @@ const migrations = [
      data        TEXT NOT NULL
    );
    CREATE INDEX device_plays_at ON device_plays(at);`,
+  // Plays are recorded from every media server, not only the main one.
+  `ALTER TABLE plays ADD COLUMN server TEXT;
+   ALTER TABLE plays ADD COLUMN server_name TEXT;`,
 ];
 
 /** Reads a JSON preference, or `fallback` when missing or unreadable. */

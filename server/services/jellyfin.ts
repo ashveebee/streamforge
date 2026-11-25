@@ -385,7 +385,12 @@ function normaliseSession(s: JfSession) {
       : undefined,
   };
 }
-export type NowPlaying = ReturnType<typeof normaliseSession>;
+export type NowPlaying = ReturnType<typeof normaliseSession> & {
+  /** Set for streams on an extra media server, or a main Plex or Emby server. */
+  server?: string;
+  serverName?: string;
+  serverType?: 'jellyfin' | 'emby' | 'plex';
+};
 
 async function rawSessions(ctx: JfCtx) {
   return cache.get(`jf:sessions:${serverToken(ctx) === ctx.token ? ctx.userId : 'srv'}`, 2_000, () =>

@@ -81,7 +81,11 @@ function Upgrades({ d }: { d: LibraryHealth }) {
 export default function LibraryHealthPage() {
   const q = useLibraryHealth();
   const { user } = useAuth();
-  const { name, type, other } = useMainServer();
+  const { name: mainName, type, other } = useMainServer();
+  // Compared with every media server once there's more than one.
+  const name = q.data?.server ?? mainName;
+  const several = name === 'your media servers';
+  const inName = several ? 'on any of your media servers' : `in ${name}`;
   return (
     <>
       <PageHeader
@@ -106,23 +110,26 @@ export default function LibraryHealthPage() {
                 )}
                 <Upgrades d={d} />
               </div>
+              {d.unreachable && d.unreachable.length > 0 && (
+                <p className="text-xs text-warn">Couldn’t read {d.unreachable.join(', ')} this time, so titles only there may show as missing.</p>
+              )}
               {d.hasJellyfin ? (
                 <div className="grid items-start gap-5 xl:grid-cols-2">
                   {d.notInJellyfin && (
                     <Card>
-                      <CardHeader icon={FolderX} accent="var(--color-warn)" title={`Downloaded but not in ${name}`} subtitle="Check library paths, or run a library scan" />
-                      <CardBody><ItemList {...d.notInJellyfin} empty={`Everything Sonarr and Radarr have downloaded shows up in ${name}.`} /></CardBody>
+                      <CardHeader icon={FolderX} accent="var(--color-warn)" title={`Downloaded but not ${inName}`} subtitle="Check library paths, or run a library scan" />
+                      <CardBody><ItemList {...d.notInJellyfin} empty={`Everything Sonarr and Radarr have downloaded shows up ${inName}.`} /></CardBody>
                     </Card>
                   )}
                   {d.unmanaged && (
                     <Card>
-                      <CardHeader icon={FileQuestion} accent={`var(--color-${type})`} title={`In ${name} but not managed`} subtitle="Won’t get upgrades or new episodes" />
-                      <CardBody><ItemList {...d.unmanaged} empty={`Everything in ${name} is managed by Sonarr or Radarr.`} /></CardBody>
+                      <CardHeader icon={FileQuestion} accent={`var(--color-${type})`} title={several ? 'On your media servers but not managed' : `In ${name} but not managed`} subtitle="Won’t get upgrades or new episodes" />
+                      <CardBody><ItemList {...d.unmanaged} empty={`Everything ${several ? 'on your media servers' : `in ${name}`} is managed by Sonarr or Radarr.`} /></CardBody>
                     </Card>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-ink-4">{name} couldn’t be reached, so the {name} cross-checks are skipped.</p>
+                <p className="text-xs text-ink-4">{several ? 'Your media servers couldn’t be reached' : `${name} couldn’t be reached`}, so the library cross-checks are skipped.</p>
               )}
               {d.hasJellyfin && <ReclaimCard />}
             </div>
