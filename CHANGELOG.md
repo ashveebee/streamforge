@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/ashveebee/streamforge/compare/v1.7.0...v1.8.0) (2026-11-25)
+
+
+### Features
+
+* find Jellyfin servers on the network and monitor more than one ([5585072](https://github.com/ashveebee/streamforge/commit/55850724b2e92b1c5ce0189d6e0b252396ea49e0))
+* find Jellyfin servers on the network and monitor more than one ([68f4822](https://github.com/ashveebee/streamforge/commit/68f482240d7a0016bb91b4271bf5df9cad8793a6))
+
+
+### Documentation
+
+* **site:** mention Jellyfin discovery and multiple servers ([6f8868d](https://github.com/ashveebee/streamforge/commit/6f8868de562a4e269eb2efe85b82e32d184043a2))
+
 ## [1.7.0](https://github.com/ashveebee/streamforge/compare/v1.6.0...v1.7.0) (2026-11-25)
 
 
