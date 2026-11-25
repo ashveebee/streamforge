@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'motion/react';
-import { PlayCircle, Repeat, Zap } from 'lucide-react';
+import { Link } from 'react-router';
+import { PlayCircle, Radar, Repeat, Zap } from 'lucide-react';
 import { useNowPlaying } from '@/hooks/queries';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StreamCard } from '@/components/widgets/StreamCard';
@@ -9,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/Stat';
 import { Loader } from '@/components/ui/Loader';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiagnosis } from '@/hooks/useDiagnosis';
 import { PlaybackGuardCard } from '@/components/widgets/PlaybackGuardCard';
 
 export default function NowPlayingPage() {
@@ -19,7 +21,12 @@ export default function NowPlayingPage() {
   const users = new Set(streams.map((s) => s.user.name)).size;
   return (
     <>
-      <PageHeader eyebrow="Jellyfin" title="Now Playing" description="Every active stream across your server, updated live." />
+      <PageHeader
+        eyebrow="Jellyfin"
+        title="Now Playing"
+        description="Every active stream across your server, updated live."
+        actions={user?.isAdmin ? <BufferingLink /> : undefined}
+      />
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatTile label="Active streams" value={q.data ? streams.length : undefined} icon={PlayCircle} accent="var(--color-brand)" />
         <StatTile label="Direct play" value={q.data ? streams.length - transcodes : undefined} icon={Zap} accent="var(--color-ok)" hint={q.data ? `${users} ${users === 1 ? 'viewer' : 'viewers'}` : undefined} />
@@ -49,5 +56,25 @@ export default function NowPlayingPage() {
       )}
       {user?.isAdmin && <div className="mt-5"><PlaybackGuardCard /></div>}
     </>
+  );
+}
+
+/** Admins: the way into the buffering diagnosis, with stalls from the last day. */
+function BufferingLink() {
+  const d = useDiagnosis();
+  const recent = d.data?.incidents.filter((i) => i.start > Date.now() - 86_400_000).length ?? 0;
+  return (
+    <Link
+      to="/now-playing/buffering"
+      className="inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.02] px-3.5 text-[13px] font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink"
+    >
+      <Radar className="size-4" />
+      Why did it buffer?
+      {recent > 0 && (
+        <span className="rounded-full bg-bad/15 px-1.5 py-px text-[10.5px] font-semibold text-bad tabular" title={`${recent} stall${recent === 1 ? '' : 's'} in the last 24 hours`}>
+          {recent}
+        </span>
+      )}
+    </Link>
   );
 }

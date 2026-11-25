@@ -108,7 +108,7 @@ const router = createBrowserRouter([
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
-      { path: '/diagnose', element: page(<Diagnose />) },
+      { path: '/now-playing/buffering', element: page(<Diagnose />) },
       { path: '/me', element: page(<Me />) },
       { path: '/media/jellyfin/:id', element: page(<JellyfinMedia />) },
       { path: '/media/:type/:id', element: page(<Media />) },

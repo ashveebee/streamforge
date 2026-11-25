@@ -176,7 +176,8 @@ server.
   When nothing on the server stands out, it says so: the cause is then the
   viewer's Wi-Fi, connection or device. When someone reports buffering, pick
   their stream and roughly when, and StreamForge finds the nearest stall.
-  Admins only; needs a Jellyfin API key. Set your upload speed on the page for
+  Open it from **Why did it buffer?** on the Now Playing page (admins only;
+  needs a Jellyfin API key). Set your upload speed on the page for
   sharper results (otherwise the highest upload seen is used).
 - **Rules.** Simple automations: if a disk is nearly full, pause the download
   clients; if downloads stall, run the cleanup; if a service stays down,

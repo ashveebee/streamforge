@@ -16,6 +16,7 @@ import {
   Search,
   Send,
   Settings,
+  Radar,
   Sparkles,
   Stethoscope,
   UserRound,
@@ -55,6 +56,7 @@ function usePages(): PageCmd[] {
     if (user?.isAdmin) {
       out.push({ key: 'p:/settings', label: 'Settings', path: '/settings', icon: Settings, keywords: 'configure services api key notifications backup' });
       out.push({ key: 'p:/audit', label: 'Audit log', path: '/audit', icon: ScrollText, keywords: 'security history changes' });
+      out.push({ key: 'p:/now-playing/buffering', label: 'Why did it buffer?', path: '/now-playing/buffering', icon: Radar, keywords: 'buffering stall lag stutter diagnose' });
       out.push({ key: 'p:/rules', label: 'Rules', path: '/rules', icon: Sparkles, keywords: 'automation alerts if then' });
     }
     for (const id of Object.keys(SERVICES) as ServiceId[]) {

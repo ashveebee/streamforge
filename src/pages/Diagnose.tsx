@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CircleAlert, Clock, Globe, House, Lightbulb, Radar, Search, ShieldAlert } from 'lucide-react';
@@ -68,7 +69,7 @@ export default function DiagnosePage() {
   return (
     <>
       <PageHeader
-        eyebrow="Diagnose"
+        eyebrow={<Link to="/now-playing" className="transition hover:text-ink">← Now Playing</Link>}
         title="Why did it buffer?"
         description="StreamForge spots streams that stopped moving forward and works out what on the server was getting in the way."
       />
