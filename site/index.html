@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamForge — one dashboard for your Jellyfin media stack</title>
-  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
+  <meta name="description" content="A self-hosted control centre for Jellyfin (plus extra Emby and Plex servers), Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
@@ -352,6 +352,7 @@
         </div>
         <div class="services" aria-label="Supported services">
           <span class="chip" style="--c:var(--jellyfin)"><i></i>Jellyfin</span>
+          <span class="chip" style="--c:var(--jellyfin)"><i></i>Emby · Plex</span>
           <span class="chip" style="--c:var(--sonarr)"><i></i>Sonarr</span>
           <span class="chip" style="--c:var(--radarr)"><i></i>Radarr</span>
           <span class="chip" style="--c:var(--lidarr)"><i></i>Lidarr</span>
@@ -380,7 +381,7 @@
           <article class="card reveal" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Now Playing, live</h3>
-            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, across one Jellyfin server or several. Pause, message or stop a stream when you need to.</p>
+            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, across every media server you run: Jellyfin, Emby and Plex. Pause, message or stop a stream when you need to.</p>
           </article>
           <article class="card reveal" style="--c:var(--ok)">
             <div class="ico"><svg class="i"><use href="#i-activity"/></svg></div>
@@ -405,7 +406,7 @@
           <article class="card reveal" style="--c:var(--violet)">
             <div class="ico"><svg class="i"><use href="#i-settings"/></svg></div>
             <h3>Set up from the UI</h3>
-            <p>Add each service's address and API key in Settings, test the connection and save, or let StreamForge find your Jellyfin servers on the network. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
+            <p>Add each service's address and API key in Settings, test the connection and save, or let StreamForge find your Jellyfin, Emby and Plex servers on the network. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
           </article>
           <article class="card reveal" style="--c:var(--downloads)">
             <div class="ico"><svg class="i"><use href="#i-gauge"/></svg></div>
@@ -570,9 +571,9 @@
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Changes apply immediately, with no restart</li>
               <li><svg class="i"><use href="#i-check"/></svg>Environment variables still work as a fallback</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Find Jellyfin servers on your network instead of typing an address</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Find Jellyfin, Emby and Plex servers on your network instead of typing an address</li>
               <li><svg class="i"><use href="#i-check"/></svg>Add a second Sonarr or Radarr, such as a 4K library</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Monitor extra Jellyfin servers alongside the main one</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Monitor as many extra Jellyfin, Emby and Plex servers as you run</li>
               <li><svg class="i"><use href="#i-check"/></svg>Switch off services you don't use</li>
             </ul>
           </div>
@@ -687,7 +688,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Recently added, linking to each title</li>
               <li><svg class="i"><use href="#i-check"/></svg>Users and when they were last active</li>
               <li><svg class="i"><use href="#i-check"/></svg>Run scheduled tasks such as a library scan now</li>
-              <li><svg class="i"><use href="#i-check"/></svg>More than one Jellyfin server, each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>More than one media server (Jellyfin, Emby or Plex), each in its own tab</li>
             </ul>
           </div>
         </div>
@@ -860,7 +861,7 @@
           </div>
           <div class="card step reveal">
             <h3>Add your services</h3>
-            <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients. Skip any you don't use.</p>
+            <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients, plus any extra Jellyfin, Emby or Plex servers. Skip any you don't use.</p>
           </div>
         </div>
         <p class="note">Full guide, Docker networking tips, backups and troubleshooting are in the <a href="https://github.com/ashveebee/streamforge#installation">installation docs</a>. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
@@ -906,7 +907,7 @@
 
   <footer>
     <div class="wrap">
-      <span>StreamForge · Not affiliated with Jellyfin, the *arr projects, Seerr or Infinidisk.</span>
+      <span>StreamForge · Not affiliated with Jellyfin, Emby, Plex, the *arr projects, Seerr or Infinidisk.</span>
       <nav aria-label="Footer">
         <a href="https://github.com/ashveebee/streamforge">GitHub</a>
         <a href="https://github.com/ashveebee/streamforge/releases">Releases</a>
