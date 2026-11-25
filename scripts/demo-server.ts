@@ -13,6 +13,7 @@ import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js'
 import { demoTicks } from './demo-diagnosis.js';
 import { demoLibrary, demoProfiles } from './demo-playability.js';
 import { parseNotes } from '../server/services/updates.js';
+import { VERSION as APP_VERSION } from '../server/version.js';
 import { libraryReport, statusOf, titleReport } from '../server/services/playability/report.js';
 import type {
   ActivityEntry,
@@ -207,7 +208,13 @@ interface Stream {
   videoCodec: string;
   audio: string;
   transcode?: NowPlaying['transcode'];
+  /** Set for streams on an extra media server. */
+  server?: { id: string; name: string; type: 'emby' | 'plex' };
 }
+
+/** Extra media servers in the demo: an Emby and a Plex server next to the main Jellyfin one. */
+const EMBY = { id: 'emby-office', name: 'Office', type: 'emby' as const };
+const PLEX = { id: 'plex-cabin', name: 'Cabin', type: 'plex' as const };
 
 const STREAMS: Stream[] = [
   {
@@ -261,20 +268,49 @@ const STREAMS: Stream[] = [
     videoCodec: 'HEVC',
     audio: 'AAC 2.0',
   },
+  {
+    user: USERS[4]!,
+    title: 'Low Tide',
+    episode: { season: 3, number: 4, name: 'Undertow' },
+    runtimeMin: 52,
+    startedMinAgo: 18,
+    client: 'Plex for Apple TV',
+    device: 'Cabin Apple TV',
+    resolution: '4K',
+    hdr: 'HDR10',
+    videoCodec: 'HEVC',
+    audio: 'EAC3 5.1',
+    server: PLEX,
+  },
+  {
+    user: USERS[5]!,
+    title: 'Northbound',
+    runtimeMin: 112,
+    startedMinAgo: 64,
+    client: 'Emby Theater',
+    device: 'Office PC',
+    resolution: '1080p',
+    videoCodec: 'H264',
+    audio: 'AC3 5.1',
+    server: EMBY,
+  },
 ];
 
 function nowPlaying(): NowPlaying[] {
-  return STREAMS.map((s, i) => {
+  const order = [STREAMS[0]!, STREAMS[3]!, STREAMS[1]!, STREAMS[4]!, STREAMS[2]!];
+  return order.map((s, i) => {
     const t = find(s.title);
     const runtimeMs = s.runtimeMin * MIN;
     const elapsed = s.paused ? s.startedMinAgo * MIN : s.startedMinAgo * MIN + (Date.now() - START);
     const positionMs = elapsed % runtimeMs;
+    const art = (type: 'Primary' | 'Backdrop' | 'Thumb') => ({ ...jfArt(t.title, type), ...(s.server ? { server: s.server.id } : {}) });
     return {
       sessionId: `demo-session-${i}`,
+      ...(s.server ? { server: s.server.id, serverName: s.server.name, serverType: s.server.type } : {}),
       user: { id: s.user.id, name: s.user.name },
       client: s.client,
       device: s.device,
-      appVersion: '10.11.2',
+      appVersion: s.server?.type === 'plex' ? '8.45' : s.server ? '3.0.20' : '10.11.2',
       lastActivity: iso(5_000),
       item: {
         id: `${slug(s.title)}${s.episode ? `-s${s.episode.season}e${s.episode.number}` : ''}`,
@@ -294,9 +330,9 @@ function nowPlaying(): NowPlaying[] {
         hdr: s.hdr,
         videoCodec: s.videoCodec,
         audio: s.audio,
-        poster: jfArt(t.title, 'Primary'),
-        backdrop: jfArt(t.title, 'Backdrop'),
-        thumb: jfArt(t.title, 'Thumb'),
+        poster: art('Primary'),
+        backdrop: art('Backdrop'),
+        thumb: art('Thumb'),
       },
       state: {
         positionMs,
@@ -308,6 +344,46 @@ function nowPlaying(): NowPlaying[] {
       transcode: s.transcode,
     };
   });
+}
+
+/** The extra server a demo request asks for with `?instance=`, if any. */
+function demoServer(req: express.Request) {
+  const id = req.query.instance;
+  return id === EMBY.id ? EMBY : id === PLEX.id ? PLEX : undefined;
+}
+
+function extraOverview(srv: typeof EMBY | typeof PLEX): JellyfinOverview {
+  const plex = srv.type === 'plex';
+  const streams = STREAMS.filter((s) => s.server?.id === srv.id).length;
+  return {
+    server: plex
+      ? { name: 'Cabin', version: '1.41.2', os: 'Linux 6.8', hasUpdateAvailable: true, hasPendingRestart: false }
+      : { name: 'Office', version: '4.8.10', os: 'Windows 11', architecture: 'X64', hasUpdateAvailable: false, hasPendingRestart: false },
+    counts: plex
+      ? { movies: 412, series: 64, episodes: 2310, albums: 0, songs: 0, artists: 0, books: 0, musicVideos: 0, collections: 0 }
+      : { movies: 236, series: 31, episodes: 1180, albums: 52, songs: 690, artists: 40, books: 0, musicVideos: 0, collections: 12 },
+    libraries: plex
+      ? [
+          { id: '1', name: 'Films', type: 'movies', locations: ['/data/films'], itemCount: 412, refreshing: false, image: jfArt('Saltwind', 'Backdrop') },
+          { id: '2', name: 'Television', type: 'tvshows', locations: ['/data/tv'], itemCount: 64, refreshing: false, image: jfArt('Low Tide', 'Backdrop') },
+        ]
+      : [
+          { id: '101', name: 'Movies', type: 'movies', locations: ['D:\\Movies'], itemCount: 236, refreshing: false, image: jfArt('Northbound', 'Backdrop') },
+          { id: '102', name: 'Shows', type: 'tvshows', locations: ['D:\\Shows'], itemCount: 31, refreshing: false, image: jfArt('Kitchen Brigade', 'Backdrop') },
+          { id: '103', name: 'Music', type: 'music', locations: ['D:\\Music'], itemCount: 52, refreshing: false, image: jfArt('Velvet Static', 'Backdrop') },
+        ],
+    users: {
+      total: plex ? 3 : 2,
+      active24h: plex ? 2 : 1,
+      list: (plex ? [USERS[0]!, USERS[4]!, USERS[1]!] : [USERS[5]!, USERS[0]!]).map((u, i) => ({
+        id: u.id,
+        name: u.name,
+        isAdmin: i === 0,
+        lastActivity: iso([5, 18, 30 * 60][i]! * MIN),
+      })),
+    },
+    sessions: { active: streams + 1, streams, transcoding: 0, directPlay: streams },
+  };
 }
 
 function jellyfinOverview(): JellyfinOverview {
@@ -325,14 +401,15 @@ function jellyfinOverview(): JellyfinOverview {
       active24h: 4,
       list: USERS.map((u, i) => ({ id: u.id, name: u.name, isAdmin: u.isAdmin, lastActivity: iso([2, 1, 1, 3, 26 * 60, 9 * 60][i]! * MIN) })),
     },
-    sessions: { active: 5, streams: STREAMS.length, transcoding: 1, directPlay: 2 },
+    sessions: { active: 5, streams: STREAMS.filter((s) => !s.server).length, transcoding: 1, directPlay: 2 },
   };
 }
 
 const LATEST_ORDER = ['Iron Bloom', 'Atlas Station', 'The Last Lighthouse', 'Velvet Static', 'Kitchen Brigade', 'The Glass Meridian', 'Saltwind', 'Starfall Academy', 'Northbound', 'Small Hours', 'Neon Harbor', 'Low Tide'];
 
-function latest(): LatestItem[] {
-  return LATEST_ORDER.map((name, i) => {
+function latest(server?: string): LatestItem[] {
+  const names = server === PLEX.id ? ['Saltwind', 'Low Tide', 'Neon Harbor', 'Iron Bloom', 'Atlas Station', 'Small Hours'] : server === EMBY.id ? ['Northbound', 'Kitchen Brigade', 'Velvet Static', 'The Glass Meridian', 'Starfall Academy'] : LATEST_ORDER;
+  return names.map((name, i) => {
     const t = find(name);
     return {
       id: slug(name),
@@ -347,6 +424,24 @@ function latest(): LatestItem[] {
       thumb: jfArt(name, 'Thumb'),
     };
   });
+}
+
+function extraActivity(srv: typeof EMBY | typeof PLEX): ActivityEntry[] {
+  const e: [string, string, string, number, string?][] =
+    srv.type === 'plex'
+      ? [
+          ['Leo watched Low Tide S3·E4', 'VideoPlayback', 'Information', 18, 'u-leo'],
+          ['Alex watched Saltwind', 'VideoPlayback', 'Information', 5 * 60, 'u-alex'],
+          ['Maya watched Atlas Station S1·E3', 'VideoPlayback', 'Information', 30 * 60, 'u-maya'],
+          ['Leo watched Low Tide S3·E3', 'VideoPlayback', 'Information', 26 * 60, 'u-leo'],
+        ]
+      : [
+          ['Sam is playing Northbound on Office PC', 'VideoPlayback', 'Information', 64, 'u-sam'],
+          ['Sam successfully authenticated', 'AuthenticationSucceeded', 'Information', 66, 'u-sam'],
+          ['Kitchen Brigade - S2E1 was added to Shows', 'ItemAdded', 'Information', 7 * 60],
+          ['Scan Media Library completed', 'TaskCompleted', 'Information', 8 * 60],
+        ];
+  return e.map(([name, type, severity, minAgo, userId], i) => ({ id: 500 - i, name, type, severity, date: iso(minAgo * MIN), userId }));
 }
 
 function activity(): ActivityEntry[] {
@@ -840,6 +935,11 @@ app.get('/api/config', json(() => ({
     { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
+  jellyfinServers: [
+    { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
+    { ...EMBY, primary: false },
+    { ...PLEX, primary: false },
+  ],
   access: null,
   downloadClients: true,
   moonfin: moonfin.enabled ? { openIn: moonfin.openIn, web: 'https://jellyfin.example.com/Moonfin/Web/' } : undefined,
@@ -860,7 +960,22 @@ const enabledHealth = () => {
   const h = health();
   const radarr = h.services.find((s) => s.id === 'radarr')!;
   const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83, publicUrl: undefined };
-  return { ...h, services: [...h.services, extra].filter((s) => !disabledServices.has(s.kind)) };
+  const jf = h.services.find((s) => s.id === 'jellyfin')!;
+  const emby: ServiceHealth = { ...jf, id: EMBY.id, instance: EMBY.id, serverType: 'emby', name: 'Emby · Office', version: '4.8.10', latencyMs: 46, meta: { server: 'Office' }, publicUrl: 'http://192.168.1.31:8096' };
+  const plex: ServiceHealth = {
+    ...jf,
+    id: PLEX.id,
+    instance: PLEX.id,
+    serverType: 'plex',
+    name: 'Plex · Cabin',
+    version: '1.41.2',
+    latencyMs: 61,
+    meta: { server: 'Cabin' },
+    publicUrl: 'http://192.168.1.40:32400/web',
+  };
+  // Extra media servers listed right after the main Jellyfin server.
+  const [main, ...rest] = h.services;
+  return { ...h, services: [main!, emby, plex, ...rest, extra].filter((s) => !disabledServices.has(s.kind)) };
 };
 app.get('/api/health', json(enabledHealth));
 app.post('/api/health/recheck', json(enabledHealth));
@@ -868,9 +983,15 @@ app.get('/api/system/host', json(host));
 app.get('/api/downloads', json(downloads));
 
 app.get('/api/jellyfin/now-playing', json(nowPlaying));
-app.get('/api/jellyfin/overview', json(jellyfinOverview));
-app.get('/api/jellyfin/latest', json(latest));
-app.get('/api/jellyfin/activity', json(activity));
+app.get('/api/jellyfin/overview', (req, res) => {
+  const srv = demoServer(req);
+  res.json(srv ? extraOverview(srv) : jellyfinOverview());
+});
+app.get('/api/jellyfin/latest', (req, res) => res.json(latest(demoServer(req)?.id)));
+app.get('/api/jellyfin/activity', (req, res) => {
+  const srv = demoServer(req);
+  res.json(srv ? extraActivity(srv) : activity());
+});
 app.get('/api/jellyfin/plays', json(plays));
 app.get('/api/sonarr/overview', json(sonarr));
 const radarrAutoImport: AutoImportStatus = { ...autoImport, settings: { enabled: false, intervalMinutes: 30 }, nextRun: undefined, stuck: 0, log: [] };
@@ -1082,7 +1203,18 @@ const demoReleases = [
     notes: parseNotes('### Features\n\n* explain why a stream buffered ([1908fb4](x))'),
   },
 ];
-const updates = () => ({ enabled: true, current: '1.6.0', latest: '1.8.0', available: '1.8.0', releases: demoReleases, checkedAt: Date.now() - 2 * 3600_000, repoUrl: 'https://github.com/ashveebee/streamforge/releases' });
+// The newest demo release only counts as an update while the app itself is older.
+const DEMO_LATEST = demoReleases[0]!.version;
+const newer = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true }) > 0;
+const updates = () => ({
+  enabled: true,
+  current: APP_VERSION,
+  latest: DEMO_LATEST,
+  available: newer(DEMO_LATEST, APP_VERSION) ? DEMO_LATEST : undefined,
+  releases: demoReleases,
+  checkedAt: Date.now() - 2 * 3600_000,
+  repoUrl: 'https://github.com/ashveebee/streamforge/releases',
+});
 app.get('/api/updates', json(updates));
 app.post('/api/updates/check', json(updates));
 

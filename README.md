@@ -20,11 +20,11 @@ server.
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/now-playing.jpg"><img src="docs/screenshots/now-playing.jpg" alt="Now Playing: every active stream with artwork, progress and playback details"></a><br><b>Now Playing.</b> Every stream, with direct play or transcode details.</td>
+    <td width="50%"><a href="docs/screenshots/now-playing.jpg"><img src="docs/screenshots/now-playing.jpg" alt="Now Playing: every active stream across Jellyfin, Emby and Plex with artwork, progress and playback details"></a><br><b>Now Playing.</b> Every stream on every media server, with direct play or transcode details.</td>
     <td width="50%"><a href="docs/screenshots/system.jpg"><img src="docs/screenshots/system.jpg" alt="System Status: health, response time and uptime for each service"></a><br><b>System Status.</b> Health, response times and issues for each service.</td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
+    <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin page with tabs for a Jellyfin, an Emby and a Plex server: libraries, server details and recently added items"></a><br><b>Media servers.</b> Libraries, users, server details and new additions, with a tab per Jellyfin, Emby or Plex server.</td>
     <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue, airing soon, auto-import and missing episodes"></a><br><b>Sonarr and Radarr.</b> Queues with actions, auto-import, missing items and what's airing.</td>
   </tr>
   <tr>
