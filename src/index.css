@@ -31,6 +31,8 @@
 
   /* Service identity */
   --color-jellyfin: #aa5cc3;
+  --color-emby: #52b54b;
+  --color-plex: #e5a00d;
   --color-sonarr: #35c5f4;
   --color-radarr: #ffc230;
   --color-prowlarr: #f97316;

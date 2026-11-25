@@ -27,7 +27,7 @@ import { useAddMedia, useGlobalSearch, useRequestMedia, type SearchHit } from '@
 import { cn } from '@/lib/cn';
 import type { ServiceId } from '@/lib/types';
 import { FadeImage } from '../ui/Image';
-import { SERVICES } from '../ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '../ui/ServiceIcon';
 import { Pill } from '../ui/Status';
 
 interface PageCmd {
@@ -66,6 +66,12 @@ function usePages(): PageCmd[] {
     for (const id of Object.keys(SERVICES) as ServiceId[]) {
       if (cfg && !cfg.enabled[id]) continue;
       out.push({ key: `p:${SERVICES[id].path}`, label: SERVICES[id].name, path: SERVICES[id].path, icon: SERVICES[id].icon, keywords: SERVICES[id].tagline });
+    }
+    // Emby and Plex pages, once a server of that kind is set up.
+    for (const t of ['emby', 'plex'] as const) {
+      if (!cfg?.jellyfinServers?.some((s) => s.type === t) || (cfg && !cfg.enabled.jellyfin)) continue;
+      const m = MEDIA_SERVERS[t];
+      out.push({ key: `p:${m.path}`, label: m.name, path: m.path, icon: m.icon, keywords: m.tagline });
     }
     return out;
   }, [user?.isAdmin, canSee, cfg]);

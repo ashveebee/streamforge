@@ -101,7 +101,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
           {s.item.resolution && <Pill>{s.item.resolution}</Pill>}
           {s.item.hdr && <Pill tone="warn">{s.item.hdr}</Pill>}
           <Pill tone={method === 'Transcode' ? 'warn' : 'ok'}>{method}</Pill>
-          {s.serverName && <Pill tone="brand">{s.serverName}</Pill>}
+          {s.serverName && <Pill tone="brand">{s.serverType && s.serverType !== 'jellyfin' ? `${s.serverType === 'plex' ? 'Plex' : 'Emby'} · ${s.serverName}` : s.serverName}</Pill>}
         </div>
 
         <div>

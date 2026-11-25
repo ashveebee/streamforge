@@ -3,12 +3,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
+import { useCanSee, useHealth, useJellyfinServers, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import type { ServiceId } from '@/lib/types';
+import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
 import { Avatar } from '../ui/Image';
-import { SERVICES } from '../ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '../ui/ServiceIcon';
 import { StatusDot } from '../ui/Status';
 import { LogoMark } from './Logo';
 
@@ -92,6 +92,12 @@ export function Sidebar({
   // Services switched off in Settings are hidden from navigation.
   const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
   const streams = playing.data?.length ?? 0;
+  // Emby and Plex get their own entries, right after Jellyfin, once a server of that kind is added.
+  const servers = useJellyfinServers();
+  const extraTypes = (['emby', 'plex'] as MediaServerType[]).filter((t) => servers.some((s) => s.type === t) && (config.data?.enabled?.jellyfin ?? true));
+  const RANK: Record<ServiceHealth['status'], number> = { offline: 3, degraded: 2, unconfigured: 1, healthy: 0 };
+  const worstOf = (type: MediaServerType) =>
+    health.data?.services.filter((s) => s.serverType === type).sort((a, b) => RANK[b.status] - RANK[a.status])[0];
 
   return (
     <aside
@@ -175,10 +181,10 @@ export function Sidebar({
           Services
         </div>
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
-        {shown.map((id) => {
+        {shown.flatMap((id) => {
           const s = byId.get(id);
           const meta = SERVICES[id];
-          return (
+          const item = (
             <NavItem
               key={id}
               to={meta.path}
@@ -190,6 +196,26 @@ export function Sidebar({
               trailing={s ? <StatusDot status={s.status} size={6} pulse={s.status === 'offline'} /> : undefined}
             />
           );
+          if (id !== 'jellyfin') return [item];
+          return [
+            item,
+            ...extraTypes.map((t) => {
+              const m = MEDIA_SERVERS[t];
+              const h = worstOf(t);
+              return (
+                <NavItem
+                  key={t}
+                  to={m.path}
+                  icon={m.icon}
+                  label={m.name}
+                  color={m.color}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                  trailing={h ? <StatusDot status={h.status} size={6} pulse={h.status === 'offline'} /> : undefined}
+                />
+              );
+            }),
+          ];
         })}
       </nav>
 

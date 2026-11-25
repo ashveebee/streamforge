@@ -24,8 +24,12 @@ server.
     <td width="50%"><a href="docs/screenshots/system.jpg"><img src="docs/screenshots/system.jpg" alt="System Status: health, response time and uptime for each service"></a><br><b>System Status.</b> Health, response times and issues for each service.</td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin page with tabs for a Jellyfin, an Emby and a Plex server: libraries, server details and recently added items"></a><br><b>Media servers.</b> Libraries, users, server details and new additions, with a tab per Jellyfin, Emby or Plex server.</td>
+    <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
     <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue, airing soon, auto-import and missing episodes"></a><br><b>Sonarr and Radarr.</b> Queues with actions, auto-import, missing items and what's airing.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/emby.jpg"><img src="docs/screenshots/emby.jpg" alt="Emby: libraries, users, server details and recently added items for an Emby server"></a><br><b>Emby.</b> Its own page, with a tab per Emby server.</td>
+    <td><a href="docs/screenshots/plex.jpg"><img src="docs/screenshots/plex.jpg" alt="Plex: libraries, server details and recently added items for a Plex server"></a><br><b>Plex.</b> Its own page, with a tab per Plex server.</td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/seerr.jpg"><img src="docs/screenshots/seerr.jpg" alt="Seerr: requests awaiting approval and recent requests"></a><br><b>Seerr.</b> Pending approvals and recent requests.</td>
@@ -71,15 +75,16 @@ server.
     items, daily plays and the activity log.
   - *Media server discovery:* on first run, StreamForge lists the Jellyfin
     servers on your local network so you can pick one instead of typing its
-    address. Under Settings → Jellyfin → More media servers, **Find on
-    network** also finds Emby and Plex servers. It uses each server's own
+    address. In Settings, **Find on network** on the Jellyfin, Emby and Plex
+    cards finds more servers of that kind. It uses each server's own
     discovery: UDP port 7359 for Jellyfin and Emby, and Plex's GDM (UDP port
     32414, "Enable local network discovery" in Plex → Settings → Network). In
     Docker it only works with `network_mode: host`, because broadcasts don't
     leave a bridge network.
-  - *More than one media server (Jellyfin, Emby and Plex):* add as many extra
-    servers as you like under Settings → Jellyfin → More media servers. Pick
-    the type, then enter the address and a key:
+  - *Emby and Plex, and more than one of each:* Settings → Services has an
+    **Emby** card and a **Plex** card next to Jellyfin, and extra Jellyfin
+    servers go under **More Jellyfin servers**. Add as many servers of each
+    kind as you run, with an address and a key:
 
     | Type | Key |
     | --- | --- |
@@ -87,9 +92,11 @@ server.
     | Emby | API key from Settings → Advanced → API Keys |
     | Plex | The server owner's Plex token (see Plex's help article "Finding an authentication token / X-Plex-Token") |
 
-    Each server gets a health check and outage alerts on System Status, its
-    streams on Now Playing (labelled with the server), and its own tab on the
-    media server page with libraries, users, recently added and activity.
+    Once a server of a kind is added, **Emby** and **Plex** appear in the
+    sidebar under Jellyfin, each with its own page. Each server gets a tab on
+    its page with libraries, users, recently added and activity, plus a health
+    check and outage alerts on System Status and its streams on Now Playing
+    (labelled with the server).
     Jellyfin and Emby streams can be paused, messaged and stopped. Plex
     streams can only be stopped, with a reason the viewer sees (stopping
     needs Plex Pass). Plex has no activity log, so its tab shows recent plays
@@ -285,8 +292,12 @@ everything up again after an upgrade.
 
 Open **http://your-server:4000**. On first launch StreamForge asks for your
 Jellyfin server address (for example `https://jellyfin.example.com` or
-`http://192.168.1.10:8096`). It checks that the server is reachable, then you
-sign in with a **Jellyfin administrator** account.
+`http://192.168.1.10:8096`), or click **Find servers on my network** to pick
+one. It checks that the server is reachable, then you sign in with a
+**Jellyfin administrator** account. Sign-in always goes through Jellyfin; Emby
+and Plex servers are added from Settings afterwards.
+
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="640" alt="First-run setup: asks for the Jellyfin server address and lists Jellyfin servers found on the network"></a>
 
 ### 3. Connect your other services
 
@@ -297,8 +308,8 @@ immediately; no restart is needed. Skip any service you don't run.
 | Service | Where to find the API key |
 | --- | --- |
 | Jellyfin | Dashboard → API Keys (optional; enables server-wide stats and update warnings) |
-| Extra Emby server | Emby → Settings → Advanced → API Keys (Settings → Jellyfin → More media servers) |
-| Extra Plex server | The server owner's Plex token (Settings → Jellyfin → More media servers) |
+| Emby | Emby → Settings → Advanced → API Keys (on the Emby card in Settings) |
+| Plex | The server owner's Plex token (on the Plex card in Settings) |
 | Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
 | Seerr | Settings → General → API Key |
 | Lidarr / Readarr / Bazarr | Settings → General → Security → API Key |

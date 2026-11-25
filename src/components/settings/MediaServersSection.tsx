@@ -14,13 +14,13 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
+import { ServiceIcon } from '@/components/ui/ServiceIcon';
 
 const inputCls =
   'h-9 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink placeholder:text-ink-4 transition outline-none focus:border-brand/60 focus:bg-white/[0.05] focus:ring-4 focus:ring-brand/10 aria-[invalid=true]:border-bad/60';
 
 type Draft = { type: MediaServerType; name: string; url: string };
 
-const TYPES: MediaServerType[] = ['jellyfin', 'emby', 'plex'];
 export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' };
 
 /** Per-type wording: default port, key name and where to find it. */
@@ -45,8 +45,7 @@ function originOf(url: string) {
 function ServerRow({ srv, draft, onDone }: { srv?: MediaServerView; draft?: Draft; onDone?: () => void }) {
   const blank = { name: srv?.name ?? draft?.name ?? '', url: srv?.url ?? draft?.url ?? '', publicUrl: srv?.publicUrl ?? '', apiKey: '' };
   const [form, setForm] = useState(blank);
-  // The type is picked when adding a server and fixed after that.
-  const [type, setType] = useState<MediaServerType>(srv?.type ?? draft?.type ?? 'jellyfin');
+  const type: MediaServerType = srv?.type ?? draft?.type ?? 'jellyfin';
   const help = TYPE_HELP[type];
   const test = useTestMediaServer();
   const save = useSaveMediaServer();
@@ -82,33 +81,6 @@ function ServerRow({ srv, draft, onDone }: { srv?: MediaServerView; draft?: Draf
 
   return (
     <form onSubmit={onSubmit} noValidate className={cn('space-y-3 px-5 py-4', srv && !srv.enabled && 'opacity-70')}>
-      {srv ? (
-        <div className="flex items-center gap-2">
-          <Pill tone="brand">{SERVER_TYPE_NAMES[srv.type]}</Pill>
-        </div>
-      ) : (
-        <div role="radiogroup" aria-label="Server type" className="flex flex-wrap gap-1.5">
-          {TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="radio"
-              aria-checked={type === t}
-              onClick={() => {
-                setType(t);
-                test.reset();
-                save.reset();
-              }}
-              className={cn(
-                'h-8 rounded-xl border px-3 text-xs font-medium transition',
-                type === t ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2',
-              )}
-            >
-              {SERVER_TYPE_NAMES[t]}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="grid gap-3 md:grid-cols-[minmax(120px,0.7fr)_minmax(180px,1.3fr)_minmax(180px,1fr)]">
         <input
           aria-label="Server name"
@@ -212,15 +184,20 @@ function ServerRow({ srv, draft, onDone }: { srv?: MediaServerView; draft?: Draf
   );
 }
 
+const DISCOVERY_HINT: Record<MediaServerType, string> = {
+  jellyfin: 'Jellyfin needs “Enable auto discovery” on (Dashboard → Networking).',
+  emby: 'Emby answers on UDP port 7359; check that a firewall isn’t blocking it.',
+  plex: 'Plex needs “Enable local network discovery (GDM)” on (Settings → Network).',
+};
+
 /** What a network search found, with a way to add each server. */
-function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServer[]; onAdd: (d: Draft) => void; pending: Set<string> }) {
+function DiscoveryResults({ type, servers, onAdd, pending }: { type: MediaServerType; servers: DiscoveredServer[]; onAdd: (d: Draft) => void; pending: Set<string> }) {
   if (!servers.length) {
     return (
       <div className="px-5 py-4 text-xs leading-relaxed text-ink-3">
-        <p className="font-medium text-ink-2">No media servers answered.</p>
+        <p className="font-medium text-ink-2">No {SERVER_TYPE_NAMES[type]} servers answered.</p>
         <p className="mt-1">
-          Discovery only reaches servers on the same local network: Jellyfin needs “Enable auto discovery” on (Dashboard → Networking), and Plex needs “Enable local
-          network discovery (GDM)” on (Settings → Network). If StreamForge runs in Docker, the container needs host networking (
+          Discovery only reaches servers on the same local network. {DISCOVERY_HINT[type]} If StreamForge runs in Docker, the container needs host networking (
           <code className="font-mono">network_mode: host</code>) for the search to leave it. You can still add a server by its address.
         </p>
       </div>
@@ -233,7 +210,6 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
               {s.name}
-              {s.type && <Pill>{SERVER_TYPE_NAMES[s.type]}</Pill>}
               {s.version && <span className="text-[11px] font-normal text-ink-4">v{s.version}</span>}
             </div>
             <div className="truncate font-mono text-[11px] text-ink-3">{s.url}</div>
@@ -244,7 +220,7 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
           ) : pending.has(s.url) ? (
             <Pill tone="brand">{s.type === 'plex' ? 'Needs token' : 'Needs API key'}</Pill>
           ) : (
-            <Button size="sm" onClick={() => onAdd({ type: s.type ?? 'jellyfin', name: s.name, url: s.url })}>
+            <Button size="sm" onClick={() => onAdd({ type, name: s.name, url: s.url })}>
               <Plus className="size-3.5" /> Add
             </Button>
           )}
@@ -254,35 +230,51 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
   );
 }
 
-/** Extra media servers (Jellyfin, Emby, Plex) to monitor, shown under the main Jellyfin card. */
-export function MediaServersSection() {
+const INTRO: Record<MediaServerType, string> = {
+  jellyfin: 'Monitor other Jellyfin servers: health, outage alerts, their streams on Now Playing and a tab each on the Jellyfin page. Sign-in still uses the main server.',
+  emby: 'Monitor Emby servers: health, outage alerts, their streams on Now Playing and an Emby page with a tab per server.',
+  plex: 'Monitor Plex servers: health, outage alerts, their streams on Now Playing and a Plex page with a tab per server.',
+};
+
+/**
+ * Media servers of one kind. Extra Jellyfin servers sit under the main
+ * Jellyfin card; Emby and Plex get cards of their own.
+ */
+export function MediaServersSection({ type }: { type: MediaServerType }) {
   const q = useMediaServerSettings();
   const discover = useDiscoverMediaServers();
+  const name = SERVER_TYPE_NAMES[type];
   // Unsaved rows: a blank one from "Add server", or ones prefilled from discovery.
   const [drafts, setDrafts] = useState<(Draft & { key: number })[]>([]);
-  const list = q.data?.servers ?? [];
+  const list = (q.data?.servers ?? []).filter((s) => s.type === type);
+  const all = q.data?.servers ?? [];
   const addDraft = (d: Draft) => setDrafts((all) => (all.some((x) => x.url && x.url === d.url) ? all : [...all, { ...d, key: Date.now() + all.length }]));
   const dropDraft = (key: number) => setDrafts((all) => all.filter((d) => d.key !== key));
   // Servers saved since the search count as added too.
-  const savedOrigins = new Set(list.map((s) => originOf(s.url)));
-  const found = discover.data?.servers.map((s) => ({ ...s, added: s.added || savedOrigins.has(originOf(s.url)) }));
+  const savedOrigins = new Set(all.map((s) => originOf(s.url)));
+  const found = discover.data?.servers.filter((s) => s.type === type).map((s) => ({ ...s, added: s.added || savedOrigins.has(originOf(s.url)) }));
 
   return (
     <li>
       <Card>
-        <header className="flex flex-wrap items-center gap-3 px-5 py-3">
+        <header className={cn('flex flex-wrap items-center gap-3', type === 'jellyfin' ? 'px-5 py-3' : 'p-5')}>
+          {type !== 'jellyfin' && <ServiceIcon id={type} size={40} />}
           <div className="min-w-[12rem] flex-1">
-            <h3 className="text-[13px] font-semibold">More media servers</h3>
-            <p className="text-[11px] text-ink-4">
-              Monitor other Jellyfin, Emby and Plex servers: health, outage alerts, their streams on Now Playing and a tab on the media server page. Sign-in still uses the
-              main Jellyfin server.
-            </p>
+            <h3 className={type === 'jellyfin' ? 'text-[13px] font-semibold' : 'text-[15px] font-semibold'}>
+              {type === 'jellyfin' ? 'More Jellyfin servers' : name}
+              {type !== 'jellyfin' && list.length > 0 && (
+                <span className="ml-2 text-[11px] font-normal text-ink-4">
+                  {list.length} server{list.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </h3>
+            <p className="text-[11px] text-ink-4">{INTRO[type]}</p>
           </div>
           <Button size="sm" disabled={discover.isPending} onClick={() => discover.mutate()}>
             {discover.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
             {discover.isPending ? 'Searching…' : 'Find on network'}
           </Button>
-          <Button size="sm" onClick={() => addDraft({ type: 'jellyfin', name: '', url: '' })}>
+          <Button size="sm" onClick={() => addDraft({ type, name: '', url: '' })}>
             <Plus className="size-3.5" /> Add server
           </Button>
         </header>
@@ -291,7 +283,7 @@ export function MediaServersSection() {
         )}
         {found && (
           <div className="border-t border-line bg-white/[0.015]">
-            <DiscoveryResults servers={found} onAdd={addDraft} pending={new Set(drafts.map((d) => d.url))} />
+            <DiscoveryResults type={type} servers={found} onAdd={addDraft} pending={new Set(drafts.map((d) => d.url))} />
           </div>
         )}
         {(list.length > 0 || drafts.length > 0) && (

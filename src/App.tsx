@@ -14,7 +14,7 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 
 const NowPlaying = lazyPage(() => import('@/pages/NowPlaying'));
-const Jellyfin = lazyPage(() => import('@/pages/Jellyfin'));
+const MediaServer = lazyPage(() => import('@/pages/MediaServer'));
 const Sonarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.SonarrPage })));
 const Radarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
 const Prowlarr = lazyPage(() => import('@/pages/Prowlarr'));
@@ -116,7 +116,9 @@ const router = createBrowserRouter([
       { path: '/digest', element: page(<Digest />) },
       { path: '/rules', element: page(<Rules />) },
       { path: '/downloads', element: page(<Downloads />, 'downloads') },
-      { path: '/jellyfin', element: page(<Jellyfin />, 'jellyfin') },
+      { path: '/jellyfin', element: page(<MediaServer type="jellyfin" />, 'jellyfin') },
+      { path: '/emby', element: page(<MediaServer type="emby" />, 'jellyfin') },
+      { path: '/plex', element: page(<MediaServer type="plex" />, 'jellyfin') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },
       { path: '/radarr', element: page(<Radarr />, 'radarr') },
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },

@@ -31,6 +31,8 @@
       --ok: #34d399;
       --grad: linear-gradient(100deg, #8b5cf6, #d946ef 45%, #22d3ee);
       --jellyfin: #aa5cc3;
+      --emby: #52b54b;
+      --plex: #e5a00d;
       --sonarr: #35c5f4;
       --radarr: #ffc230;
       --prowlarr: #fe7a34;
@@ -352,7 +354,8 @@
         </div>
         <div class="services" aria-label="Supported services">
           <span class="chip" style="--c:var(--jellyfin)"><i></i>Jellyfin</span>
-          <span class="chip" style="--c:var(--jellyfin)"><i></i>Emby · Plex</span>
+          <span class="chip" style="--c:var(--emby)"><i></i>Emby</span>
+          <span class="chip" style="--c:var(--plex)"><i></i>Plex</span>
           <span class="chip" style="--c:var(--sonarr)"><i></i>Sonarr</span>
           <span class="chip" style="--c:var(--radarr)"><i></i>Radarr</span>
           <span class="chip" style="--c:var(--lidarr)"><i></i>Lidarr</span>
@@ -639,6 +642,8 @@
           <button class="tab" role="tab" type="button" id="tab-title" aria-controls="panel-title" aria-selected="true" style="--c:var(--seerr)"><i></i>Title pages</button>
           <button class="tab" role="tab" type="button" id="tab-arr" aria-controls="panel-arr" aria-selected="false" style="--c:var(--sonarr)" tabindex="-1"><i></i>Sonarr &amp; Radarr</button>
           <button class="tab" role="tab" type="button" id="tab-jellyfin" aria-controls="panel-jellyfin" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Jellyfin</button>
+          <button class="tab" role="tab" type="button" id="tab-emby" aria-controls="panel-emby" aria-selected="false" style="--c:var(--emby)" tabindex="-1"><i></i>Emby</button>
+          <button class="tab" role="tab" type="button" id="tab-plex" aria-controls="panel-plex" aria-selected="false" style="--c:var(--plex)" tabindex="-1"><i></i>Plex</button>
           <button class="tab" role="tab" type="button" id="tab-stats" aria-controls="panel-stats" aria-selected="false" style="--c:var(--violet)" tabindex="-1"><i></i>Stats</button>
           <button class="tab" role="tab" type="button" id="tab-library" aria-controls="panel-library" aria-selected="false" style="--c:var(--ok)" tabindex="-1"><i></i>Library health</button>
           <button class="tab" role="tab" type="button" id="tab-seerr" aria-controls="panel-seerr" aria-selected="false" style="--c:var(--seerr)" tabindex="-1"><i></i>Requests</button>
@@ -678,7 +683,7 @@
           </div>
         </div>
         <div class="panel" role="tabpanel" id="panel-jellyfin" aria-labelledby="tab-jellyfin" hidden>
-          <a class="shot" href="screenshots/jellyfin.jpg"><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with tabs for Jellyfin, Emby and Plex servers, libraries, server details and recently added items"></a>
+          <a class="shot" href="screenshots/jellyfin.jpg"><img src="screenshots/jellyfin.jpg" width="2880" height="1800" loading="lazy" alt="Jellyfin page with libraries, server details and recently added items"></a>
           <div class="txt">
             <div class="eyebrow">Jellyfin</div>
             <h3>Your server, at a glance</h3>
@@ -688,7 +693,36 @@
               <li><svg class="i"><use href="#i-check"/></svg>Recently added, linking to each title</li>
               <li><svg class="i"><use href="#i-check"/></svg>Users and when they were last active</li>
               <li><svg class="i"><use href="#i-check"/></svg>Run scheduled tasks such as a library scan now</li>
-              <li><svg class="i"><use href="#i-check"/></svg>More than one media server (Jellyfin, Emby or Plex), each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>More than one Jellyfin server, each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Emby and Plex get pages of their own, with a tab per server</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-emby" aria-labelledby="tab-emby" hidden>
+          <a class="shot" href="screenshots/emby.jpg"><img src="screenshots/emby.jpg" width="2880" height="1800" loading="lazy" alt="Emby page with libraries, users, server details and recently added items"></a>
+          <div class="txt">
+            <div class="eyebrow">Emby</div>
+            <h3>Emby servers, side by side with Jellyfin</h3>
+            <p>Add your Emby servers in Settings and they get a page of their own, with their streams on Now Playing and their health on System Status.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Libraries with item counts</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recently added, users and the activity log</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop Emby streams</li>
+              <li><svg class="i"><use href="#i-check"/></svg>As many Emby servers as you run, each in its own tab</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-plex" aria-labelledby="tab-plex" hidden>
+          <a class="shot" href="screenshots/plex.jpg"><img src="screenshots/plex.jpg" width="2880" height="1800" loading="lazy" alt="Plex page with libraries, server details and recently added items"></a>
+          <div class="txt">
+            <div class="eyebrow">Plex</div>
+            <h3>Plex servers too</h3>
+            <p>Connect a Plex server with its owner's token and keep an eye on it from the same dashboard as everything else.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Libraries, episode and track counts</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recently added and recent plays from Plex's watch history</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Stop a Plex stream with a reason the viewer sees</li>
+              <li><svg class="i"><use href="#i-check"/></svg>As many Plex servers as you run, each in its own tab</li>
             </ul>
           </div>
         </div>

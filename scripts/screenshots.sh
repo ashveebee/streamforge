@@ -2,6 +2,8 @@
 # Re-creates the README screenshots from the demo data.
 #
 #   npm run demo                 # in one terminal
+#   (DEMO_SETUP=1 npm run demo shows the first-run screen, for setup.jpg:
+#    open /login and click "Find servers on my network" before capturing.)
 #   ./scripts/screenshots.sh     # in another
 #
 # Needs Google Chrome (or set CHROME=/path/to/chrome), plus sips (macOS) or
@@ -46,6 +48,8 @@ shot system      /system      1440,1100
 shot stats       /stats       1440,1100
 shot library     /library     1440,900
 shot jellyfin    /jellyfin    1440,900
+shot emby        /emby        1440,900
+shot plex        /plex        1440,900
 shot sonarr      /sonarr      1440,1700
 shot seerr       /seerr       1440,900
 shot infinidisk  /infinidisk  1440,900

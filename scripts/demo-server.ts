@@ -922,6 +922,18 @@ const json = (fn: () => unknown) => (_req: express.Request, res: express.Respons
 
 const demoUser = { id: 'u-alex', name: 'Alex', isAdmin: true, expiresAt: ahead(12 * HOUR) };
 
+// DEMO_SETUP=1 shows the first-run screen of a fresh install instead of a signed-in dashboard.
+const FRESH = process.env.DEMO_SETUP === '1';
+if (FRESH) {
+  app.get('/api/auth/me', (_req, res) => res.status(401).json({ error: 'unauthenticated', message: 'Sign in' }));
+  app.get('/api/auth/server', json(() => ({ online: false, configured: false })));
+  app.post('/api/auth/setup/discover', json(() => ({
+    servers: [
+      { id: 'a1', name: 'Homelab', url: 'http://192.168.1.10:8096', version: '10.11.2', reachable: true },
+      { id: 'a2', name: 'Basement', url: 'http://192.168.1.22:8096', version: '10.10.7', reachable: true },
+    ],
+  })));
+}
 app.get('/api/auth/me', json(() => ({ user: demoUser })));
 app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));

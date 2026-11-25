@@ -126,7 +126,9 @@ function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
       >
         {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Connect <ArrowRight className="size-4" /></>}
       </button>
-      <p className="mt-4 text-center text-[11px] text-ink-4">You can add Sonarr, Radarr and the rest from Settings once you're in.</p>
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">
+        Sign-in uses Jellyfin. Once you're in, add Emby and Plex servers, Sonarr, Radarr and the rest from Settings.
+      </p>
     </form>
   );
 }

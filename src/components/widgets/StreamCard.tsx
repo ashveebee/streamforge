@@ -1,5 +1,6 @@
 import { SessionControls } from './SessionControls';
 import { motion } from 'motion/react';
+import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
 import { Cpu, Gauge, Globe, Pause, Play, Server, Volume2, VolumeX, Zap } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { jfImage, jfUserImage } from '@/lib/api';
@@ -49,8 +50,12 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
           </span>
           {s.serverName && (
             <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={`Playing on this ${s.serverType === 'plex' ? 'Plex' : s.serverType === 'emby' ? 'Emby' : 'Jellyfin'} server`}>
-              <Server className="size-3" />
-              {s.serverName}
+              {(() => {
+                const m = MEDIA_SERVERS[s.serverType ?? 'jellyfin'];
+                const Icon = m.icon ?? Server;
+                return <Icon className="size-3" style={{ color: m.color }} />;
+              })()}
+              {s.serverType && s.serverType !== 'jellyfin' ? `${MEDIA_SERVERS[s.serverType].name} · ${s.serverName}` : s.serverName}
             </span>
           )}
         </div>

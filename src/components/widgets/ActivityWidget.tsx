@@ -2,6 +2,7 @@ import { CircleAlert, History, Info, LogIn, Play, Square, TriangleAlert } from '
 import { useActivity } from '@/hooks/queries';
 import { relative } from '@/lib/format';
 import type { MediaServerType } from '@/lib/types';
+import { MEDIA_SERVERS } from '../ui/ServiceIcon';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { EmptyState, QueryState, SkeletonRows } from '../ui/States';
 
@@ -19,7 +20,7 @@ export function ActivityWidget({ limit = 8, server, serverType = 'jellyfin' }: {
   const q = useActivity(server);
   return (
     <Card className="h-full">
-      <CardHeader icon={History} accent="var(--color-jellyfin)" title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
+      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
       <CardBody>
         <QueryState
           query={q}

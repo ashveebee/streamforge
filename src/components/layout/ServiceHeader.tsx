@@ -1,28 +1,28 @@
 import { ExternalLink, Timer } from 'lucide-react';
 import { useHealth, useServiceConfig } from '@/hooks/queries';
 import { relative } from '@/lib/format';
-import type { ServiceId } from '@/lib/types';
-import { SERVICES, ServiceIcon } from '../ui/ServiceIcon';
+import type { MediaServerType, ServiceId } from '@/lib/types';
+import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '../ui/ServiceIcon';
 import { StatusBadge } from '../ui/Status';
 import { PageHeader } from './PageHeader';
 
 export function ServiceHeader({
   id,
   instance,
-  title,
+  media,
   description,
   actions,
 }: {
   id: ServiceId;
   instance?: string;
-  /** Replaces the service name, e.g. "Plex" for an extra media server. */
-  title?: string;
+  /** Shows an Emby or Plex page with that server's name, colour and icon. */
+  media?: MediaServerType;
   description?: string;
   actions?: React.ReactNode;
 }) {
   const health = useHealth();
   const s = health.data?.services.find((x) => x.id === (instance ?? id)) ?? health.data?.services.find((x) => x.id === id);
-  const meta = title ? { ...SERVICES[id], name: title } : SERVICES[id];
+  const meta = media ? MEDIA_SERVERS[media] : SERVICES[id];
   const moonfinWeb = useServiceConfig().data?.moonfin?.web;
   const linkCls =
     'inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink';
@@ -31,7 +31,7 @@ export function ServiceHeader({
   return (
     <>
       <PageHeader
-        icon={<ServiceIcon id={id} size={52} className="rounded-2xl" />}
+        icon={<ServiceIcon id={media && media !== 'jellyfin' ? media : id} size={52} className="rounded-2xl" />}
         eyebrow={meta.tagline}
         title={meta.name}
         description={

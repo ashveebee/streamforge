@@ -512,7 +512,13 @@ function ServicesTab() {
             <Fragment key={id}>
               <ServiceCard s={s} index={i} />
               {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              {id === 'jellyfin' && s.configured && <MediaServersSection />}
+              {id === 'jellyfin' && s.configured && (
+                <>
+                  <MediaServersSection type="jellyfin" />
+                  <MediaServersSection type="emby" />
+                  <MediaServersSection type="plex" />
+                </>
+              )}
             </Fragment>
           );
         })}

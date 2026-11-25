@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router';
 import { useInstances, useJellyfinServers } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
-import type { ArrKind } from '@/lib/types';
+import type { ArrKind, MediaServerType } from '@/lib/types';
 
 /** The instance chosen via `?instance=`, falling back to the first one. */
 export function useSelectedInstance(kind: ArrKind) {
@@ -18,30 +18,28 @@ export function InstanceTabs({ kind }: { kind: ArrKind }) {
   return <Tabs list={list} current={current} label="Instance" />;
 }
 
-/** The media server chosen via `?instance=`; `jellyfin` (the main one) by default. */
-export function useSelectedJellyfinServer() {
+/** Media servers of one kind (Jellyfin includes the main server), first one first. */
+export function useServersOfType(type: MediaServerType) {
+  return useJellyfinServers().filter((s) => s.type === type);
+}
+
+/**
+ * The server of a kind chosen via `?instance=`. Defaults to the first one:
+ * the main server on the Jellyfin page. Undefined when there's none of that kind.
+ */
+export function useSelectedMediaServer(type: MediaServerType) {
   const [params] = useSearchParams();
-  const list = useJellyfinServers();
+  const list = useServersOfType(type);
   const wanted = params.get('instance');
-  return list.find((s) => s.id === wanted)?.id ?? 'jellyfin';
+  return list.find((s) => s.id === wanted)?.id ?? list[0]?.id ?? (type === 'jellyfin' ? 'jellyfin' : undefined);
 }
 
-/** Jellyfin, Emby or Plex: the type of the media server chosen via `?instance=`. */
-export function useSelectedServerType() {
-  const list = useJellyfinServers();
-  const current = useSelectedJellyfinServer();
-  return list.find((s) => s.id === current)?.type ?? 'jellyfin';
-}
-
-const TYPE_NAMES = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' } as const;
-
-/** Tabs for switching between media servers; hidden when there's only one. */
-export function JellyfinServerTabs() {
-  const list = useJellyfinServers();
-  const current = useSelectedJellyfinServer();
-  // Label the type when servers of more than one kind are set up.
-  const mixed = new Set(list.map((s) => s.type)).size > 1;
-  return <Tabs list={list.map((s) => ({ ...s, name: mixed ? `${s.name} · ${TYPE_NAMES[s.type]}` : s.name }))} current={current} label="Media server" />;
+/** Tabs for switching between servers of one kind; hidden when there's only one. */
+export function MediaServerTabs({ type }: { type: MediaServerType }) {
+  const list = useServersOfType(type);
+  const current = useSelectedMediaServer(type);
+  // The first server of a kind is the default, so it needs no `?instance=`.
+  return <Tabs list={list.map((s, i) => ({ ...s, primary: i === 0 }))} current={current} label={`${type[0]!.toUpperCase()}${type.slice(1)} server`} />;
 }
 
 function Tabs({ list, current, label }: { list: { id: string; name: string; primary: boolean }[]; current?: string; label: string }) {
