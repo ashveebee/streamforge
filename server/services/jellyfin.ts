@@ -167,10 +167,16 @@ interface JfMediaStream {
   Channels?: number;
   IsDefault?: boolean;
   VideoRangeType?: string;
+  RealFrameRate?: number;
+  AverageFrameRate?: number;
+  Index?: number;
+  BitDepth?: number;
 }
 
 interface JfItem {
   Id: string;
+  Container?: string;
+  Bitrate?: number;
   Name: string;
   Type: string;
   MediaType?: string;
@@ -222,6 +228,8 @@ interface JfSession {
     IsMuted?: boolean;
     VolumeLevel?: number;
     PlayMethod?: 'DirectPlay' | 'DirectStream' | 'Transcode';
+    AudioStreamIndex?: number;
+    SubtitleStreamIndex?: number;
     RepeatMode?: string;
   };
   TranscodingInfo?: {
@@ -293,6 +301,11 @@ function normaliseSession(s: JfSession) {
   const video = item.MediaStreams?.find((m) => m.Type === 'Video');
   const audio = item.MediaStreams?.find((m) => m.Type === 'Audio' && m.IsDefault) ??
     item.MediaStreams?.find((m) => m.Type === 'Audio');
+  // The tracks actually in use, when the player says.
+  const audioIndex = s.PlayState?.AudioStreamIndex;
+  const subIndex = s.PlayState?.SubtitleStreamIndex;
+  const playingAudio = (audioIndex !== undefined && item.MediaStreams?.find((m) => m.Type === 'Audio' && m.Index === audioIndex)) || audio;
+  const playingSub = subIndex !== undefined && subIndex >= 0 ? item.MediaStreams?.find((m) => m.Type === 'Subtitle' && m.Index === subIndex) : undefined;
   const t = s.TranscodingInfo;
 
   return {
@@ -304,6 +317,7 @@ function normaliseSession(s: JfSession) {
     },
     client: s.Client,
     device: s.DeviceName,
+    deviceId: s.DeviceId,
     appVersion: s.ApplicationVersion,
     remoteAddress: s.RemoteEndPoint,
     lastActivity: s.LastPlaybackCheckIn ?? s.LastActivityDate,
@@ -328,8 +342,18 @@ function normaliseSession(s: JfSession) {
       videoCodec: video?.Codec,
       /** Source video bitrate in bits/s, when Jellyfin reports it. */
       bitrate: video?.BitRate,
+      /** Frames per second of the source video. */
+      frameRate: video?.RealFrameRate ?? video?.AverageFrameRate,
       audio: audio?.DisplayTitle ?? audio?.Codec,
       ...artworkFor(item),
+    },
+    /** The file and tracks being played, for learning what each device can play. */
+    media: {
+      container: item.Container,
+      bitrate: item.Bitrate,
+      video: video && { codec: video.Codec, range: video.VideoRangeType, bitDepth: video.BitDepth, width: video.Width, height: video.Height },
+      audio: playingAudio && { codec: playingAudio.Codec, channels: playingAudio.Channels },
+      subtitle: playingSub && { codec: playingSub.Codec },
     },
     state: {
       positionMs,

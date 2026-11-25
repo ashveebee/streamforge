@@ -33,6 +33,7 @@ const JellyfinMedia = lazyPage(() => import('@/pages/MediaDetails').then((m) => 
 const Me = lazyPage(() => import('@/pages/Me'));
 const Downloads = lazyPage(() => import('@/pages/Downloads'));
 const Audit = lazyPage(() => import('@/pages/Audit'));
+const Diagnose = lazyPage(() => import('@/pages/Diagnose'));
 const Settings = lazyPage(() => import('@/pages/Settings'));
 const NotFound = lazyPage(() => import('@/pages/NotFound'));
 
@@ -106,7 +107,9 @@ const router = createBrowserRouter([
       { path: '/stats', element: page(<Stats />, 'stats') },
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
+      { path: '/settings/:section', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
+      { path: '/now-playing/buffering', element: page(<Diagnose />) },
       { path: '/me', element: page(<Me />) },
       { path: '/media/jellyfin/:id', element: page(<JellyfinMedia />) },
       { path: '/media/:type/:id', element: page(<Media />) },

@@ -71,6 +71,8 @@ const schema = z.object({
   DEGRADED_LATENCY_MS: int(1500, 50),
   REQUEST_TIMEOUT_MS: int(8000, 500),
   HOST_METRICS: bool(true),
+  // Ask GitHub every 6 hours whether a newer StreamForge release exists.
+  UPDATE_CHECK: bool(true),
   HOST_METRICS_INTERVAL_SECONDS: int(5, 1),
 });
 
@@ -99,6 +101,7 @@ export const config = {
   healthIntervalMs: env.HEALTH_INTERVAL_SECONDS * 1000,
   degradedLatencyMs: env.DEGRADED_LATENCY_MS,
   hostMetrics: env.HOST_METRICS,
+  updateCheck: env.UPDATE_CHECK,
   hostMetricsIntervalMs: env.HOST_METRICS_INTERVAL_SECONDS * 1000,
 
   dataDir: env.DATA_DIR,

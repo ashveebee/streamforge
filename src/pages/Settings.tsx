@@ -1,7 +1,11 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Navigate, NavLink, useParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  ArchiveRestore,
+  Bell,
   ChevronDown,
+  Download,
   CircleCheck,
   CircleX,
   Database,
@@ -15,8 +19,10 @@ import {
   Server,
   ShieldAlert,
   TriangleAlert,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpdates } from '@/hooks/useUpdates';
 import { useHealth, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -35,6 +41,7 @@ import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
 import { MoonfinSection } from '@/components/settings/MoonfinSection';
+import { UpdatesSection } from '@/components/settings/UpdatesSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
 
@@ -173,6 +180,10 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
   const [showKey, setShowKey] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Healthy services start closed to keep the page short; ones that need
+  // attention (not connected, offline, degraded) start open.
+  const [openState, setOpen] = useState<boolean>();
+  const open = openState ?? (!s.configured || (s.enabled && (status === 'offline' || status === 'degraded')));
   const test = useTestService(s.id);
   const save = useSaveService(s.id);
   const reset = useResetService(s.id);
@@ -219,12 +230,20 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
     <motion.li initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
       <Card>
         <form onSubmit={onSave} noValidate>
-          <header className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-            <ServiceIcon id={s.id} size={36} />
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-semibold tracking-tight">{meta.name}</h2>
-              <p className="text-xs text-ink-3">{meta.tagline}</p>
-            </div>
+          <header className={cn('flex flex-wrap items-center gap-3 px-5 py-4', open && 'border-b border-line')}>
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              aria-controls={`${s.id}-settings`}
+              className="flex min-w-[9rem] flex-1 items-center gap-3 text-left"
+            >
+              <ServiceIcon id={s.id} size={36} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold tracking-tight">{meta.name}</span>
+                <span className="block truncate text-xs text-ink-3">{!open && (s.publicUrl || s.url) ? s.publicUrl || s.url : meta.tagline}</span>
+              </span>
+            </button>
             <div className="flex flex-wrap items-center gap-1.5">
               <SourceBadge s={s} />
               {!s.enabled ? <Pill>Disabled</Pill> : status && <StatusBadge status={status} />}
@@ -238,7 +257,19 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
                 className="ml-1"
               />
             )}
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              aria-controls={`${s.id}-settings`}
+              aria-label={open ? `Close ${meta.name} settings` : `Open ${meta.name} settings`}
+              className="grid size-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white/[0.06] hover:text-ink"
+            >
+              <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
+            </button>
           </header>
+          {/* Hidden rather than removed, so edits survive closing the card. */}
+          <div id={`${s.id}-settings`} hidden={!open}>
           {!s.enabled && (
             <p className="border-b border-line bg-white/[0.02] px-5 py-2.5 text-xs text-ink-3">
               Switched off — hidden from navigation and the dashboard, and StreamForge won’t contact it. Settings are kept.
@@ -420,6 +451,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
               Save
             </Button>
           </footer>
+          </div>
         </form>
       </Card>
     </motion.li>
@@ -428,9 +460,73 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
 
 /* --------------------------------- page --------------------------------- */
 
+/** Settings is split into pages; each has its own address so links land on it. */
+const TABS = [
+  { path: '', label: 'Services', icon: Server, description: 'Connect your services, or switch off the ones you don’t use. Changes apply immediately — no restart needed.' },
+  { path: 'downloads', label: 'Download clients', icon: Download, description: 'qBittorrent, Transmission, SABnzbd and NZBGet, for real speeds and the Downloads page.' },
+  { path: 'notifications', label: 'Notifications', icon: Bell, description: 'Where alerts go, and which events each channel hears about.' },
+  { path: 'access', label: 'Access', icon: Users, description: 'Who can sign in, what members see, and single sign-on.' },
+  { path: 'system', label: 'Updates & backup', icon: ArchiveRestore, description: 'New StreamForge releases, and a backup of every setting.' },
+] as const;
+
+function SettingsTabs({ update }: { update?: string }) {
+  return (
+    <nav aria-label="Settings sections" className="no-scrollbar -mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <ul className="flex w-max gap-1 rounded-2xl border border-line bg-white/[0.02] p-1">
+        {TABS.map((t) => (
+          <li key={t.path}>
+            <NavLink
+              to={t.path ? `/settings/${t.path}` : '/settings'}
+              end
+              className={({ isActive }) =>
+                cn(
+                  'relative flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-medium whitespace-nowrap transition-colors',
+                  isActive ? 'bg-white/[0.08] text-ink' : 'text-ink-3 hover:bg-white/[0.04] hover:text-ink-2',
+                )
+              }
+            >
+              <t.icon className="size-4" />
+              {t.label}
+              {t.path === 'system' && update && <span className="size-2 rounded-full bg-brand" title={`StreamForge ${update} is available`} />}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+function ServicesTab() {
+  const q = useServiceSettings();
+  const byId = new Map(q.data?.services.map((s) => [s.id, s]));
+  if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
+  if (!q.data) return <PageLoader label="Loading settings" />;
+  return (
+    <>
+      <ul className="space-y-4">
+        {ORDER.map((id, i) => {
+          const s = byId.get(id);
+          if (!s) return null;
+          return (
+            <Fragment key={id}>
+              <ServiceCard s={s} index={i} />
+              {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
+            </Fragment>
+          );
+        })}
+      </ul>
+      <MoonfinSection />
+      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
+        <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
+      </p>
+    </>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
-  const q = useServiceSettings();
+  const { section = '' } = useParams();
+  const updates = useUpdates(!!user?.isAdmin);
 
   if (!user?.isAdmin) {
     return (
@@ -439,42 +535,31 @@ export default function SettingsPage() {
       </Card>
     );
   }
+  const tab = TABS.find((t) => t.path === section);
+  if (!tab) return <Navigate to="/settings" replace />;
 
-  const byId = new Map(q.data?.services.map((s) => [s.id, s]));
   return (
     <>
-      <PageHeader
-        eyebrow="Configuration"
-        title="Settings"
-        description="Connect your services, or switch off the ones you don’t use. Changes apply immediately — no restart needed."
-      />
-      {q.isError ? (
-        <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
-      ) : !q.data ? (
-        <PageLoader label="Loading settings" />
-      ) : (
-        <ul className="space-y-4">
-          {ORDER.map((id, i) => {
-            const s = byId.get(id);
-            if (!s) return null;
-            return (
-              <Fragment key={id}>
-                <ServiceCard s={s} index={i} />
-                {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              </Fragment>
-            );
-          })}
-        </ul>
-      )}
-      {q.data && <MoonfinSection />}
-      {q.data && <ClientsSection />}
-      {q.data && <NotificationsSection />}
-      {q.data && <MembersSection />}
-      {q.data && <SsoSection />}
-      {q.data && <BackupSection />}
-      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
-        <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
-      </p>
+      <PageHeader eyebrow="Configuration" title="Settings" description={tab.description} />
+      <SettingsTabs update={updates.data?.available} />
+      {/* Each section brings its own heading; the first needs no gap above it. */}
+      <div className="[&>section:first-child]:mt-0">
+        {tab.path === '' && <ServicesTab />}
+        {tab.path === 'downloads' && <ClientsSection />}
+        {tab.path === 'notifications' && <NotificationsSection />}
+        {tab.path === 'access' && (
+          <>
+            <MembersSection />
+            <SsoSection />
+          </>
+        )}
+        {tab.path === 'system' && (
+          <>
+            <UpdatesSection />
+            <BackupSection />
+          </>
+        )}
+      </div>
     </>
   );
 }

@@ -33,7 +33,7 @@ export interface WidgetDef {
   defaultSize: WidgetSize;
   /** Widget is only offered when at least one of these services is configured. */
   requires?: ServiceId[];
-  /** Area a member needs access to (see Settings → Member access). */
+  /** Area a member needs access to (see Settings → Access). */
   area?: Area;
 }
 

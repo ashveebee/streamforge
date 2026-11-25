@@ -9,6 +9,11 @@
  *   npm run demo      → UI on http://localhost:5173, already signed in
  */
 import express from 'express';
+import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js';
+import { demoTicks } from './demo-diagnosis.js';
+import { demoLibrary, demoProfiles } from './demo-playability.js';
+import { parseNotes } from '../server/services/updates.js';
+import { libraryReport, statusOf, titleReport } from '../server/services/playability/report.js';
 import type {
   ActivityEntry,
   AutoImportEntry,
@@ -1000,6 +1005,77 @@ app.get('/api/settings/clients', json(() => ({
     { id: 'nzbget', name: 'NZBGet', fields: ['username', 'password'] },
   ],
 })));
+
+// Buffering diagnosis over a made-up timeline (see demo-diagnosis.ts).
+let demoUpload: number | null = 50;
+const diagTicks = demoTicks();
+const diagIncidents = findIncidents(diagTicks);
+const diagStatus = () => {
+  const plays = new Map<string, { id: string; user: string; title: string; device?: string; remote: boolean; first: number; last: number }>();
+  for (const t of diagTicks) for (const p of t.streams) {
+    const cur = plays.get(p.id);
+    if (cur) cur.last = t.t;
+    else plays.set(p.id, { id: p.id, user: p.user, title: p.title, device: p.device, remote: p.remote, first: t.t, last: t.t });
+  }
+  return {
+    recording: true,
+    since: diagTicks[0]?.t,
+    sampleMs: 15_000,
+    keepDays: 3,
+    uploadMbps: demoUpload,
+    hostMetrics: true,
+    incidents: diagIncidents,
+    plays: [...plays.values()].sort((a, b) => b.last - a.last),
+  };
+};
+app.get('/api/diagnosis', json(diagStatus));
+app.put('/api/diagnosis/settings', (req, res) => {
+  demoUpload = typeof req.body?.uploadMbps === 'number' ? req.body.uploadMbps : null;
+  res.json(diagStatus());
+});
+app.get('/api/diagnosis/explain', (req, res) => {
+  const opts = { uploadBps: demoUpload ? demoUpload * 1e6 : undefined, history: diagTicks };
+  const inc = diagIncidents.find((i) => i.id === req.query.incident);
+  if (inc) return void res.json({ incident: inc, ...analyse(diagTicks, { from: inc.start, to: inc.end, session: inc.session }, opts) });
+  const at = Number(req.query.at);
+  if (!at) return void res.status(400).json({ error: 'bad_request', message: 'Pick a time to check' });
+  const session = typeof req.query.session === 'string' ? req.query.session : undefined;
+  const near = diagIncidents.find((i) => i.session === session && Math.abs(i.start - at) < 10 * 60_000);
+  if (near) return void res.json({ incident: near, ...analyse(diagTicks, { from: near.start, to: near.end, session }, opts) });
+  res.json({ ...analyse(diagTicks, { from: at - 60_000, to: at + 30_000, session }, opts) });
+});
+
+// A newer release, so the update notice shows in the demo.
+const demoReleases = [
+  {
+    version: '1.8.0',
+    name: 'v1.8.0',
+    url: 'https://github.com/ashveebee/streamforge/releases',
+    publishedAt: iso(1 * DAY),
+    notes: parseNotes('### Features\n\n* learn what each device can play, and predict it for the library ([20ab29e](x))\n* see when a new StreamForge release is out\n\n### Bug Fixes\n\n* stall list scrolls on small phones'),
+  },
+  {
+    version: '1.7.0',
+    name: 'v1.7.0',
+    url: 'https://github.com/ashveebee/streamforge/releases',
+    publishedAt: iso(6 * DAY),
+    notes: parseNotes('### Features\n\n* explain why a stream buffered ([1908fb4](x))'),
+  },
+];
+const updates = () => ({ enabled: true, current: '1.6.0', latest: '1.8.0', available: '1.8.0', releases: demoReleases, checkedAt: Date.now() - 2 * 3600_000, repoUrl: 'https://github.com/ashveebee/streamforge/releases' });
+app.get('/api/updates', json(updates));
+app.post('/api/updates/check', json(updates));
+
+// Device playability from simulated plays (see demo-playability.ts).
+const playProfiles = demoProfiles();
+const playLibrary = demoLibrary([...MOVIES, ...SERIES].map((t) => ({ title: t.title, kind: t.kind === 'series' ? 'series' : 'movie', year: t.year })), slug);
+app.get('/api/playability', json(() => statusOf(playProfiles, true)));
+app.get('/api/playability/device', (req, res) => {
+  const p = playProfiles.find((x) => x.key === req.query.key);
+  if (!p) return void res.status(400).json({ error: 'bad_request', message: 'StreamForge hasn’t seen this device play anything' });
+  res.json(libraryReport(p, playLibrary, Date.now() - 40 * 60_000));
+});
+app.get('/api/playability/title/:id', (req, res) => res.json(titleReport(playProfiles, playLibrary.filter((f) => f.titleId === req.params.id))));
 
 app.get('/api/audit', json(() => ({
   entries: [

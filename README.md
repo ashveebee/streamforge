@@ -50,6 +50,9 @@ server.
     <td><a href="docs/screenshots/bazarr.jpg"><img src="docs/screenshots/bazarr.jpg" alt="Bazarr: episodes and movies missing subtitles"></a><br><b>Bazarr.</b> Missing subtitles with search buttons.</td>
     <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
   </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/buffering.jpg"><img src="docs/screenshots/buffering.jpg" alt="Buffering diagnosis: a stream that stalled, the likely cause with evidence, and what to try"></a><br><b>Why did it buffer?</b> Spots streams that stalled and explains the likely cause, from the transcoder to your upload.</td>
+  </tr>
 </table>
 
 ## Features
@@ -152,12 +155,44 @@ server.
   signed-in devices and two-factor settings.
 - **Weekly digest.** A "This week" page shows what was added and what got
   watched. Admins can send it every week through the notification channels.
+- **Will it play on your devices?** Every play teaches StreamForge what
+  that device can handle: which file types, video and audio formats, HDR
+  and subtitles it plays directly, and which make Jellyfin convert (from
+  Jellyfin's own transcode reasons). From that it predicts, for any file,
+  whether a device plays it directly, needs it repackaged, converts the
+  audio, or converts the video (the heavy one).
+  - Title pages show **Will it play?** for each device people watch on,
+    with the reason and, for movies with several versions, which version
+    to use.
+  - Library health shows how the whole library plays on each device: how
+    much plays directly, what makes the rest convert ("Dolby TrueHD audio:
+    21 files") and which titles are affected.
+  Profiles build up from new plays (a few plays per device is enough to
+  start). Admins only; needs a Jellyfin API key.
 - **Cleanup suggestions.** Library health lists big movies and series nobody
   has watched in 3–24 months, with the space each would free. Keep, stop
   monitoring, or delete them from there.
 - **Transcode and bandwidth alerts.** Get alerted when too many streams
   transcode at once, total bandwidth passes a limit, or a 4K file is being
   transcoded (optionally messaging the viewer).
+- **Buffering diagnosis.** StreamForge records every stream, the host's CPU
+  and network, download client speeds and Jellyfin's response time every 15
+  seconds, and keeps three days. It spots streams that fell behind real time
+  while not paused and explains the likely cause, with evidence and what to
+  try:
+  - Jellyfin converting slower than real time (with its transcode reasons
+    and whether hardware acceleration is on);
+  - a maxed-out CPU;
+  - a full internet upload for viewers away from home, split into streams
+    and torrent seeding;
+  - a video bitrate the connection can't carry;
+  - downloads running flat out, or Jellyfin slow or not responding.
+  When nothing on the server stands out, it says so: the cause is then the
+  viewer's Wi-Fi, connection or device. When someone reports buffering, pick
+  their stream and roughly when, and StreamForge finds the nearest stall.
+  Open it from **Why did it buffer?** on the Now Playing page (admins only;
+  needs a Jellyfin API key). Set your upload speed on the page for
+  sharper results (otherwise the highest upload seen is used).
 - **Rules.** Simple automations: if a disk is nearly full, pause the download
   clients; if downloads stall, run the cleanup; if a service stays down,
   notify; and more. Rules never delete anything.
@@ -166,6 +201,8 @@ server.
 - **Single sign-on and two-factor.** Sign in through any OpenID Connect
   provider (Authentik, Authelia, Keycloak, Pocket ID, …), and turn on
   two-factor sign-in with an authenticator app.
+- **Update notices.** Admins see when a new StreamForge release is out, with
+  what changed since their version and how to update.
 - **Backup and restore.** Download all settings as one encrypted file and
   restore it on another server from Settings.
 - **Installable.** StreamForge is a progressive web app: install it on a phone
@@ -255,6 +292,13 @@ docker compose pull && docker compose up -d
 Your settings are kept in the `streamforge-data` volume. See
 [Releases and image tags](#releases-and-image-tags) to pin a version instead of
 following `latest`.
+
+StreamForge tells admins when a new release is out: the sidebar shows the new
+version, and **Settings → Updates & backup** lists what changed since your version and
+the command to update. It asks GitHub's public API every 6 hours, sending
+nothing but its version number. Pick **StreamForge update available** on a
+notification channel to hear about it there too, or set `UPDATE_CHECK=false`
+to turn the check off.
 
 ### Backing up
 

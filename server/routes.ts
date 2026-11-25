@@ -26,6 +26,9 @@ import { addToArr, requestMedia, search } from './services/search.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { checkNow, updateStatus } from './services/updates.js';
+import { deviceReport, PlayabilityError, playabilityStatus, titlePlayability } from './services/playability/index.js';
+import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
 import { setAlertPercent, storageForecast } from './services/storage.js';
 import { prowlarrOverview } from './services/prowlarr.js';
 import { decideRequest, seerrOverview } from './services/seerr.js';
@@ -518,6 +521,65 @@ api.post(
 );
 
 /* --------------------------------- audit -------------------------------- */
+
+/* ------------------------------- diagnosis ------------------------------- */
+
+api.get('/diagnosis', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(diagnosisStatus()));
+api.get(
+  '/diagnosis/explain',
+  requireAdmin,
+  handle(null, async (req) => {
+    const str = (v: unknown) => (typeof v === 'string' && v.length <= 200 ? v : undefined);
+    try {
+      return explain({ incident: str(req.query.incident), session: str(req.query.session), at: Number(req.query.at) || undefined });
+    } catch (err) {
+      if (err instanceof DiagnosisError) throw new HttpError(400, err.message);
+      throw err;
+    }
+  }),
+);
+const diagnosisBody = z.object({ uploadMbps: z.number().positive().max(100_000).nullable() }).strict();
+api.put(
+  '/diagnosis/settings',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = diagnosisBody.safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Enter your upload speed in Mbps');
+    updateDiagnosisPrefs(b.data);
+    audit(req, b.data.uploadMbps ? `[diagnosis] upload speed set to ${b.data.uploadMbps} Mbps` : '[diagnosis] upload speed cleared');
+    return diagnosisStatus();
+  }),
+);
+
+/* -------------------------------- updates -------------------------------- */
+
+api.get('/updates', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(updateStatus()));
+api.post('/updates/check', requireAdmin, handle(null, () => checkNow()));
+
+/* ------------------------------ playability ------------------------------ */
+
+const playabilityError = (err: unknown): never => {
+  if (err instanceof PlayabilityError) throw new HttpError(400, err.message);
+  throw err;
+};
+api.get('/playability', requireAdmin, (_req, res) => res.set('Cache-Control', 'no-store').json(playabilityStatus()));
+api.get(
+  '/playability/device',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const key = typeof req.query.key === 'string' && req.query.key.length <= 300 ? req.query.key : '';
+    return deviceReport(key).catch(playabilityError);
+  }),
+);
+api.get(
+  '/playability/title/:id',
+  requireAdmin,
+  handle('jellyfin', async (req) => {
+    const id = String(req.params.id);
+    if (!/^[a-f0-9-]{32,36}$/i.test(id)) throw new HttpError(400, 'Invalid item id');
+    return titlePlayability(id).catch(playabilityError);
+  }),
+);
 
 api.get('/audit', requireAdmin, (req, res) => {
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 100) : undefined);

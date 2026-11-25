@@ -2,6 +2,7 @@ import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useUpdates } from '@/hooks/useUpdates';
 import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -85,6 +86,8 @@ export function Sidebar({
   const playing = useNowPlaying();
   const config = useServiceConfig();
   const canSee = useCanSee();
+  const updates = useUpdates(!!user?.isAdmin);
+  const newVersion = user?.isAdmin ? updates.data?.available : undefined;
   const byId = new Map(health.data?.services.map((s) => [s.id, s]));
   // Services switched off in Settings are hidden from navigation.
   const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
@@ -99,11 +102,24 @@ export function Sidebar({
       )}
     >
       <div className={cn('flex h-11 items-center gap-2.5 px-1.5', collapsed && 'justify-center px-0')}>
-        <LogoMark size={30} />
+        {collapsed && newVersion ? (
+          <NavLink to="/settings/system" onClick={onNavigate} className="relative" title={`StreamForge ${newVersion} is available`} aria-label={`StreamForge ${newVersion} is available`}>
+            <LogoMark size={30} />
+            <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface bg-brand" />
+          </NavLink>
+        ) : (
+          <LogoMark size={30} />
+        )}
         {!collapsed && (
           <div className="min-w-0 leading-tight">
             <div className="text-[15px] font-semibold tracking-tight">StreamForge</div>
-            <div className="text-[11px] text-ink-4">Control centre · v{__APP_VERSION__}</div>
+            {newVersion ? (
+              <NavLink to="/settings/system" onClick={onNavigate} className="text-[11px] font-medium text-brand hover:underline" title="See what’s new and how to update">
+                v{__APP_VERSION__} · {newVersion} available
+              </NavLink>
+            ) : (
+              <div className="text-[11px] text-ink-4">Control centre · v{__APP_VERSION__}</div>
+            )}
           </div>
         )}
       </div>

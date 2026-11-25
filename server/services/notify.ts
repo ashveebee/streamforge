@@ -30,6 +30,7 @@ export const EVENT_TYPES = [
   'playback_alert',
   'weekly_digest',
   'rule',
+  'update_available',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -230,6 +231,7 @@ const COLORS: Record<EventType | 'test', number> = {
   playback_alert: 0xfbbf24,
   weekly_digest: 0x22d3ee,
   rule: 0xa78bfa,
+  update_available: 0x818cf8,
   test: 0xa78bfa,
 };
 const TAGS: Record<EventType | 'test', string> = {
@@ -243,6 +245,7 @@ const TAGS: Record<EventType | 'test', string> = {
   playback_alert: 'film_projector',
   weekly_digest: 'newspaper',
   rule: 'robot',
+  update_available: 'sparkles',
   test: 'wave',
 };
 
@@ -359,7 +362,7 @@ export function removeChannel(id: string) {
 export async function testChannel(id: string) {
   const c = channels.find((x) => x.id === id);
   if (!c) throw new ChannelError('Unknown channel');
-  const p = { title: 'StreamForge test notification', message: 'If you can read this, notifications are working.', url: '/settings' };
+  const p = { title: 'StreamForge test notification', message: 'If you can read this, notifications are working.', url: '/settings/notifications' };
   try {
     await deliver(c, 'test', p);
     remember({ at: new Date().toISOString(), channel: c.name, event: 'test', title: p.title, ok: true });

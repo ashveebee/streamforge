@@ -56,6 +56,7 @@ shot digest      /digest      1440,1100
 shot rules       /rules       1440,900
 shot audit       /audit       1440,900
 shot bazarr      /bazarr      1440,1100
+shot buffering   /now-playing/buffering 1440,900
 shot title       /media/movie/1000 1440,1300
 shot title-tv    /media/tv/1013    1440,1300
 # Phone-sized, for the website's "in your pocket" section.
