@@ -880,6 +880,26 @@ app.put('/api/radarr/auto-import', (req, res) => {
   res.json(radarrAutoImport);
 });
 app.post('/api/radarr/auto-import/run', (_req, res) => res.json({ results: [], status: radarrAutoImport }));
+// Extra media servers: an Emby and a Plex server next to the main Jellyfin one.
+const demoMediaServers = [
+  { id: 'emby-office', type: 'emby', name: 'Office', url: 'http://192.168.1.31:8096', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••a91e', createdAt: '2026-09-02T10:00:00.000Z' },
+  { id: 'plex-cabin', type: 'plex', name: 'Cabin', url: 'http://192.168.1.40:32400', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••Zq7x', createdAt: '2026-10-14T18:30:00.000Z' },
+];
+app.get('/api/settings/media-servers', json(() => ({ servers: demoMediaServers })));
+app.post('/api/settings/media-servers/test', (req, res) =>
+  res.json({ ok: true, version: (req.body as { type?: string })?.type === 'plex' ? '1.41.2' : '4.8.10', latencyMs: 42, issues: [] }),
+);
+app.post('/api/settings/media-servers/discover', json(() => ({
+  servers: [
+    { id: 'a1', type: 'jellyfin', name: 'Homelab', url: 'http://192.168.1.10:8096', version: '10.11.2', reachable: true, added: true },
+    { id: 'b2', type: 'emby', name: 'Office', url: 'http://192.168.1.31:8096', version: '4.8.10', reachable: true, added: true },
+    { id: 'c3', type: 'plex', name: 'Cabin', url: 'http://192.168.1.40:32400', version: '1.41.2', reachable: true, added: true },
+    { id: 'd4', type: 'plex', name: 'Garage NAS', url: 'http://192.168.1.52:32400', version: '1.41.2', reachable: true, added: false },
+  ],
+})));
+app.post('/api/settings/media-servers', (_req, res) => res.status(403).json({ error: 'demo', message: 'Adding servers is switched off in the demo.' }));
+app.put('/api/settings/media-servers/:id', (_req, res) => res.status(403).json({ error: 'demo', message: 'Changes are switched off in the demo.' }));
+app.delete('/api/settings/media-servers/:id', (_req, res) => res.status(403).json({ error: 'demo', message: 'Changes are switched off in the demo.' }));
 app.get('/api/settings/instances', json(() => ({
   instances: [{ id: 'radarr-4k', kind: 'radarr', name: '4K', url: 'https://radarr-4k.example.com', enabled: true, apiKeySet: true, apiKeyHint: '••••77ab', createdAt: iso(20 * DAY) }],
 })));

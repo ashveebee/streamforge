@@ -8,7 +8,7 @@ import { useJellyfin } from '@/hooks/queries';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
-import { JellyfinServerTabs, useSelectedJellyfinServer } from '@/components/layout/InstanceTabs';
+import { JellyfinServerTabs, useSelectedJellyfinServer, useSelectedServerType } from '@/components/layout/InstanceTabs';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
 import { KV, StatTile } from '@/components/ui/Stat';
@@ -23,6 +23,8 @@ import { PageLoader } from '@/components/ui/Loader';
 export default function JellyfinPage() {
   const server = useSelectedJellyfinServer();
   const extra = server !== 'jellyfin' ? server : undefined;
+  const type = useSelectedServerType();
+  const typeName = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' }[type];
   const q = useJellyfin(server);
   const { user } = useAuth();
   // Scans, tasks and play history are only available for the main server.
@@ -30,9 +32,9 @@ export default function JellyfinPage() {
   const scan = useLibraryScan();
   return (
     <>
-      <ServiceHeader id="jellyfin" instance={extra} />
+      <ServiceHeader id="jellyfin" instance={extra} title={typeName} />
       <JellyfinServerTabs />
-      <QueryState key={server} query={q} skeleton={<PageLoader label="Loading Jellyfin" hint="Fetching libraries, users and server details…" />}>
+      <QueryState key={server} query={q} skeleton={<PageLoader label={`Loading ${typeName}`} hint="Fetching libraries, users and server details…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -125,7 +127,7 @@ export default function JellyfinPage() {
                   <ul className="space-y-1">
                     {d.users.list.slice(0, 8).map((u) => (
                       <li key={u.id} className="flex items-center gap-3 rounded-lg px-1.5 py-1.5 hover:bg-white/[0.03]">
-                        <Avatar src={jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
+                        <Avatar src={type === 'plex' ? undefined : jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-medium">{u.name}</div>
                           <div className="text-[11px] text-ink-4">{u.lastActivity ? `Active ${relative(u.lastActivity)}` : 'Never active'}</div>
@@ -138,7 +140,7 @@ export default function JellyfinPage() {
               </Card>
             </div>
             {admin && <JellyfinTasks />}
-            <ActivityWidget limit={15} server={server} />
+            <ActivityWidget limit={15} server={server} serverType={type} />
           </div>
         )}
       </QueryState>

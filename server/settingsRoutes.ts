@@ -34,8 +34,20 @@ import { hasServerKey } from './services/jellyfin.js';
 import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
 import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
-import { addServer, describeServers, getStoredServer, knownOrigins, originOf, removeServer, updateServer } from './services/jellyfinServers.js';
-import { discoverJellyfin } from './services/jellyfinDiscovery.js';
+import {
+  addServer,
+  describeServers,
+  getStoredServer,
+  knownOrigins,
+  MEDIA_SERVER_NAMES,
+  MEDIA_SERVER_TYPES,
+  originOf,
+  removeServer,
+  updateServer,
+  type MediaServerType,
+} from './services/mediaServers.js';
+import { discoverMediaServers, type DiscoveredServer } from './services/mediaDiscovery.js';
+import * as plex from './services/plex.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
   describe,
@@ -338,10 +350,11 @@ settingsRouter.delete('/instances/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-/* ------------------------- extra Jellyfin servers ------------------------- */
+/* --------------------------- extra media servers --------------------------- */
 
-const jfServerBody = z
+const mediaServerBody = z
   .object({
+    type: z.enum(['jellyfin', 'emby', 'plex']).optional(),
     name: z.string().trim().min(1, 'Give the server a name').max(40).optional(),
     url: urlField.optional(),
     publicUrl: urlField.optional(),
@@ -350,75 +363,97 @@ const jfServerBody = z
   })
   .strict();
 
+const KEY_HELP: Record<MediaServerType, string> = {
+  jellyfin: 'an API key (Dashboard → API Keys in Jellyfin)',
+  emby: 'an API key (Settings → Advanced → API Keys in Emby)',
+  plex: 'a Plex token (see the X-Plex-Token help article from Plex)',
+};
+
+/** Tests a media server's details with the probe for its type. */
+async function testMediaServer(type: MediaServerType, target: { url: string; apiKey: string }) {
+  if (type === 'jellyfin') return runTest('jellyfin', target);
+  const started = performance.now();
+  try {
+    const r = type === 'plex' ? await plex.probe(target) : await jellyfin.embyProbe(target);
+    return { ok: true as const, version: r.version, latencyMs: Math.round(performance.now() - started), issues: r.issues };
+  } catch (err) {
+    if (!(err instanceof UpstreamError)) console.error(`[settings] test ${type}`, err);
+    return { ok: false as const, message: err instanceof UpstreamError ? err.message : 'Unexpected error while testing' };
+  }
+}
+
 /** Looks for Jellyfin servers on the local network and says which are already set up. */
-let discovering: Promise<Awaited<ReturnType<typeof discoverJellyfin>>> | undefined;
-export async function discoverWithStatus() {
+let discovering: Promise<DiscoveredServer[]> | undefined;
+export async function discoverWithStatus(types: MediaServerType[] = ['jellyfin']) {
   // One scan at a time; concurrent callers share it.
-  discovering ??= discoverJellyfin().finally(() => (discovering = undefined));
-  const found = await discovering;
+  discovering ??= discoverMediaServers().finally(() => (discovering = undefined));
+  const found = (await discovering).filter((s) => types.includes(s.type));
   const known = knownOrigins();
   return found.map((s) => ({ ...s, added: known.has(originOf(s.url)) }));
 }
 
-settingsRouter.post('/jellyfin/discover', async (req, res) => {
-  const servers = await discoverWithStatus();
-  audit(req, `[settings] searched the network for Jellyfin servers (${servers.length} found)`);
+settingsRouter.post('/media-servers/discover', async (req, res) => {
+  const servers = await discoverWithStatus(MEDIA_SERVER_TYPES);
+  audit(req, `[settings] searched the network for media servers (${servers.length} found)`);
   res.json({ servers });
 });
 
-settingsRouter.get('/jellyfin-servers', (_req, res) => {
+settingsRouter.get('/media-servers', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({ servers: describeServers() });
 });
 
 /** Tests candidate details; reuses the saved key when `id` is given and no key is. */
-settingsRouter.post('/jellyfin-servers/test', async (req, res) => {
-  const parsed = jfServerBody.extend({ id: z.string().max(64).optional() }).safeParse(req.body ?? {});
+settingsRouter.post('/media-servers/test', async (req, res) => {
+  const parsed = mediaServerBody.extend({ id: z.string().max(64).optional() }).safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   const b = parsed.data;
   const saved = b.id ? getStoredServer(b.id) : undefined;
+  const type = saved?.type ?? b.type ?? 'jellyfin';
   const url = b.url || saved?.url;
   const apiKey = b.apiKey || saved?.apiKey;
-  if (!url || !apiKey) return res.json({ ok: false, message: 'Enter the server address and an API key (Dashboard → API Keys in Jellyfin).' });
+  if (!url || !apiKey) return res.json({ ok: false, message: `Enter the server address and ${KEY_HELP[type]}.` });
   if (saved && !b.apiKey && origin(url) !== origin(saved.url)) {
-    return res.json({ ok: false, message: 'Re-enter the API key when changing the server address.' });
+    return res.json({ ok: false, message: `Re-enter the ${type === 'plex' ? 'token' : 'API key'} when changing the server address.` });
   }
-  res.json(await runTest('jellyfin', { url, apiKey }));
+  res.json(await testMediaServer(type, { url, apiKey }));
 });
 
-settingsRouter.post('/jellyfin-servers', (req, res) => {
-  const parsed = jfServerBody.safeParse(req.body ?? {});
+settingsRouter.post('/media-servers', (req, res) => {
+  const parsed = mediaServerBody.safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   const { name, url, publicUrl, apiKey } = parsed.data;
+  const type = parsed.data.type ?? 'jellyfin';
   if (!name) return badRequest(res, 'Give the server a name', 'name');
   if (!url) return badRequest(res, 'Enter the server address', 'url');
-  if (!apiKey) return badRequest(res, 'Enter an API key from Dashboard → API Keys in Jellyfin', 'apiKey');
-  if (knownOrigins().has(originOf(url))) return badRequest(res, 'That Jellyfin server is already set up.', 'url');
-  const srv = addServer({ name, url, publicUrl, apiKey });
-  audit(req, `[settings] Jellyfin server "${name}" added`);
+  if (!apiKey) return badRequest(res, `Enter ${KEY_HELP[type]}`, 'apiKey');
+  if (knownOrigins().has(originOf(url))) return badRequest(res, 'That server is already set up.', 'url');
+  const srv = addServer({ type, name, url, publicUrl, apiKey });
+  audit(req, `[settings] ${MEDIA_SERVER_NAMES[type]} server "${name}" added`);
   res.json({ server: describeServers().find((s) => s.id === srv.id) });
 });
 
-settingsRouter.put('/jellyfin-servers/:id', (req, res) => {
+settingsRouter.put('/media-servers/:id', (req, res) => {
   const id = String(req.params.id);
   const cur = getStoredServer(id);
-  if (!cur) return res.status(404).json({ error: 'not_found', message: 'Unknown Jellyfin server' });
-  const parsed = jfServerBody.safeParse(req.body ?? {});
+  if (!cur) return res.status(404).json({ error: 'not_found', message: 'Unknown media server' });
+  const parsed = mediaServerBody.safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   const b = parsed.data;
+  if (b.type && b.type !== cur.type) return badRequest(res, 'A server’s type can’t be changed. Remove it and add it again.', 'type');
   // Never send a saved key to a different server unless it was re-entered.
   if (b.url && !b.apiKey && origin(b.url) !== origin(cur.url)) {
-    return badRequest(res, 'Re-enter the API key when changing the server address.', 'apiKey');
+    return badRequest(res, `Re-enter the ${cur.type === 'plex' ? 'token' : 'API key'} when changing the server address.`, 'apiKey');
   }
   updateServer(id, { name: b.name, url: b.url, publicUrl: b.publicUrl, apiKey: b.apiKey || undefined, enabled: b.enabled });
-  audit(req, `[settings] Jellyfin server "${b.name ?? cur.name}" updated`);
+  audit(req, `[settings] ${MEDIA_SERVER_NAMES[cur.type]} server "${b.name ?? cur.name}" updated`);
   res.json({ server: describeServers().find((s) => s.id === id) });
 });
 
-settingsRouter.delete('/jellyfin-servers/:id', (req, res) => {
+settingsRouter.delete('/media-servers/:id', (req, res) => {
   const id = String(req.params.id);
   const cur = getStoredServer(id);
-  if (!cur || !removeServer(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown Jellyfin server' });
-  audit(req, `[settings] Jellyfin server "${cur.name}" removed`);
+  if (!cur || !removeServer(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown media server' });
+  audit(req, `[settings] ${MEDIA_SERVER_NAMES[cur.type]} server "${cur.name}" removed`);
   res.json({ ok: true });
 });
 

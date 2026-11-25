@@ -48,7 +48,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
             {s.state.isPaused ? 'Paused' : 'Playing'}
           </span>
           {s.serverName && (
-            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title="Playing on this Jellyfin server">
+            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={`Playing on this ${s.serverType === 'plex' ? 'Plex' : s.serverType === 'emby' ? 'Emby' : 'Jellyfin'} server`}>
               <Server className="size-3" />
               {s.serverName}
             </span>
@@ -81,7 +81,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
         </div>
 
         <div className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-white/[0.02] p-2.5">
-          <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 80, s.server)} name={s.user.name} size={34} />
+          <Avatar src={s.serverType === 'plex' ? undefined : jfUserImage(s.user.id, s.user.imageTag, 80, s.server)} name={s.user.name} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{s.user.name}</div>
             <div className="flex items-center gap-1.5 truncate text-xs text-ink-3">

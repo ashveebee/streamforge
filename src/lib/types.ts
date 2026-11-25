@@ -24,8 +24,10 @@ export interface ServiceHealth {
   /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
   id: string;
   kind: ServiceId;
-  /** Set for extra Sonarr/Radarr instances. */
+  /** Set for extra Sonarr/Radarr instances and extra media servers. */
   instance?: string;
+  /** Extra media servers only: Jellyfin, Emby or Plex. */
+  serverType?: MediaServerType;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -114,9 +116,10 @@ export interface CleanupStatus {
 
 export interface NowPlaying {
   sessionId: string;
-  /** Set for streams on an extra Jellyfin server (its id and name). */
+  /** Set for streams on an extra media server (its id, name and type). */
   server?: string;
   serverName?: string;
+  serverType?: MediaServerType;
   user: { id?: string; name: string; imageTag?: string };
   client?: string;
   device?: string;
@@ -446,16 +449,20 @@ export interface ArrInstanceRef {
   primary: boolean;
 }
 
-/** A Jellyfin server as listed in /api/config (only when there are several). */
+export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
+
+/** A media server as listed in /api/config (only when there are several). */
 export interface JellyfinServerRef {
   id: string;
+  type: MediaServerType;
   name: string;
   primary: boolean;
 }
 
-/** An extra Jellyfin server as shown on the Settings page. */
-export interface JellyfinServerView {
+/** An extra media server (Jellyfin, Emby or Plex) as shown on the Settings page. */
+export interface MediaServerView {
   id: string;
+  type: MediaServerType;
   name: string;
   url: string;
   publicUrl: string;
@@ -465,9 +472,11 @@ export interface JellyfinServerView {
   createdAt: string;
 }
 
-/** A Jellyfin server found on the local network. */
+/** A media server found on the local network. */
 export interface DiscoveredServer {
   id: string;
+  /** Settings discovery only; the first-run search lists Jellyfin servers. */
+  type?: MediaServerType;
   name: string;
   url: string;
   version?: string;

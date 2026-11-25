@@ -171,6 +171,8 @@ interface JfMediaStream {
   AverageFrameRate?: number;
   Index?: number;
   BitDepth?: number;
+  /** Emby's name for VideoRangeType. */
+  VideoRange?: string;
 }
 
 interface JfItem {
@@ -296,6 +298,8 @@ function artworkFor(item: JfItem) {
   return { poster, backdrop, logo, thumb };
 }
 
+const rangeOf = (v?: JfMediaStream) => v?.VideoRangeType ?? v?.VideoRange;
+
 function normaliseSession(s: JfSession) {
   const item = s.NowPlayingItem!;
   const runtimeMs = Math.round((item.RunTimeTicks ?? 0) / TICKS_PER_MS);
@@ -340,7 +344,7 @@ function normaliseSession(s: JfSession) {
       communityRating: item.CommunityRating,
       runtimeMs,
       resolution: resolutionLabel(video?.Width, video?.Height),
-      hdr: video?.VideoRangeType && video.VideoRangeType !== 'SDR' ? video.VideoRangeType : undefined,
+      hdr: rangeOf(video) && rangeOf(video) !== 'SDR' ? rangeOf(video) : undefined,
       videoCodec: video?.Codec,
       /** Source video bitrate in bits/s, when Jellyfin reports it. */
       bitrate: video?.BitRate,
@@ -353,7 +357,7 @@ function normaliseSession(s: JfSession) {
     media: {
       container: item.Container,
       bitrate: item.Bitrate,
-      video: video && { codec: video.Codec, range: video.VideoRangeType, bitDepth: video.BitDepth, width: video.Width, height: video.Height },
+      video: video && { codec: video.Codec, range: rangeOf(video), bitDepth: video.BitDepth, width: video.Width, height: video.Height },
       audio: playingAudio && { codec: playingAudio.Codec, channels: playingAudio.Channels },
       subtitle: playingSub && { codec: playingSub.Codec },
     },
@@ -648,18 +652,18 @@ export type SessionCommand = 'pause' | 'unpause' | 'stop' | 'message';
 /** Controls a playback session. Needs an administrator token. */
 export async function controlSession(ctx: JfCtx, sessionId: string, command: SessionCommand, text?: string) {
   const token = serverToken(ctx);
-  await sendSessionCommand(base(), token, ctx.deviceId, sessionId, command, text);
+  await sendSessionCommand(base(), authHeader(token, ctx.deviceId), sessionId, command, text);
   cache.delete('jf:sessions:');
 }
 
-function sendSessionCommand(url: string, token: string, deviceId: string, sessionId: string, command: SessionCommand, text?: string) {
+function sendSessionCommand(url: string, headers: Record<string, string>, sessionId: string, command: SessionCommand, text?: string) {
   const path =
     command === 'message'
       ? `/Sessions/${sessionId}/Message`
       : `/Sessions/${sessionId}/Playing/${command === 'pause' ? 'Pause' : command === 'unpause' ? 'Unpause' : 'Stop'}`;
   return requestJson(buildUrl(url, path), {
     method: 'POST',
-    headers: authHeader(token, deviceId),
+    headers,
     body: command === 'message' ? { Header: 'Message from the server admin', Text: text ?? '', TimeoutMs: 15_000 } : undefined,
     service: 'jellyfin',
   });
@@ -740,18 +744,62 @@ export async function libraryItems(ctx: JfCtx) {
 /* Extra servers (monitored with their own API key)                    */
 /* ------------------------------------------------------------------ */
 
-/** What's needed to talk to an extra Jellyfin server. */
+/**
+ * What's needed to talk to an extra Jellyfin or Emby server. Emby shares
+ * Jellyfin's API (Jellyfin began as a fork of it), so the same calls work
+ * with Emby's URL prefix and token header.
+ */
 export interface JfServerTarget {
   id: string;
   name: string;
   url: string;
   apiKey: string;
+  type?: 'jellyfin' | 'emby' | 'plex';
 }
 
 const REMOTE_DEVICE = 'streamforge-server';
 
+/** Emby answers its API under `/emby`; Jellyfin at the root. */
+function remoteBase(srv: Pick<JfServerTarget, 'url' | 'type'>) {
+  const url = srv.url.replace(/\/+$/, '');
+  return srv.type === 'emby' && !/\/emby$/i.test(url) ? `${url}/emby` : url;
+}
+
+function remoteHeaders(srv: Pick<JfServerTarget, 'apiKey' | 'type'>): Record<string, string> {
+  if (srv.type !== 'emby') return authHeader(srv.apiKey, REMOTE_DEVICE);
+  // Emby reads the client description and token from its own headers.
+  return { 'X-Emby-Authorization': authHeader(undefined, REMOTE_DEVICE).Authorization, 'X-Emby-Token': srv.apiKey };
+}
+
 function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
-  return requestJson<T>(buildUrl(srv.url, path, query), { headers: authHeader(srv.apiKey, REMOTE_DEVICE), service: 'jellyfin' });
+  return requestJson<T>(buildUrl(remoteBase(srv), path, query), { headers: remoteHeaders(srv), service: 'jellyfin' });
+}
+
+/**
+ * Checks an Emby server, the way `probe` checks Jellyfin. Emby's public info
+ * has no ProductName; Jellyfin's says "Jellyfin Server", which tells them apart.
+ */
+export async function embyProbe(target: { url: string; apiKey?: string }): Promise<HealthProbe> {
+  const t = { url: target.url, apiKey: target.apiKey ?? '', type: 'emby' as const };
+  const info = await requestJson<JfPublicInfo>(buildUrl(remoteBase(t), '/System/Info/Public'), { service: 'jellyfin' });
+  if (!info?.Version || !info.ServerName) throw new UpstreamError('This does not look like an Emby server', undefined, 'jellyfin');
+  if (info.ProductName?.toLowerCase().includes('jellyfin')) {
+    throw new UpstreamError('This is a Jellyfin server. Add it as Jellyfin instead.', undefined, 'jellyfin');
+  }
+  const result: HealthProbe = { version: info.Version, issues: [], meta: { server: info.ServerName } };
+  if (target.apiKey) {
+    const sys = await requestJson<JfSystemInfo>(buildUrl(remoteBase(t), '/System/Info'), { headers: remoteHeaders(t), service: 'jellyfin' });
+    if (sys.HasPendingRestart) result.issues.push({ level: 'warning', message: 'Server restart pending', source: 'System' });
+    if (sys.HasUpdateAvailable) result.issues.push({ level: 'info', message: 'An update is available', source: 'System' });
+    if (sys.IsShuttingDown) result.issues.push({ level: 'error', message: 'Server is shutting down', source: 'System' });
+    result.meta = { ...result.meta, os: sys.OperatingSystemDisplayName ?? sys.OperatingSystem };
+  }
+  return result;
+}
+
+/** Ids on extra servers: Jellyfin's GUIDs, or Emby's numeric ids. */
+export function isValidRemoteId(id: string) {
+  return ID_RE.test(id) || /^\d{1,12}$/.test(id);
 }
 
 /** Points every artwork reference at the server it lives on. */
@@ -771,7 +819,13 @@ export async function remoteNowPlaying(srv: JfServerTarget) {
   return list
     .filter((s) => s.NowPlayingItem)
     .map(normaliseSession)
-    .map((s) => ({ ...s, item: onServer(s.item, srv.id), server: srv.id, serverName: srv.name }));
+    .map((s) => ({
+      ...s,
+      item: onServer(s.item, srv.id),
+      server: srv.id,
+      serverName: srv.name,
+      serverType: srv.type ?? 'jellyfin',
+    }));
 }
 
 /** The same shape as `overview`, for an extra server. */
@@ -903,13 +957,13 @@ export function remoteImage(
   type: string,
   opts: { tag?: string; maxWidth?: number; quality?: number },
 ) {
-  return requestRaw(buildUrl(srv.url, `/${kind}/${id}/Images/${type}`, { tag: opts.tag, maxWidth: opts.maxWidth, quality: opts.quality ?? 90 }), {
-    headers: { ...authHeader(srv.apiKey, REMOTE_DEVICE), Accept: 'image/*' },
+  return requestRaw(buildUrl(remoteBase(srv), `/${kind}/${id}/Images/${type}`, { tag: opts.tag, maxWidth: opts.maxWidth, quality: opts.quality ?? 90 }), {
+    headers: { ...remoteHeaders(srv), Accept: 'image/*' },
     service: 'jellyfin',
   });
 }
 
 export async function controlRemoteSession(srv: JfServerTarget, sessionId: string, command: SessionCommand, text?: string) {
-  await sendSessionCommand(srv.url, srv.apiKey, REMOTE_DEVICE, sessionId, command, text);
+  await sendSessionCommand(remoteBase(srv), remoteHeaders(srv), sessionId, command, text);
   cache.delete(`jfx:${srv.id}:sessions`);
 }

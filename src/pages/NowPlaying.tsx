@@ -24,9 +24,9 @@ export default function NowPlayingPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Jellyfin"
+        eyebrow="Media servers"
         title="Now Playing"
-        description={servers > 1 ? `Every active stream across your ${servers} Jellyfin servers, updated live.` : 'Every active stream across your server, updated live.'}
+        description={servers > 1 ? `Every active stream across your ${servers} media servers, updated live.` : 'Every active stream across your server, updated live.'}
         actions={user?.isAdmin ? <BufferingLink /> : undefined}
       />
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">

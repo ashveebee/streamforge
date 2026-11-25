@@ -2,7 +2,8 @@ import { config } from './config.js';
 import * as jellyfin from './services/jellyfin.js';
 import { arrProbe, arrQueue } from './services/arr.js';
 import { arrInstances, onInstancesChange } from './services/instances.js';
-import { jellyfinServers, onServersChange } from './services/jellyfinServers.js';
+import { MEDIA_SERVER_NAMES, mediaServers, onServersChange, type MediaServerType } from './services/mediaServers.js';
+import * as plex from './services/plex.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
@@ -28,8 +29,10 @@ export interface ServiceHealth {
   id: string;
   /** Which kind of service this is (equal to id for the built-in ones). */
   kind: ServiceId;
-  /** Set for extra Sonarr/Radarr instances and extra Jellyfin servers. */
+  /** Set for extra Sonarr/Radarr instances and extra media servers. */
   instance?: string;
+  /** Extra media servers only: which kind of server (they share the `jellyfin` kind). */
+  serverType?: MediaServerType;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -73,21 +76,23 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
   }
 }
 
-/** Extra Sonarr/Radarr instances and Jellyfin servers, probed like any other service. */
+/** Extra Sonarr/Radarr instances and media servers, probed like any other service. */
 function extraProbe(id: string) {
   const inst = arrInstances().find((i) => i.id === id && !i.primary);
   if (inst) return () => arrProbe(inst.client, 'v3');
-  const srv = jellyfinServers().find((s) => s.id === id);
-  return srv ? () => jellyfin.probe({ url: srv.url, apiKey: srv.apiKey }) : undefined;
+  const srv = mediaServers().find((s) => s.id === id);
+  if (!srv) return undefined;
+  const target = { url: srv.url, apiKey: srv.apiKey };
+  return srv.type === 'plex' ? () => plex.probe(target) : srv.type === 'emby' ? () => jellyfin.embyProbe(target) : () => jellyfin.probe(target);
 }
 
 /** Every extra instance that should be monitored, with its display name. */
-function extras(): { id: string; kind: ServiceId; name: string }[] {
+function extras(): { id: string; kind: ServiceId; name: string; serverType?: MediaServerType }[] {
   return [
     ...arrInstances()
       .filter((i) => !i.primary)
       .map((i) => ({ id: i.id, kind: i.kind as ServiceId, name: `${SERVICE_NAMES[i.kind]} · ${i.name}` })),
-    ...jellyfinServers().map((s) => ({ id: s.id, kind: 'jellyfin' as const, name: `Jellyfin · ${s.name}` })),
+    ...mediaServers().map((s) => ({ id: s.id, kind: 'jellyfin' as const, name: `${MEDIA_SERVER_NAMES[s.type]} · ${s.name}`, serverType: s.type })),
   ];
 }
 
@@ -115,7 +120,7 @@ function syncInstances() {
     const name = i.name;
     const cur = state.get(i.id);
     if (cur && cur.name === name) continue;
-    state.set(i.id, { id: i.id, kind: i.kind, instance: i.id, name, configured: true, status: 'offline', issues: [], history: [] });
+    state.set(i.id, { id: i.id, kind: i.kind, instance: i.id, serverType: i.serverType, name, configured: true, status: 'offline', issues: [], history: [] });
     void check(i.id);
   }
 }
@@ -218,8 +223,8 @@ export function healthSnapshot(visible: (kind: ServiceId) => boolean = () => tru
     .map((s) => {
       if (s.status === 'unconfigured') return s;
       if (!s.instance) return { ...s, publicUrl: publicUrl(s.kind) };
-      // Extra Jellyfin servers can be opened too.
-      const srv = s.kind === 'jellyfin' ? jellyfinServers().find((j) => j.id === s.instance) : undefined;
+      // Extra media servers can be opened too.
+      const srv = s.kind === 'jellyfin' ? mediaServers().find((j) => j.id === s.instance) : undefined;
       return srv ? { ...s, publicUrl: srv.publicUrl || srv.url } : s;
     });
   return {

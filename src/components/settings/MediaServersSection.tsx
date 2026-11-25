@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CircleCheck, CircleX, KeyRound, LoaderCircle, PlugZap, Plus, Radar, Save, Trash2 } from 'lucide-react';
 import {
-  useDiscoverJellyfin,
-  useJellyfinServerSettings,
-  useRemoveJellyfinServer,
-  useSaveJellyfinServer,
-  useTestJellyfinServer,
+  useDiscoverMediaServers,
+  useMediaServerSettings,
+  useRemoveMediaServer,
+  useSaveMediaServer,
+  useTestMediaServer,
 } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import type { DiscoveredServer, JellyfinServerView } from '@/lib/types';
+import type { DiscoveredServer, MediaServerType, MediaServerView } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
@@ -18,7 +18,21 @@ import { Switch } from '@/components/ui/Switch';
 const inputCls =
   'h-9 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink placeholder:text-ink-4 transition outline-none focus:border-brand/60 focus:bg-white/[0.05] focus:ring-4 focus:ring-brand/10 aria-[invalid=true]:border-bad/60';
 
-type Draft = { name: string; url: string };
+type Draft = { type: MediaServerType; name: string; url: string };
+
+const TYPES: MediaServerType[] = ['jellyfin', 'emby', 'plex'];
+export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' };
+
+/** Per-type wording: default port, key name and where to find it. */
+const TYPE_HELP: Record<MediaServerType, { placeholder: string; key: string; hint: string }> = {
+  jellyfin: { placeholder: 'http://192.168.1.20:8096', key: 'API key', hint: 'Create an API key in Jellyfin under Dashboard → API Keys.' },
+  emby: { placeholder: 'http://192.168.1.20:8096', key: 'API key', hint: 'Create an API key in Emby under Settings → Advanced → API Keys.' },
+  plex: {
+    placeholder: 'http://192.168.1.20:32400',
+    key: 'Plex token',
+    hint: 'Use the server owner’s Plex token (Plex’s “Finding an authentication token” help article shows how). Plex streams can be stopped, not paused or messaged.',
+  },
+};
 
 function originOf(url: string) {
   try {
@@ -28,12 +42,15 @@ function originOf(url: string) {
   }
 }
 
-function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: Draft; onDone?: () => void }) {
+function ServerRow({ srv, draft, onDone }: { srv?: MediaServerView; draft?: Draft; onDone?: () => void }) {
   const blank = { name: srv?.name ?? draft?.name ?? '', url: srv?.url ?? draft?.url ?? '', publicUrl: srv?.publicUrl ?? '', apiKey: '' };
   const [form, setForm] = useState(blank);
-  const test = useTestJellyfinServer();
-  const save = useSaveJellyfinServer();
-  const remove = useRemoveJellyfinServer();
+  // The type is picked when adding a server and fixed after that.
+  const [type, setType] = useState<MediaServerType>(srv?.type ?? draft?.type ?? 'jellyfin');
+  const help = TYPE_HELP[type];
+  const test = useTestMediaServer();
+  const save = useSaveMediaServer();
+  const remove = useRemoveMediaServer();
   useEffect(
     () => setForm({ name: srv?.name ?? draft?.name ?? '', url: srv?.url ?? draft?.url ?? '', publicUrl: srv?.publicUrl ?? '', apiKey: '' }),
     [srv?.name, srv?.url, srv?.publicUrl, draft?.name, draft?.url],
@@ -49,6 +66,7 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
   };
   const input = () => ({
     id: srv?.id,
+    type: srv ? undefined : type,
     name: form.name.trim(),
     url: form.url.trim(),
     publicUrl: form.publicUrl.trim(),
@@ -64,6 +82,33 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
 
   return (
     <form onSubmit={onSubmit} noValidate className={cn('space-y-3 px-5 py-4', srv && !srv.enabled && 'opacity-70')}>
+      {srv ? (
+        <div className="flex items-center gap-2">
+          <Pill tone="brand">{SERVER_TYPE_NAMES[srv.type]}</Pill>
+        </div>
+      ) : (
+        <div role="radiogroup" aria-label="Server type" className="flex flex-wrap gap-1.5">
+          {TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={type === t}
+              onClick={() => {
+                setType(t);
+                test.reset();
+                save.reset();
+              }}
+              className={cn(
+                'h-8 rounded-xl border px-3 text-xs font-medium transition',
+                type === t ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2',
+              )}
+            >
+              {SERVER_TYPE_NAMES[t]}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-[minmax(120px,0.7fr)_minmax(180px,1.3fr)_minmax(180px,1fr)]">
         <input
           aria-label="Server name"
@@ -80,7 +125,7 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
           inputMode="url"
           spellCheck={false}
           autoComplete="off"
-          placeholder="http://192.168.1.20:8096"
+          placeholder={help.placeholder}
           value={form.url}
           aria-invalid={err?.field === 'url'}
           onChange={(e) => set('url', e.target.value)}
@@ -88,12 +133,12 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
         <div className="relative">
           <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-ink-4" />
           <input
-            aria-label="API key"
+            aria-label={help.key}
             className={cn(inputCls, 'pl-8 font-mono text-[13px]')}
             type="password"
             autoComplete="new-password"
             spellCheck={false}
-            placeholder={srv?.apiKeySet ? `Saved ${srv.apiKeyHint ?? '••••'} — blank keeps it` : 'API key'}
+            placeholder={srv?.apiKeySet ? `Saved ${srv.apiKeyHint ?? '••••'} — blank keeps it` : help.key}
             value={form.apiKey}
             aria-invalid={err?.field === 'apiKey'}
             onChange={(e) => set('apiKey', e.target.value)}
@@ -125,7 +170,7 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
           ) : srv ? (
             <span className="text-ink-4">{srv.enabled ? 'Monitoring' : 'Switched off'}</span>
           ) : (
-            <span className="text-ink-4">Create an API key in Jellyfin under Dashboard → API Keys.</span>
+            <span className="text-ink-4">{help.hint}</span>
           )}
         </div>
         {srv && (
@@ -142,7 +187,7 @@ function ServerRow({ srv, draft, onDone }: { srv?: JellyfinServerView; draft?: D
               size="sm"
               disabled={busy}
               onClick={() => {
-                if (confirm(`Stop monitoring the Jellyfin server "${srv.name}" and remove it?`)) remove.mutate(srv.id);
+                if (confirm(`Stop monitoring the ${SERVER_TYPE_NAMES[srv.type]} server "${srv.name}" and remove it?`)) remove.mutate(srv.id);
               }}
             >
               <Trash2 className="size-3.5" /> Remove
@@ -172,11 +217,11 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
   if (!servers.length) {
     return (
       <div className="px-5 py-4 text-xs leading-relaxed text-ink-3">
-        <p className="font-medium text-ink-2">No Jellyfin servers answered.</p>
+        <p className="font-medium text-ink-2">No media servers answered.</p>
         <p className="mt-1">
-          Discovery only reaches servers on the same local network, with “Enable auto discovery” on in Jellyfin (Dashboard → Networking). If StreamForge runs in
-          Docker, the container needs host networking (<code className="font-mono">network_mode: host</code>) for the search to leave it. You can still add a server
-          by its address.
+          Discovery only reaches servers on the same local network: Jellyfin needs “Enable auto discovery” on (Dashboard → Networking), and Plex needs “Enable local
+          network discovery (GDM)” on (Settings → Network). If StreamForge runs in Docker, the container needs host networking (
+          <code className="font-mono">network_mode: host</code>) for the search to leave it. You can still add a server by its address.
         </p>
       </div>
     );
@@ -188,6 +233,7 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
               {s.name}
+              {s.type && <Pill>{SERVER_TYPE_NAMES[s.type]}</Pill>}
               {s.version && <span className="text-[11px] font-normal text-ink-4">v{s.version}</span>}
             </div>
             <div className="truncate font-mono text-[11px] text-ink-3">{s.url}</div>
@@ -196,9 +242,9 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
           {s.added ? (
             <Pill>Already added</Pill>
           ) : pending.has(s.url) ? (
-            <Pill tone="brand">Needs API key</Pill>
+            <Pill tone="brand">{s.type === 'plex' ? 'Needs token' : 'Needs API key'}</Pill>
           ) : (
-            <Button size="sm" onClick={() => onAdd({ name: s.name, url: s.url })}>
+            <Button size="sm" onClick={() => onAdd({ type: s.type ?? 'jellyfin', name: s.name, url: s.url })}>
               <Plus className="size-3.5" /> Add
             </Button>
           )}
@@ -208,10 +254,10 @@ function DiscoveryResults({ servers, onAdd, pending }: { servers: DiscoveredServ
   );
 }
 
-/** Extra Jellyfin servers to monitor, shown under the main Jellyfin card. */
-export function JellyfinServersSection() {
-  const q = useJellyfinServerSettings();
-  const discover = useDiscoverJellyfin();
+/** Extra media servers (Jellyfin, Emby, Plex) to monitor, shown under the main Jellyfin card. */
+export function MediaServersSection() {
+  const q = useMediaServerSettings();
+  const discover = useDiscoverMediaServers();
   // Unsaved rows: a blank one from "Add server", or ones prefilled from discovery.
   const [drafts, setDrafts] = useState<(Draft & { key: number })[]>([]);
   const list = q.data?.servers ?? [];
@@ -226,16 +272,17 @@ export function JellyfinServersSection() {
       <Card>
         <header className="flex flex-wrap items-center gap-3 px-5 py-3">
           <div className="min-w-[12rem] flex-1">
-            <h3 className="text-[13px] font-semibold">More Jellyfin servers</h3>
+            <h3 className="text-[13px] font-semibold">More media servers</h3>
             <p className="text-[11px] text-ink-4">
-              Monitor other Jellyfin servers: health, outage alerts and their streams on Now Playing. Sign-in still uses the main server.
+              Monitor other Jellyfin, Emby and Plex servers: health, outage alerts, their streams on Now Playing and a tab on the media server page. Sign-in still uses the
+              main Jellyfin server.
             </p>
           </div>
           <Button size="sm" disabled={discover.isPending} onClick={() => discover.mutate()}>
             {discover.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
             {discover.isPending ? 'Searching…' : 'Find on network'}
           </Button>
-          <Button size="sm" onClick={() => addDraft({ name: '', url: '' })}>
+          <Button size="sm" onClick={() => addDraft({ type: 'jellyfin', name: '', url: '' })}>
             <Plus className="size-3.5" /> Add server
           </Button>
         </header>

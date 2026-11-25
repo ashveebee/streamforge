@@ -134,7 +134,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <span className="flex items-center gap-2">
-            <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 64, s.server)} name={s.user.name} size={26} />
+            <Avatar src={s.serverType === 'plex' ? undefined : jfUserImage(s.user.id, s.user.imageTag, 64, s.server)} name={s.user.name} size={26} />
             <span className="font-medium text-ink">{s.user.name}</span>
           </span>
           <span className="flex items-center gap-2 text-ink-2">

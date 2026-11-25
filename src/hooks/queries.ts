@@ -8,7 +8,8 @@ import type {
   ArrInstanceView,
   DiscoveredServer,
   JellyfinServerRef,
-  JellyfinServerView,
+  MediaServerType,
+  MediaServerView,
   ArrKind,
   ChannelInput,
   MissingPage,
@@ -87,13 +88,13 @@ export const useNowPlaying = () => {
   const on = useCanSee()('now-playing');
   return useQuery(poll<NowPlaying[]>(['jellyfin', 'now-playing'], '/jellyfin/now-playing', 5 * SECOND, on));
 };
-/** Jellyfin servers, main first. Empty when there's only the main one. */
+/** Media servers (Jellyfin, Emby, Plex), main first. Empty when there's only the main one. */
 export function useJellyfinServers(): JellyfinServerRef[] {
   const { data } = useServiceConfig();
   return data?.jellyfinServers ?? [];
 }
 
-/** `?instance=` for an extra Jellyfin server; nothing for the main one. */
+/** `?instance=` for an extra media server; nothing for the main one. */
 const jfq = (server?: string) => (server && server !== 'jellyfin' ? `?instance=${encodeURIComponent(server)}` : '');
 const jfKey = (server?: string) => server && server !== 'jellyfin' ? server : 'main';
 
@@ -273,45 +274,45 @@ export function useRemoveInstance() {
   });
 }
 
-/* ------------------------- extra Jellyfin servers ------------------------- */
+/* --------------------------- extra media servers --------------------------- */
 
-export const useJellyfinServerSettings = () =>
+export const useMediaServerSettings = () =>
   useQuery({
-    queryKey: ['settings', 'jellyfin-servers'],
-    queryFn: ({ signal }) => api<{ servers: JellyfinServerView[] }>('/settings/jellyfin-servers', { signal }),
+    queryKey: ['settings', 'media-servers'],
+    queryFn: ({ signal }) => api<{ servers: MediaServerView[] }>('/settings/media-servers', { signal }),
   });
 
-export type JellyfinServerInput = { name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
+export type MediaServerInput = { type?: MediaServerType; name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
 
-export const useTestJellyfinServer = () =>
+export const useTestMediaServer = () =>
   useMutation({
-    mutationFn: (input: JellyfinServerInput & { id?: string }) =>
-      api<ConnectionTest>('/settings/jellyfin-servers/test', { method: 'POST', body: input }),
+    mutationFn: (input: MediaServerInput & { id?: string }) =>
+      api<ConnectionTest>('/settings/media-servers/test', { method: 'POST', body: input }),
   });
 
-export function useSaveJellyfinServer() {
+export function useSaveMediaServer() {
   const changed = useSettingsChanged();
   return useMutation({
-    mutationFn: ({ id, ...input }: JellyfinServerInput & { id?: string }) =>
+    mutationFn: ({ id, ...input }: MediaServerInput & { id?: string }) =>
       id
-        ? api<{ server: JellyfinServerView }>(`/settings/jellyfin-servers/${id}`, { method: 'PUT', body: input })
-        : api<{ server: JellyfinServerView }>('/settings/jellyfin-servers', { method: 'POST', body: input }),
+        ? api<{ server: MediaServerView }>(`/settings/media-servers/${id}`, { method: 'PUT', body: input })
+        : api<{ server: MediaServerView }>('/settings/media-servers', { method: 'POST', body: input }),
     onSuccess: changed,
   });
 }
 
-export function useRemoveJellyfinServer() {
+export function useRemoveMediaServer() {
   const changed = useSettingsChanged();
   return useMutation({
-    mutationFn: (id: string) => api<{ ok: true }>(`/settings/jellyfin-servers/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api<{ ok: true }>(`/settings/media-servers/${id}`, { method: 'DELETE' }),
     onSuccess: changed,
   });
 }
 
-/** Searches the local network for Jellyfin servers (takes a few seconds). */
-export const useDiscoverJellyfin = () =>
+/** Searches the local network for Jellyfin, Emby and Plex servers (takes a few seconds). */
+export const useDiscoverMediaServers = () =>
   useMutation({
-    mutationFn: () => api<{ servers: DiscoveredServer[] }>('/settings/jellyfin/discover', { method: 'POST' }),
+    mutationFn: () => api<{ servers: DiscoveredServer[] }>('/settings/media-servers/discover', { method: 'POST' }),
   });
 
 /* ------------------------------ queue actions ----------------------------- */

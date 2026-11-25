@@ -10,7 +10,7 @@ import { QueryState, Skeleton } from '../ui/States';
 import { EmptyState } from '../ui/States';
 import { TitleLink } from '@/components/ui/TitleLink';
 
-/** `server` picks an extra Jellyfin server; the main one by default. */
+/** `server` picks an extra media server; the main one by default. */
 export function RecentlyAddedWidget({ server }: { server?: string } = {}) {
   const q = useLatest(server);
   // Title pages read the main server, so an extra server's titles don't link.

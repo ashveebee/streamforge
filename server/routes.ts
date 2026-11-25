@@ -16,7 +16,8 @@ import { moonfinClientConfig } from './services/moonfin.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
-import { jellyfinServer, jellyfinServers, type JellyfinServer } from './services/jellyfinServers.js';
+import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
+import * as plex from './services/plex.js';
 import { playbackStats } from './services/playStats.js';
 import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
@@ -54,12 +55,12 @@ api.get('/config', (req, res) => {
     instances: arrInstances()
       .filter((i) => canSee(req, i.kind))
       .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
-    /** Jellyfin servers, main one first; only listed when there's more than one. */
+    /** Media servers (Jellyfin, Emby, Plex), main one first; only listed when there's more than one. */
     jellyfinServers:
-      canSee(req, 'jellyfin') && jellyfinServers().length
+      canSee(req, 'jellyfin') && mediaServers().length
         ? [
-            { id: 'jellyfin', name: mainServerName(), primary: true },
-            ...jellyfinServers().map((s) => ({ id: s.id, name: s.name, primary: false })),
+            { id: 'jellyfin', type: 'jellyfin', name: mainServerName(), primary: true },
+            ...mediaServers().map((s) => ({ id: s.id, type: s.type, name: s.name, primary: false })),
           ]
         : [],
     /** Areas this user can open; null means everything (admins). */
@@ -156,25 +157,31 @@ function mainServerName() {
 }
 
 /**
- * The extra Jellyfin server a request addresses with `instance` (query or
- * body), or undefined for the main server.
+ * The extra media server (Jellyfin, Emby or Plex) a request addresses with
+ * `instance` (query or body), or undefined for the main Jellyfin server.
  */
-function extraServer(req: Request): JellyfinServer | undefined {
+function extraServer(req: Request): MediaServer | undefined {
   const raw = (req.body as { instance?: unknown } | undefined)?.instance ?? req.query.instance ?? req.query.server;
   if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return undefined;
-  const srv = jellyfinServer(raw);
-  if (!srv) throw new HttpError(404, 'Unknown Jellyfin server', 'not_found');
+  const srv = mediaServer(raw);
+  if (!srv) throw new HttpError(404, 'Unknown media server', 'not_found');
   return srv;
 }
+
+/* Calls for an extra server, by type. Emby speaks Jellyfin's API. */
+const remoteNowPlaying = (srv: MediaServer) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv));
+const remoteOverview = (srv: MediaServer) => (srv.type === 'plex' ? plex.overview(srv) : jellyfin.remoteOverview(srv));
+const remoteLatest = (srv: MediaServer) => (srv.type === 'plex' ? plex.latest(srv) : jellyfin.remoteLatest(srv));
+const remoteActivity = (srv: MediaServer) => (srv.type === 'plex' ? plex.activity(srv) : jellyfin.remoteActivity(srv));
 
 /* Streams from the main server and every extra one. An extra server that's down doesn't hide the rest. */
 api.get(
   '/jellyfin/now-playing',
   handle('jellyfin', async (req) => {
-    const extras = jellyfinServers();
+    const extras = mediaServers();
     const [main, ...rest] = await Promise.allSettled([
       jellyfin.nowPlaying(ctxOf(req.session!)),
-      ...extras.map((srv) => jellyfin.remoteNowPlaying(srv)),
+      ...extras.map(remoteNowPlaying),
     ]);
     if (main!.status === 'rejected' && (!extras.length || rest.every((r) => r.status === 'rejected'))) throw main!.reason;
     const streams = [
@@ -188,21 +195,21 @@ api.get(
   '/jellyfin/overview',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteOverview(srv) : jellyfin.overview(ctxOf(req.session!));
+    return srv ? remoteOverview(srv) : jellyfin.overview(ctxOf(req.session!));
   }),
 );
 api.get(
   '/jellyfin/latest',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteLatest(srv) : jellyfin.latest(ctxOf(req.session!));
+    return srv ? remoteLatest(srv) : jellyfin.latest(ctxOf(req.session!));
   }),
 );
 api.get(
   '/jellyfin/activity',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
+    return srv ? remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
   }),
 );
 api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
@@ -218,7 +225,7 @@ const sessionBody = z
   .object({
     command: z.enum(['pause', 'unpause', 'stop', 'message']),
     text: z.string().trim().max(500).optional(),
-    /** An extra Jellyfin server's id, for streams playing there. */
+    /** An extra media server's id, for streams playing there. */
     instance: z.string().max(64).optional(),
   })
   .strict();
@@ -231,12 +238,19 @@ api.post(
     if (!jellyfin.SESSION_ID_RE.test(id) || !b.success) throw new HttpError(400, 'Invalid request');
     if (b.data.command === 'message' && !b.data.text) throw new HttpError(400, 'Enter a message');
     const srv = extraServer(req);
-    const send = (command: jellyfin.SessionCommand, text?: string) =>
-      srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
-    // A stop can carry a message explaining why, shown before playback ends.
-    if (b.data.command === 'stop' && b.data.text) await send('message', b.data.text);
-    await send(b.data.command, b.data.text);
-    audit(req, `[jellyfin] stream ${id}${srv ? ` on ${srv.name}` : ''}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
+    const tag = srv ? srv.type : 'jellyfin';
+    if (srv?.type === 'plex') {
+      // Plex can only end streams from the server; the reason is shown to the viewer.
+      if (b.data.command !== 'stop') throw new HttpError(400, 'Plex can only stop streams, not pause them or send messages.');
+      await plex.stopSession(srv, id, b.data.text);
+    } else {
+      const send = (command: jellyfin.SessionCommand, text?: string) =>
+        srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
+      // A stop can carry a message explaining why, shown before playback ends.
+      if (b.data.command === 'stop' && b.data.text) await send('message', b.data.text);
+      await send(b.data.command, b.data.text);
+    }
+    audit(req, `[${tag}] stream ${id}${srv ? ` on ${srv.name}` : ''}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
     return { ok: true };
   }),
 );
@@ -298,7 +312,7 @@ function imageOpts(req: Request) {
 }
 
 /** The extra server an image lives on (`?server=`); null after answering 404 for an unknown one. */
-function imageServer(req: Request, res: Response): JellyfinServer | undefined | null {
+function imageServer(req: Request, res: Response): MediaServer | undefined | null {
   try {
     return extraServer(req);
   } catch {
@@ -310,23 +324,33 @@ function imageServer(req: Request, res: Response): JellyfinServer | undefined | 
 api.get('/jellyfin/image/items/:id/:type', (req, res) => {
   const id = String(req.params.id);
   const type = String(req.params.type);
-  if (!jellyfin.isValidId(id) || !jellyfin.isValidImageType(type)) {
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  const validId = !srv ? jellyfin.isValidId(id) : srv.type === 'plex' ? plex.isValidId(id) : jellyfin.isValidRemoteId(id);
+  if (!validId || !jellyfin.isValidImageType(type)) {
     res.status(400).end();
     return;
   }
-  const srv = imageServer(req, res);
-  if (srv === null) return;
-  void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Items', id, type, imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Items', id, type, imageOpts(req)));
+  const opts = imageOpts(req);
+  void pipeImage(
+    res,
+    !srv
+      ? jellyfin.image(ctxOf(req.session!), 'Items', id, type, opts)
+      : srv.type === 'plex'
+        ? plex.image(srv, id, type, opts)
+        : jellyfin.remoteImage(srv, 'Items', id, type, opts),
+  );
 });
 
 api.get('/jellyfin/image/users/:id', (req, res) => {
   const id = String(req.params.id);
-  if (!jellyfin.isValidId(id)) {
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  // Plex avatars live on plex.tv, so there's nothing to proxy.
+  if (!jellyfin.isValidId(id) || srv?.type === 'plex') {
     res.status(400).end();
     return;
   }
-  const srv = imageServer(req, res);
-  if (srv === null) return;
   void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Users', id, 'Primary', imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Users', id, 'Primary', imageOpts(req)));
 });
 

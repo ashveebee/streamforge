@@ -18,7 +18,7 @@ export function InstanceTabs({ kind }: { kind: ArrKind }) {
   return <Tabs list={list} current={current} label="Instance" />;
 }
 
-/** The Jellyfin server chosen via `?instance=`; `jellyfin` (the main one) by default. */
+/** The media server chosen via `?instance=`; `jellyfin` (the main one) by default. */
 export function useSelectedJellyfinServer() {
   const [params] = useSearchParams();
   const list = useJellyfinServers();
@@ -26,11 +26,22 @@ export function useSelectedJellyfinServer() {
   return list.find((s) => s.id === wanted)?.id ?? 'jellyfin';
 }
 
-/** Tabs for switching between Jellyfin servers; hidden when there's only one. */
+/** Jellyfin, Emby or Plex: the type of the media server chosen via `?instance=`. */
+export function useSelectedServerType() {
+  const list = useJellyfinServers();
+  const current = useSelectedJellyfinServer();
+  return list.find((s) => s.id === current)?.type ?? 'jellyfin';
+}
+
+const TYPE_NAMES = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' } as const;
+
+/** Tabs for switching between media servers; hidden when there's only one. */
 export function JellyfinServerTabs() {
   const list = useJellyfinServers();
   const current = useSelectedJellyfinServer();
-  return <Tabs list={list} current={current} label="Jellyfin server" />;
+  // Label the type when servers of more than one kind are set up.
+  const mixed = new Set(list.map((s) => s.type)).size > 1;
+  return <Tabs list={list.map((s) => ({ ...s, name: mixed ? `${s.name} · ${TYPE_NAMES[s.type]}` : s.name }))} current={current} label="Media server" />;
 }
 
 function Tabs({ list, current, label }: { list: { id: string; name: string; primary: boolean }[]; current?: string; label: string }) {

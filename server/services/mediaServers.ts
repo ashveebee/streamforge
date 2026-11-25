@@ -4,19 +4,27 @@ import { cache } from '../lib/cache.js';
 import { keyHint, resolve } from '../settings.js';
 
 /*
- * Extra Jellyfin servers to monitor.
+ * Extra media servers to monitor: more Jellyfin servers, Emby and Plex.
  *
  * The main Jellyfin server (Settings card or environment) handles sign-in
  * and everything user-specific. Extra servers are watched with their own API
- * key: health and outage alerts, active streams on Now Playing, and an
- * overview tab on the Jellyfin page. Ids look like `jellyfin-cabin`.
+ * key (a Plex token for Plex): health and outage alerts, active streams on
+ * Now Playing, and an overview tab on the media server page.
+ *
+ * Ids carry the type: `jellyfin-cabin`, `emby-office`, `plex-loft`.
  */
 
-export interface JellyfinServer {
+export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
+export const MEDIA_SERVER_TYPES: MediaServerType[] = ['jellyfin', 'emby', 'plex'];
+export const MEDIA_SERVER_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' };
+
+export interface MediaServer {
   id: string;
+  type: MediaServerType;
   name: string;
   url: string;
   publicUrl?: string;
+  /** Jellyfin/Emby API key, or a Plex token. */
   apiKey: string;
   enabled: boolean;
   createdAt: string;
@@ -24,19 +32,22 @@ export interface JellyfinServer {
   serverId?: string;
 }
 
+// Kept as `jellyfinServers` so servers added before Plex/Emby support carry over.
 const PREF = 'jellyfinServers';
-let stored: JellyfinServer[] = readPref<JellyfinServer[]>(PREF, []).filter((s) => s && typeof s.id === 'string' && s.url && s.apiKey);
+let stored: MediaServer[] = readPref<Partial<MediaServer>[]>(PREF, [])
+  .filter((s): s is MediaServer => !!s && typeof s.id === 'string' && !!s.url && !!s.apiKey)
+  .map((s) => ({ ...s, type: MEDIA_SERVER_TYPES.includes(s.type as MediaServerType) ? s.type : 'jellyfin' }));
 const listeners = new Set<() => void>();
 
-export const SERVER_ID_RE = /^jellyfin-[a-z0-9-]{1,40}$/;
+export const SERVER_ID_RE = /^(jellyfin|emby|plex)-[a-z0-9-]{1,40}$/;
 
 /** Extra servers StreamForge should talk to (switched on). */
-export function jellyfinServers() {
-  return stored.filter((s) => s.enabled);
+export function mediaServers(type?: MediaServerType) {
+  return stored.filter((s) => s.enabled && (!type || s.type === type));
 }
 
-export function jellyfinServer(id: string) {
-  return jellyfinServers().find((s) => s.id === id);
+export function mediaServer(id: string) {
+  return mediaServers().find((s) => s.id === id);
 }
 
 export function getStoredServer(id: string) {
@@ -46,6 +57,7 @@ export function getStoredServer(id: string) {
 export function describeServers() {
   return stored.map((s) => ({
     id: s.id,
+    type: s.type,
     name: s.name,
     url: s.url,
     publicUrl: s.publicUrl ?? '',
@@ -56,7 +68,7 @@ export function describeServers() {
   }));
 }
 
-/** Origins of every Jellyfin server already set up, main one included. */
+/** Origins of every media server already set up, main Jellyfin server included. */
 export function knownOrigins() {
   const urls = [resolve('jellyfin').settings.url, ...stored.map((s) => s.url)];
   return new Set(urls.filter((u): u is string => !!u).map(originOf));
@@ -73,6 +85,7 @@ export function originOf(url: string) {
 function save(id: string) {
   writePref(PREF, stored);
   cache.delete(`jfx:${id}:`);
+  cache.delete(`plex:${id}:`);
   for (const fn of listeners) fn();
 }
 
@@ -84,11 +97,12 @@ function slug(name: string) {
     .slice(0, 24);
 }
 
-export function addServer(input: { name: string; url: string; publicUrl?: string; apiKey: string; serverId?: string }) {
-  let id = `jellyfin-${slug(input.name) || randomBytes(3).toString('hex')}`;
+export function addServer(input: { type: MediaServerType; name: string; url: string; publicUrl?: string; apiKey: string; serverId?: string }) {
+  let id = `${input.type}-${slug(input.name) || randomBytes(3).toString('hex')}`;
   if (stored.some((s) => s.id === id)) id = `${id}-${randomBytes(2).toString('hex')}`;
-  const server: JellyfinServer = {
+  const server: MediaServer = {
     id,
+    type: input.type,
     name: input.name,
     url: input.url,
     publicUrl: input.publicUrl || undefined,
@@ -102,10 +116,10 @@ export function addServer(input: { name: string; url: string; publicUrl?: string
   return server;
 }
 
-export function updateServer(id: string, patch: Partial<Pick<JellyfinServer, 'name' | 'url' | 'publicUrl' | 'apiKey' | 'enabled' | 'serverId'>>) {
+export function updateServer(id: string, patch: Partial<Pick<MediaServer, 'name' | 'url' | 'publicUrl' | 'apiKey' | 'enabled' | 'serverId'>>) {
   const cur = stored.find((s) => s.id === id);
   if (!cur) return undefined;
-  const next: JellyfinServer = { ...cur, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+  const next: MediaServer = { ...cur, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
   if (next.publicUrl === '') delete next.publicUrl;
   stored = stored.map((s) => (s.id === id ? next : s));
   save(id);
@@ -124,4 +138,3 @@ export function onServersChange(fn: () => void) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
-

@@ -3,7 +3,8 @@
 A modern control centre for a Jellyfin media server and the services around it:
 **Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
 Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
-NZBGet).
+NZBGet). Run more than one media server? StreamForge can also watch extra
+**Jellyfin, Emby and Plex** servers next to your main one.
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
@@ -68,18 +69,33 @@ server.
 - **Service integrations**
   - *Jellyfin:* server info, sessions, users, library statistics, recently added
     items, daily plays and the activity log.
-  - *Jellyfin server discovery:* on first run, or under Settings → Jellyfin,
-    **Find on network** lists the Jellyfin servers on your local network so you
-    can pick one instead of typing its address. It uses Jellyfin's own
-    auto-discovery (UDP port 7359). In Docker it only works with
-    `network_mode: host`, because broadcasts don't leave a bridge network.
-  - *Multiple Jellyfin servers:* add more Jellyfin servers under the main one in
-    Settings, each with its own API key (Jellyfin → Dashboard → API Keys). Each
-    one gets a health check and outage alerts on System Status, its streams on
-    Now Playing (labelled with the server, with pause, message and stop), and
-    its own tab on the Jellyfin page with libraries, users, recently added and
-    activity. Sign-in, title pages, stats, playback alerts and the buffering
-    diagnosis still use the main server.
+  - *Media server discovery:* on first run, StreamForge lists the Jellyfin
+    servers on your local network so you can pick one instead of typing its
+    address. Under Settings → Jellyfin → More media servers, **Find on
+    network** also finds Emby and Plex servers. It uses each server's own
+    discovery: UDP port 7359 for Jellyfin and Emby, and Plex's GDM (UDP port
+    32414, "Enable local network discovery" in Plex → Settings → Network). In
+    Docker it only works with `network_mode: host`, because broadcasts don't
+    leave a bridge network.
+  - *More than one media server (Jellyfin, Emby and Plex):* add as many extra
+    servers as you like under Settings → Jellyfin → More media servers. Pick
+    the type, then enter the address and a key:
+
+    | Type | Key |
+    | --- | --- |
+    | Jellyfin | API key from Dashboard → API Keys |
+    | Emby | API key from Settings → Advanced → API Keys |
+    | Plex | The server owner's Plex token (see Plex's help article "Finding an authentication token / X-Plex-Token") |
+
+    Each server gets a health check and outage alerts on System Status, its
+    streams on Now Playing (labelled with the server), and its own tab on the
+    media server page with libraries, users, recently added and activity.
+    Jellyfin and Emby streams can be paused, messaged and stopped. Plex
+    streams can only be stopped, with a reason the viewer sees (stopping
+    needs Plex Pass). Plex has no activity log, so its tab shows recent plays
+    from Plex's watch history instead. Sign-in, title pages, stats, playback
+    alerts and the buffering diagnosis use the main Jellyfin server, so a
+    Jellyfin server is still needed to sign in.
   - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
     missing-episodes list with search buttons.
   - *Radarr:* movie stats, queue, cinema/digital/physical release dates,
@@ -281,6 +297,8 @@ immediately; no restart is needed. Skip any service you don't run.
 | Service | Where to find the API key |
 | --- | --- |
 | Jellyfin | Dashboard → API Keys (optional; enables server-wide stats and update warnings) |
+| Extra Emby server | Emby → Settings → Advanced → API Keys (Settings → Jellyfin → More media servers) |
+| Extra Plex server | The server owner's Plex token (Settings → Jellyfin → More media servers) |
 | Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
 | Seerr | Settings → General → API Key |
 | Lidarr / Readarr / Bazarr | Settings → General → Security → API Key |
@@ -365,7 +383,13 @@ default for **Member access** in Settings. See `.env.example` for the full list.
   address from inside the container:
   `docker exec streamforge wget -qO- <url>/System/Info/Public`.
 - **"Unauthorised — check API key":** the key is wrong or was regenerated.
-  Paste it again in Settings.
+  Paste it again in Settings. For Plex, use the token of the account that owns
+  the server: a shared user's token can't see sessions or history.
+- **Plex says "Plex can only stop streams":** Plex doesn't let a server pause
+  a stream or send the viewer a message. Stopping works with Plex Pass.
+- **"Find on network" doesn't find Plex or Emby:** turn on "Enable local
+  network discovery (GDM)" in Plex (Settings → Network). In Docker, use
+  `network_mode: host`. You can always add a server by its address.
 - **"Re-enter the API key when changing the server address":** a saved key is
   never sent to a new address. Paste the key again along with the new address.
 - **Locked out after changing the Jellyfin server:** this is expected, because
@@ -536,6 +560,13 @@ To add an integration:
   between samples, taken every 5 seconds.
 - **Playback activity chart.** This is built from Jellyfin's activity log
   (`VideoPlayback` and `AudioPlayback` entries). No plugin is needed.
+- **Extra Emby and Plex servers.** Emby shares Jellyfin's API, so StreamForge
+  reads it the same way (under Emby's `/emby` path, with the `X-Emby-Token`
+  header). Plex is read through its own API (`server/services/plex.ts`): active
+  streams from `/status/sessions`, libraries and counts from
+  `/library/sections`, users from `/accounts`, recent plays from
+  `/status/sessions/history/all` and artwork through Plex's photo transcoder.
+  Plex user avatars live on plex.tv, so Plex users show initials instead.
 - **CPU, RAM and network.** These figures come from the machine running the
   StreamForge server. Run it on the media server, with host networking in
   Docker, to see that server's figures.

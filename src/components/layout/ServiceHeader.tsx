@@ -6,15 +6,28 @@ import { SERVICES, ServiceIcon } from '../ui/ServiceIcon';
 import { StatusBadge } from '../ui/Status';
 import { PageHeader } from './PageHeader';
 
-export function ServiceHeader({ id, instance, description, actions }: { id: ServiceId; instance?: string; description?: string; actions?: React.ReactNode }) {
+export function ServiceHeader({
+  id,
+  instance,
+  title,
+  description,
+  actions,
+}: {
+  id: ServiceId;
+  instance?: string;
+  /** Replaces the service name, e.g. "Plex" for an extra media server. */
+  title?: string;
+  description?: string;
+  actions?: React.ReactNode;
+}) {
   const health = useHealth();
   const s = health.data?.services.find((x) => x.id === (instance ?? id)) ?? health.data?.services.find((x) => x.id === id);
-  const meta = SERVICES[id];
+  const meta = title ? { ...SERVICES[id], name: title } : SERVICES[id];
   const moonfinWeb = useServiceConfig().data?.moonfin?.web;
   const linkCls =
     'inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink';
   const openService = s?.publicUrl && /^https?:\/\//.test(s.publicUrl) ? s.publicUrl : undefined;
-  const openMoonfin = id === 'jellyfin' ? moonfinWeb : undefined;
+  const openMoonfin = id === 'jellyfin' && !instance ? moonfinWeb : undefined;
   return (
     <>
       <PageHeader
