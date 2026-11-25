@@ -2,7 +2,7 @@
 
 A modern control centre for a **Jellyfin, Plex or Emby** media server and the
 services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
-Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
+Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
 NZBGet). Run more than one media server? StreamForge also watches extra
 **Jellyfin, Emby and Plex** servers next to your main one. Only have Plex or
 Emby? See [Plex-only and Emby-only households](#plex-only-and-emby-only-households).
@@ -418,6 +418,41 @@ address** on a service in Settings (or `JELLYFIN_PUBLIC_URL`,
 `SONARR_PUBLIC_URL` and so on) to the address you open it at in a browser,
 for example `https://jellyfin.example.com`. Links such as **Play in
 Jellyfin** and **Open in Sonarr** then use it.
+
+### Kometa
+
+[Kometa](https://kometa.wiki) (previously Plex Meta Manager) builds collections,
+overlays and playlists on a schedule. It has no API, but it can send webhooks,
+and StreamForge can receive them:
+
+1. In StreamForge, go to **Settings → Services → Kometa** and switch on
+   **Receive Kometa webhooks**.
+2. Copy the `webhooks:` block it shows into Kometa's `config.yml`. If you
+   already have a `webhooks:` section (for Discord or Notifiarr, say), turn
+   each entry into a list and add StreamForge's address to it:
+
+   ```yaml
+   webhooks:
+     error:
+       - notifiarr
+       - http://streamforge:4000/api/hooks/kometa/<your code>
+     run_end: http://streamforge:4000/api/hooks/kometa/<your code>
+   ```
+
+3. Use an address Kometa can reach. In Docker that's usually StreamForge's
+   container name or LAN IP, not `localhost`.
+
+After Kometa's next run, **System Status** shows a Kometa card: whether it's
+running, the last run's time and counts (collections created, updated and
+removed, items added and removed), a strip of recent runs, errors with the
+library and collection they came from, a notice when a newer Kometa is out,
+and recent collection changes. Under **Settings → Notifications** you can
+subscribe a channel to **Kometa errors** and **Kometa run finished**.
+
+The long code at the end of the address is what lets Kometa in, because Kometa
+can't send a password. Keep it private; **New address** replaces it if it
+leaks. StreamForge keeps the last 1,000 Kometa events and drops the poster
+images Kometa sometimes includes.
 
 ### Moonfin
 

@@ -42,6 +42,7 @@ import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
 import { MoonfinSection } from '@/components/settings/MoonfinSection';
+import { KometaSection } from '@/components/settings/KometaSection';
 import { UpdatesSection } from '@/components/settings/UpdatesSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
@@ -533,6 +534,7 @@ function ServicesTab() {
           );
         })}
       </ul>
+      <KometaSection />
       {!main.other && <MoonfinSection />}
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.

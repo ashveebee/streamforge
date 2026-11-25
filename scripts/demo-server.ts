@@ -1092,6 +1092,40 @@ app.put('/api/radarr/auto-import', (req, res) => {
   res.json(radarrAutoImport);
 });
 app.post('/api/radarr/auto-import/run', (_req, res) => res.json({ results: [], status: radarrAutoImport }));
+// Kometa: last night's run, one error and some collection changes, as its webhooks would report them.
+const kometaRun = (daysAgo: number, errors: number, id: number) => ({
+  id,
+  at: iso(daysAgo * DAY + 3 * HOUR),
+  event: 'run_end',
+  startTime: '2026-11-25 03:00:00',
+  endTime: '2026-11-25 03:14:12',
+  runTime: `0:${12 + (id % 5)}:${String(10 + id * 7).slice(-2)}`,
+  created: daysAgo ? 0 : 2,
+  modified: 14 - (id % 4),
+  deleted: daysAgo ? 0 : 1,
+  added: 48 - id,
+  removed: 7,
+  toRadarr: daysAgo ? 0 : 3,
+  toSonarr: 0,
+  errors,
+});
+app.get('/api/kometa/status', json(() => ({
+  enabled: true,
+  waiting: false,
+  running: false,
+  lastRun: kometaRun(0, 1, 14),
+  runs: Array.from({ length: 14 }, (_, i) => kometaRun(i, i === 0 || i === 5 ? 1 : 0, 14 - i)),
+  errors: [{ id: 99, at: iso(3 * HOUR + 7 * MIN), event: 'error', error: 'Collection Error: TMDb list 8273 not found', critical: false, library: 'Movies', collection: 'Staff Picks' }],
+  version: { current: '2.1.0', latest: '2.2.1' },
+  changes: [
+    { id: 98, at: iso(3 * HOUR), event: 'changes', library: 'Movies', collection: 'Oscar Winners', created: true, addedCount: 24, removedCount: 0 },
+    { id: 97, at: iso(3 * HOUR), event: 'changes', library: 'Movies', collection: 'Trending This Week', addedCount: 6, removedCount: 5 },
+    { id: 96, at: iso(3 * HOUR), event: 'changes', library: 'TV Shows', collection: 'New Episodes', addedCount: 9, removedCount: 11 },
+    { id: 95, at: iso(3 * HOUR), event: 'delete', message: 'Collection “Halloween 2025” deleted', library: 'Movies' },
+  ],
+})));
+app.get('/api/settings/kometa', json(() => ({ enabled: true, path: '/api/hooks/kometa/k7Qe2mXv9TzLwR4nB8sYc1Pd' })));
+
 // Extra media servers: an Emby and a Plex server next to the main Jellyfin one.
 const demoMediaServers = [
   { id: 'emby-office', type: 'emby', name: 'Office', url: 'http://192.168.1.31:8096', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••a91e', createdAt: '2026-09-02T10:00:00.000Z' },

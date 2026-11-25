@@ -25,6 +25,8 @@ export const EVENT_LABEL: Record<NotifyEvent, string> = {
   playback_alert: 'Transcode and bandwidth alerts',
   weekly_digest: 'Weekly digest',
   update_available: 'StreamForge update available',
+  kometa_error: 'Kometa errors',
+  kometa_run: 'Kometa run finished',
   rule: 'Rule alerts',
 };
 

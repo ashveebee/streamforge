@@ -15,6 +15,7 @@ import { startPlaybackRecorder } from './services/playStats.js';
 import { startStorageSampler } from './services/storage.js';
 import { startClientSampler } from './services/clients/index.js';
 import { startPlaybackGuard } from './services/playbackGuard.js';
+import { hooksRouter } from './hooks.js';
 import { startDigest } from './services/digest.js';
 import { startRules } from './services/rules.js';
 import { startDiagnosisRecorder } from './services/diagnosis/index.js';
@@ -51,9 +52,12 @@ app.use(
 // Backups can be large (they may include play history); everything else is small.
 const smallJson = express.json({ limit: '32kb' });
 const largeJson = express.json({ limit: '50mb' });
-app.use((req, res, next) => (req.path === '/api/settings/backup/restore' ? largeJson : smallJson)(req, res, next));
+// Kometa webhooks parse their own (possibly large) bodies, after the address is checked.
+app.use((req, res, next) => (req.path.startsWith('/api/hooks/') ? next() : (req.path === '/api/settings/backup/restore' ? largeJson : smallJson)(req, res, next)));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
+// Webhooks from Kometa: no session or CSRF header (Kometa can't send one); the address's token is the credential.
+app.use('/api/hooks', hooksRouter);
 app.use('/api', requireCsrfHeader);
 app.use('/api/auth', authRouter);
 app.use('/api', api);

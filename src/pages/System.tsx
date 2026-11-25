@@ -17,6 +17,7 @@ import { EmptyState, Skeleton } from '@/components/ui/States';
 import { CleanupCard } from '@/components/widgets/CleanupCard';
 import { StorageForecastCard } from '@/components/widgets/StorageForecastCard';
 import { DownloadsWidget } from '@/components/widgets/DownloadsWidget';
+import { KometaCard } from '@/components/widgets/KometaCard';
 import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
 
@@ -183,6 +184,10 @@ export default function SystemPage() {
       <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
         <StorageForecastCard />
         <CleanupCard />
+      </div>
+
+      <div className="mt-5 empty:hidden">
+        <KometaCard />
       </div>
 
       {host.data?.filesystems && host.data.filesystems.length > 0 && (

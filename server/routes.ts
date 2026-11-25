@@ -18,6 +18,7 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
+import { kometaStatus } from './services/kometa.js';
 import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
 import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
@@ -145,6 +146,10 @@ api.post(
     return { results, status: cleanupStatus() };
   }),
 );
+
+/* --------------------------------- kometa -------------------------------- */
+
+api.get('/kometa/status', (_req, res) => res.set('Cache-Control', 'no-store').json(kometaStatus()));
 
 /* -------------------------------- jellyfin ------------------------------ */
 

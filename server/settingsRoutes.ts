@@ -49,6 +49,7 @@ import {
 import { discoverMediaServers, type DiscoveredServer } from './services/mediaDiscovery.js';
 import * as plex from './services/plex.js';
 import { isMainServer } from './services/mainServer.js';
+import { kometaSettings, updateKometa } from './services/kometa.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
   describe,
@@ -349,6 +350,26 @@ settingsRouter.delete('/instances/:id', (req, res) => {
   if (!removeInstance(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown instance' });
   audit(req, `[settings] instance ${id} removed`);
   res.json({ ok: true });
+});
+
+/* --------------------------------- kometa -------------------------------- */
+
+const kometaView = () => {
+  const s = kometaSettings();
+  return { enabled: s.enabled, path: `/api/hooks/kometa/${s.token}` };
+};
+
+settingsRouter.get('/kometa', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json(kometaView());
+});
+
+settingsRouter.put('/kometa', (req, res) => {
+  const parsed = z.object({ enabled: z.boolean().optional(), regenerate: z.boolean().optional() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, 'Invalid request');
+  updateKometa(parsed.data);
+  if (parsed.data.enabled !== undefined) audit(req, `[settings] Kometa webhooks ${parsed.data.enabled ? 'switched on' : 'switched off'}`);
+  if (parsed.data.regenerate) audit(req, '[settings] Kometa webhook address changed');
+  res.json(kometaView());
 });
 
 /* --------------------------- extra media servers --------------------------- */

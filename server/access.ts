@@ -54,7 +54,7 @@ function areasFor(path: string): Area[] | undefined {
   if (path.startsWith('/jellyfin/stats')) return ['stats'];
   if (path.startsWith('/jellyfin/')) return ['jellyfin'];
   if (path.startsWith('/library/')) return ['library'];
-  if (path.startsWith('/system/') || path.startsWith('/downloads') || path.startsWith('/storage/')) return ['system'];
+  if (path.startsWith('/system/') || path.startsWith('/downloads') || path.startsWith('/storage/') || path.startsWith('/kometa/')) return ['system'];
   if (path.startsWith('/clients')) return ['downloads'];
   for (const a of ['sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr'] as const) if (path.startsWith(`/${a}/`)) return [a];
   return undefined;
