@@ -12,7 +12,7 @@ import { Avatar, FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { ErrorState, Skeleton } from '../ui/States';
-import { deviceIcon, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
+import { deviceIcon, streamKey, streamTitlePath, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
 import { TitleLink } from '../ui/TitleLink';
 
 const DEVICE_ICONS = { tv: Tv, phone: Smartphone, web: MonitorSmartphone, desktop: Laptop };
@@ -72,7 +72,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
 
   return (
     <motion.div
-      key={s.sessionId}
+      key={streamKey(s)}
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -12 }}
@@ -101,6 +101,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
           {s.item.resolution && <Pill>{s.item.resolution}</Pill>}
           {s.item.hdr && <Pill tone="warn">{s.item.hdr}</Pill>}
           <Pill tone={method === 'Transcode' ? 'warn' : 'ok'}>{method}</Pill>
+          {s.serverName && <Pill tone="brand">{s.serverName}</Pill>}
         </div>
 
         <div>
@@ -113,7 +114,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
             />
           ) : (
             <h2 className="text-3xl leading-tight font-semibold tracking-tight text-balance text-white lg:text-[40px]">
-              <TitleLink to={s.item.type === 'Audio' ? undefined : `/media/jellyfin/${s.item.id}`}>{titleOf(s)}</TitleLink>
+              <TitleLink to={streamTitlePath(s)}>{titleOf(s)}</TitleLink>
             </h2>
           )}
           {subtitle && <p className="mt-2 text-base font-medium text-ink lg:text-lg">{subtitle}</p>}
@@ -133,7 +134,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <span className="flex items-center gap-2">
-            <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 64)} name={s.user.name} size={26} />
+            <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 64, s.server)} name={s.user.name} size={26} />
             <span className="font-medium text-ink">{s.user.name}</span>
           </span>
           <span className="flex items-center gap-2 text-ink-2">
@@ -156,7 +157,7 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
         const p = s.item.runtimeMs ? livePosition(s, fetchedAt, now) / s.item.runtimeMs : 0;
         return (
           <button
-            key={s.sessionId}
+            key={streamKey(s)}
             onClick={() => onSelect(i)}
             className={cn(
               'glass group flex w-56 shrink-0 items-center gap-3 rounded-xl p-2 pr-3 text-left transition sm:w-64',
@@ -166,7 +167,7 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
             <FadeImage src={jfImage(s.item.thumb ?? s.item.backdrop ?? s.item.poster, 200)} alt="" className="h-10 w-16 shrink-0 rounded-md" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-medium text-ink">{titleOf(s)}</div>
-              <div className="truncate text-[11px] text-ink-3">{s.user.name} · {s.device}</div>
+              <div className="truncate text-[11px] text-ink-3">{s.user.name} · {s.serverName ?? s.device}</div>
               <div className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-brand" style={{ width: `${p * 100}%` }} />
               </div>
@@ -240,7 +241,7 @@ export function NowPlayingHero() {
         ) : current ? (
           <>
             <AnimatePresence mode="wait">
-              <HeroStream key={current.sessionId} s={current} fetchedAt={q.dataUpdatedAt} />
+              <HeroStream key={streamKey(current)} s={current} fetchedAt={q.dataUpdatedAt} />
             </AnimatePresence>
             {streams.length > 1 && <Switcher streams={streams} active={idx} onSelect={setActive} fetchedAt={q.dataUpdatedAt} />}
           </>

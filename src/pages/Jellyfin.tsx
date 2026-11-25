@@ -8,6 +8,7 @@ import { useJellyfin } from '@/hooks/queries';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
+import { JellyfinServerTabs, useSelectedJellyfinServer } from '@/components/layout/InstanceTabs';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
 import { KV, StatTile } from '@/components/ui/Stat';
@@ -20,13 +21,18 @@ import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
 import { PageLoader } from '@/components/ui/Loader';
 
 export default function JellyfinPage() {
-  const q = useJellyfin();
+  const server = useSelectedJellyfinServer();
+  const extra = server !== 'jellyfin' ? server : undefined;
+  const q = useJellyfin(server);
   const { user } = useAuth();
+  // Scans, tasks and play history are only available for the main server.
+  const admin = !!user?.isAdmin && !extra;
   const scan = useLibraryScan();
   return (
     <>
-      <ServiceHeader id="jellyfin" />
-      <QueryState query={q} skeleton={<PageLoader label="Loading Jellyfin" hint="Fetching libraries, users and server details…" />}>
+      <ServiceHeader id="jellyfin" instance={extra} />
+      <JellyfinServerTabs />
+      <QueryState key={server} query={q} skeleton={<PageLoader label="Loading Jellyfin" hint="Fetching libraries, users and server details…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -44,7 +50,7 @@ export default function JellyfinPage() {
                   title="Libraries"
                   subtitle={scan.error ? <span className="text-bad">{(scan.error as Error).message}</span> : `${d.libraries.length} libraries`}
                   action={
-                    user?.isAdmin ? (
+                    admin ? (
                       <Button size="sm" disabled={scan.isPending} onClick={() => scan.mutate({})}>
                         {scan.isPending && !scan.variables?.library ? <LoaderCircle className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />} Scan all
                       </Button>
@@ -67,7 +73,7 @@ export default function JellyfinPage() {
                             <span className="text-lg font-semibold text-white tabular">{l.itemCount?.toLocaleString() ?? '—'}</span>
                           </div>
                           {l.refreshing && <div className="absolute top-2 left-2"><Pill tone="brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</Pill></div>}
-                          {user?.isAdmin && (
+                          {admin && (
                             <div className="absolute top-1.5 right-1.5 rounded-lg bg-black/40 text-white backdrop-blur">
                               <Menu
                                 label={`Actions for ${l.name}`}
@@ -109,17 +115,17 @@ export default function JellyfinPage() {
               </Card>
             </div>
 
-            <RecentlyAddedWidget />
+            <RecentlyAddedWidget server={server} />
 
             <div className="grid gap-5 xl:grid-cols-3">
-              <div className="xl:col-span-2"><PlaysWidget /></div>
-              <Card>
+              {!extra && <div className="xl:col-span-2"><PlaysWidget /></div>}
+              <Card className={extra ? 'xl:col-span-3' : undefined}>
                 <CardHeader icon={Users} title="Users" subtitle="Most recently active first" />
                 <CardBody>
                   <ul className="space-y-1">
                     {d.users.list.slice(0, 8).map((u) => (
                       <li key={u.id} className="flex items-center gap-3 rounded-lg px-1.5 py-1.5 hover:bg-white/[0.03]">
-                        <Avatar src={jfUserImage(u.id, u.imageTag)} name={u.name} size={30} />
+                        <Avatar src={jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-medium">{u.name}</div>
                           <div className="text-[11px] text-ink-4">{u.lastActivity ? `Active ${relative(u.lastActivity)}` : 'Never active'}</div>
@@ -131,8 +137,8 @@ export default function JellyfinPage() {
                 </CardBody>
               </Card>
             </div>
-            {user?.isAdmin && <JellyfinTasks />}
-            <ActivityWidget limit={15} />
+            {admin && <JellyfinTasks />}
+            <ActivityWidget limit={15} server={server} />
           </div>
         )}
       </QueryState>

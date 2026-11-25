@@ -1,6 +1,6 @@
 import { SessionControls } from './SessionControls';
 import { motion } from 'motion/react';
-import { Cpu, Gauge, Globe, Pause, Play, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Cpu, Gauge, Globe, Pause, Play, Server, Volume2, VolumeX, Zap } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { bitrate, clock, pct } from '@/lib/format';
@@ -9,7 +9,7 @@ import { Avatar, FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { DeviceGlyph } from './NowPlayingHero';
-import { kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
+import { kindLabel, livePosition, methodLabel, streamTitlePath, subtitleOf, titleOf } from './playback';
 import { TitleLink } from '@/components/ui/TitleLink';
 
 function Row({ icon: Icon, label, children }: { icon: typeof Cpu; label: string; children: React.ReactNode }) {
@@ -47,6 +47,12 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
             {s.state.isPaused ? <Pause className="size-3" /> : <Play className="size-3 text-brand" />}
             {s.state.isPaused ? 'Paused' : 'Playing'}
           </span>
+          {s.serverName && (
+            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title="Playing on this Jellyfin server">
+              <Server className="size-3" />
+              {s.serverName}
+            </span>
+          )}
         </div>
         <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 p-4">
           <FadeImage
@@ -60,7 +66,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
               {s.item.year && <Pill>{s.item.year}</Pill>}
             </div>
             <h3 className="truncate text-lg leading-tight font-semibold text-white">
-              <TitleLink to={s.item.type === 'Audio' ? undefined : `/media/jellyfin/${s.item.id}`}>{titleOf(s)}</TitleLink>
+              <TitleLink to={streamTitlePath(s)}>{titleOf(s)}</TitleLink>
             </h3>
             {subtitle && <p className="truncate text-sm text-ink-2">{subtitle}</p>}
           </div>
@@ -75,7 +81,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
         </div>
 
         <div className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-white/[0.02] p-2.5">
-          <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 80)} name={s.user.name} size={34} />
+          <Avatar src={jfUserImage(s.user.id, s.user.imageTag, 80, s.server)} name={s.user.name} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{s.user.name}</div>
             <div className="flex items-center gap-1.5 truncate text-xs text-ink-3">

@@ -13,7 +13,7 @@ import { beginSetup, disable as disableMfa, finishSetup, mfaEnabled, mfaInfo, ve
 import { authorizeUrl, finishLogin, oidcReady, oidcSettings } from './services/oidc.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
-import { urlField } from './settingsRoutes.js';
+import { discoverWithStatus, urlField } from './settingsRoutes.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -198,6 +198,19 @@ authRouter.post('/setup', setupLimiter, async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: 'upstream', message: `Could not reach Jellyfin: ${(err as Error).message}` });
   }
+});
+
+/**
+ * First-run setup: looks for Jellyfin servers on the local network so the
+ * address can be picked instead of typed. Only while nothing is configured.
+ */
+authRouter.post('/setup/discover', setupLimiter, async (_req, res) => {
+  if (isConfigured('jellyfin')) {
+    res.status(409).json({ error: 'already_configured', message: 'Jellyfin is already configured.' });
+    return;
+  }
+  const servers = await discoverWithStatus();
+  res.json({ servers: servers.map(({ id, name, url, version, reachable }) => ({ id, name, url, version, reachable })) });
 });
 
 authRouter.post('/login', loginLimiter, async (req, res) => {

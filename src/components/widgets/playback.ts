@@ -47,3 +47,9 @@ export function deviceIcon(client = '', device = '') {
   if (/(web|chrome|firefox|safari|edge)/.test(s)) return 'web';
   return 'desktop';
 }
+
+/** A stable key for a stream; session ids are only unique within one server. */
+export const streamKey = (s: NowPlaying) => `${s.server ?? 'main'}:${s.sessionId}`;
+
+/** Where the title opens. Title pages read the main server, so extra servers' streams don't link. */
+export const streamTitlePath = (s: NowPlaying) => (s.item.type === 'Audio' || s.server ? undefined : `/media/jellyfin/${s.item.id}`);

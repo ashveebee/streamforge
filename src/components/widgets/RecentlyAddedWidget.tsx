@@ -10,8 +10,11 @@ import { QueryState, Skeleton } from '../ui/States';
 import { EmptyState } from '../ui/States';
 import { TitleLink } from '@/components/ui/TitleLink';
 
-export function RecentlyAddedWidget() {
-  const q = useLatest();
+/** `server` picks an extra Jellyfin server; the main one by default. */
+export function RecentlyAddedWidget({ server }: { server?: string } = {}) {
+  const q = useLatest(server);
+  // Title pages read the main server, so an extra server's titles don't link.
+  const linkTo = (id: string) => (server && server !== 'jellyfin' ? undefined : `/media/jellyfin/${id}`);
   const scroller = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: 'smooth' });
 
@@ -46,7 +49,7 @@ export function RecentlyAddedWidget() {
                 transition={{ delay: Math.min(idx, 10) * 0.03 }}
                 className="group w-32 shrink-0 snap-start sm:w-36"
               >
-                <TitleLink to={`/media/jellyfin/${i.id}`} className="relative block">
+                <TitleLink to={linkTo(i.id)} className="relative block">
                   <FadeImage
                     src={jfImage(i.poster, 320)}
                     alt={i.title}
@@ -60,7 +63,7 @@ export function RecentlyAddedWidget() {
                     </span>
                   )}
                 </TitleLink>
-                <TitleLink to={`/media/jellyfin/${i.id}`} className="mt-2 block truncate text-[13px] font-medium">{i.title}</TitleLink>
+                <TitleLink to={linkTo(i.id)} className="mt-2 block truncate text-[13px] font-medium">{i.title}</TitleLink>
                 <div className="truncate text-[11px] text-ink-3">{i.subtitle ?? i.year ?? ''}</div>
                 <div className="text-[11px] text-ink-4">{relative(i.added)}</div>
               </motion.div>

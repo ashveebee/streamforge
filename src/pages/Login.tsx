@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, ShieldCheck, User } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Radar, Server, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
 import { LogoMark } from '@/components/layout/Logo';
@@ -20,11 +20,31 @@ function Field({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElem
 
 type ServerInfo = { name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
 
-/** First run: no Jellyfin server is configured yet, so ask for one. */
+type Found = { id: string; name: string; url: string; version?: string; reachable: boolean };
+
+/** First run: no Jellyfin server is configured yet, so ask for one (or find it on the network). */
 function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<Found[]>();
+  const [searching, setSearching] = useState(false);
+
+  async function search() {
+    setSearching(true);
+    setError(undefined);
+    try {
+      const r = await api<{ servers: Found[] }>('/auth/setup/discover', { method: 'POST' });
+      setFound(r.servers);
+      // One server that answers: fill it in, ready to connect.
+      const ok = r.servers.filter((s) => s.reachable);
+      if (ok.length === 1 && !url.trim()) setUrl(ok[0]!.url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not search the network');
+    } finally {
+      setSearching(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -56,6 +76,44 @@ function Setup({ onDone }: { onDone: (s: ServerInfo) => void }) {
         aria-label="Jellyfin server address"
         required
       />
+      {found === undefined ? (
+        <button
+          type="button"
+          onClick={() => void search()}
+          disabled={searching}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 transition hover:text-ink disabled:opacity-60"
+        >
+          {searching ? <LoaderCircle className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
+          {searching ? 'Searching your network…' : 'Find servers on my network'}
+        </button>
+      ) : found.length === 0 ? (
+        <p className="mt-3 text-xs leading-relaxed text-ink-4">
+          No servers answered. Discovery only works on the same local network, and from Docker only with host networking. Type the address instead.{' '}
+          <button type="button" onClick={() => void search()} disabled={searching} className="font-medium text-ink-3 underline-offset-2 hover:text-ink hover:underline">
+            {searching ? 'Searching…' : 'Search again'}
+          </button>
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-1.5" aria-label="Servers found on your network">
+          {found.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => setUrl(s.url)}
+                aria-pressed={url === s.url}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${url === s.url ? 'border-brand/50 bg-brand/10' : 'border-line bg-white/[0.02] hover:bg-white/[0.05]'}`}
+              >
+                <Server className="size-4 shrink-0 text-ink-3" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{s.name}</span>
+                  <span className="block truncate font-mono text-[11px] text-ink-3">{s.url}</span>
+                </span>
+                <span className="shrink-0 text-[11px] text-ink-4">{s.reachable ? (s.version ? `v${s.version}` : '') : 'Not answering'}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {error && (
         <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="mt-3 rounded-lg border border-bad/25 bg-bad/10 px-3 py-2 text-xs text-bad">
           {error}

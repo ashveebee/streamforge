@@ -17,7 +17,7 @@ export function SessionControls({ s }: { s: NowPlaying }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     control.mutate(
-      { id: s.sessionId, command: mode!, text: text.trim() || undefined },
+      { id: s.sessionId, server: s.server, command: mode!, text: text.trim() || undefined },
       {
         onSuccess: () => {
           setMode(undefined);
@@ -30,7 +30,7 @@ export function SessionControls({ s }: { s: NowPlaying }) {
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => control.mutate({ id: s.sessionId, command: s.state.isPaused ? 'unpause' : 'pause' })}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => control.mutate({ id: s.sessionId, server: s.server, command: s.state.isPaused ? 'unpause' : 'pause' })}>
           {s.state.isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
           {s.state.isPaused ? 'Resume' : 'Pause'}
         </Button>

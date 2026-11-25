@@ -16,7 +16,8 @@ services:
       # Optional: mount storage read-only to measure it under Settings →
       # Infinidisk → Advanced → Local mount paths.
       # - /mnt/media:/mnt/media:ro
-    # For host-level network stats, use host networking instead of ports:
+    # For host-level network stats, or to find Jellyfin servers on your network
+    # (Settings → Jellyfin → Find on network), use host networking instead of ports:
     # network_mode: host
     restart: unless-stopped
 

@@ -13,8 +13,9 @@ function iconFor(type: string, severity: string) {
   return { Icon: Info, cls: 'text-ink-3' };
 }
 
-export function ActivityWidget({ limit = 8 }: { limit?: number }) {
-  const q = useActivity();
+/** `server` picks an extra Jellyfin server; the main one by default. */
+export function ActivityWidget({ limit = 8, server }: { limit?: number; server?: string }) {
+  const q = useActivity(server);
   return (
     <Card className="h-full">
       <CardHeader icon={History} accent="var(--color-jellyfin)" title="Server activity" subtitle="Jellyfin activity log" />

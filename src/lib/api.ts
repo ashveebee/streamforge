@@ -58,16 +58,20 @@ export interface ArtworkRef {
   itemId: string;
   type: 'Primary' | 'Backdrop' | 'Thumb' | 'Logo';
   tag?: string;
+  /** Set when the artwork lives on an extra Jellyfin server. */
+  server?: string;
 }
 
 export function jfImage(ref: ArtworkRef | undefined, width: number) {
   if (!ref) return undefined;
   const q = new URLSearchParams({ w: String(width) });
   if (ref.tag) q.set('tag', ref.tag);
+  if (ref.server) q.set('server', ref.server);
   return `/api/jellyfin/image/items/${ref.itemId}/${ref.type}?${q}`;
 }
 
-export function jfUserImage(userId: string | undefined, tag: string | undefined, width = 96) {
+/** A user's avatar; pass `server` for a user on an extra Jellyfin server. */
+export function jfUserImage(userId: string | undefined, tag: string | undefined, width = 96, server?: string) {
   if (!userId || !tag) return undefined;
-  return `/api/jellyfin/image/users/${userId}?w=${width}&tag=${encodeURIComponent(tag)}`;
+  return `/api/jellyfin/image/users/${userId}?w=${width}&tag=${encodeURIComponent(tag)}${server ? `&server=${encodeURIComponent(server)}` : ''}`;
 }

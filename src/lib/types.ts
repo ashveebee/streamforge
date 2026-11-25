@@ -114,6 +114,9 @@ export interface CleanupStatus {
 
 export interface NowPlaying {
   sessionId: string;
+  /** Set for streams on an extra Jellyfin server (its id and name). */
+  server?: string;
+  serverName?: string;
   user: { id?: string; name: string; imageTag?: string };
   client?: string;
   device?: string;
@@ -162,7 +165,8 @@ export interface NowPlaying {
 }
 
 export interface JellyfinOverview {
-  server: { name: string; version: string; os?: string; architecture?: string; hasUpdateAvailable: boolean; hasPendingRestart: boolean };
+  /** `id` is set when this is an extra Jellyfin server. */
+  server: { id?: string; name: string; version: string; os?: string; architecture?: string; hasUpdateAvailable: boolean; hasPendingRestart: boolean };
   counts: {
     movies: number;
     series: number;
@@ -440,6 +444,36 @@ export interface ArrInstanceRef {
   kind: ArrKind;
   name: string;
   primary: boolean;
+}
+
+/** A Jellyfin server as listed in /api/config (only when there are several). */
+export interface JellyfinServerRef {
+  id: string;
+  name: string;
+  primary: boolean;
+}
+
+/** An extra Jellyfin server as shown on the Settings page. */
+export interface JellyfinServerView {
+  id: string;
+  name: string;
+  url: string;
+  publicUrl: string;
+  enabled: boolean;
+  apiKeySet: boolean;
+  apiKeyHint?: string;
+  createdAt: string;
+}
+
+/** A Jellyfin server found on the local network. */
+export interface DiscoveredServer {
+  id: string;
+  name: string;
+  url: string;
+  version?: string;
+  reachable: boolean;
+  /** Settings only: already the main server or an extra one. */
+  added?: boolean;
 }
 
 /** An extra instance as shown on the Settings page. */

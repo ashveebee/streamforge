@@ -2,6 +2,7 @@ import { config } from './config.js';
 import * as jellyfin from './services/jellyfin.js';
 import { arrProbe, arrQueue } from './services/arr.js';
 import { arrInstances, onInstancesChange } from './services/instances.js';
+import { jellyfinServers, onServersChange } from './services/jellyfinServers.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
@@ -23,11 +24,11 @@ interface Sample {
 }
 
 export interface ServiceHealth {
-  /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
+  /** Service id, or an extra instance id such as `radarr-4k` or `jellyfin-cabin`. */
   id: string;
   /** Which kind of service this is (equal to id for the built-in ones). */
   kind: ServiceId;
-  /** Set for extra Sonarr/Radarr instances. */
+  /** Set for extra Sonarr/Radarr instances and extra Jellyfin servers. */
   instance?: string;
   name: string;
   configured: boolean;
@@ -72,10 +73,22 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
   }
 }
 
-/** Extra Sonarr/Radarr instances, probed like any other service. */
+/** Extra Sonarr/Radarr instances and Jellyfin servers, probed like any other service. */
 function extraProbe(id: string) {
   const inst = arrInstances().find((i) => i.id === id && !i.primary);
-  return inst ? () => arrProbe(inst.client, 'v3') : undefined;
+  if (inst) return () => arrProbe(inst.client, 'v3');
+  const srv = jellyfinServers().find((s) => s.id === id);
+  return srv ? () => jellyfin.probe({ url: srv.url, apiKey: srv.apiKey }) : undefined;
+}
+
+/** Every extra instance that should be monitored, with its display name. */
+function extras(): { id: string; kind: ServiceId; name: string }[] {
+  return [
+    ...arrInstances()
+      .filter((i) => !i.primary)
+      .map((i) => ({ id: i.id, kind: i.kind as ServiceId, name: `${SERVICE_NAMES[i.kind]} · ${i.name}` })),
+    ...jellyfinServers().map((s) => ({ id: s.id, kind: 'jellyfin' as const, name: `Jellyfin · ${s.name}` })),
+  ];
 }
 
 function freshState(id: ServiceId): ServiceHealth {
@@ -95,11 +108,11 @@ const state = new Map<string, ServiceHealth>(SERVICE_IDS.map((id) => [id, freshS
 
 /** Adds/removes extra instances so the monitor matches the current set. */
 function syncInstances() {
-  const extras = arrInstances().filter((i) => !i.primary);
-  const live = new Set(extras.map((i) => i.id));
+  const list = extras();
+  const live = new Set(list.map((i) => i.id));
   for (const [id, s] of state) if (s.instance && !live.has(id)) state.delete(id);
-  for (const i of extras) {
-    const name = `${SERVICE_NAMES[i.kind]} · ${i.name}`;
+  for (const i of list) {
+    const name = i.name;
     const cur = state.get(i.id);
     if (cur && cur.name === name) continue;
     state.set(i.id, { id: i.id, kind: i.kind, instance: i.id, name, configured: true, status: 'offline', issues: [], history: [] });
@@ -114,7 +127,11 @@ onSettingsChange((id) => {
 });
 onInstancesChange(() => {
   // Connection details may have changed: restart history for extra instances.
-  for (const [id, s] of state) if (s.instance) state.delete(id);
+  for (const [id, s] of state) if (s.instance && s.kind !== 'jellyfin') state.delete(id);
+  syncInstances();
+});
+onServersChange(() => {
+  for (const [id, s] of state) if (s.instance && s.kind === 'jellyfin') state.delete(id);
   syncInstances();
 });
 
@@ -198,7 +215,13 @@ export function healthSnapshot(visible: (kind: ServiceId) => boolean = () => tru
   // Primary services carry the address to open them in a browser.
   const services = [...state.values()]
     .filter((s) => isEnabled(s.kind) && visible(s.kind))
-    .map((s) => (s.instance || s.status === 'unconfigured' ? s : { ...s, publicUrl: publicUrl(s.kind) }));
+    .map((s) => {
+      if (s.status === 'unconfigured') return s;
+      if (!s.instance) return { ...s, publicUrl: publicUrl(s.kind) };
+      // Extra Jellyfin servers can be opened too.
+      const srv = s.kind === 'jellyfin' ? jellyfinServers().find((j) => j.id === s.instance) : undefined;
+      return srv ? { ...s, publicUrl: srv.publicUrl || srv.url } : s;
+    });
   return {
     services,
     checkedAt: lastRun ? new Date(lastRun).toISOString() : undefined,

@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router';
-import { useInstances } from '@/hooks/queries';
+import { useInstances, useJellyfinServers } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import type { ArrKind } from '@/lib/types';
 
@@ -13,12 +13,31 @@ export function useSelectedInstance(kind: ArrKind) {
 
 /** Tabs for switching between Sonarr/Radarr instances; hidden when there's only one. */
 export function InstanceTabs({ kind }: { kind: ArrKind }) {
-  const [params, setParams] = useSearchParams();
   const list = useInstances(kind);
   const current = useSelectedInstance(kind);
+  return <Tabs list={list} current={current} label="Instance" />;
+}
+
+/** The Jellyfin server chosen via `?instance=`; `jellyfin` (the main one) by default. */
+export function useSelectedJellyfinServer() {
+  const [params] = useSearchParams();
+  const list = useJellyfinServers();
+  const wanted = params.get('instance');
+  return list.find((s) => s.id === wanted)?.id ?? 'jellyfin';
+}
+
+/** Tabs for switching between Jellyfin servers; hidden when there's only one. */
+export function JellyfinServerTabs() {
+  const list = useJellyfinServers();
+  const current = useSelectedJellyfinServer();
+  return <Tabs list={list} current={current} label="Jellyfin server" />;
+}
+
+function Tabs({ list, current, label }: { list: { id: string; name: string; primary: boolean }[]; current?: string; label: string }) {
+  const [params, setParams] = useSearchParams();
   if (list.length < 2) return null;
   return (
-    <div role="tablist" aria-label="Instance" className="mb-5 flex flex-wrap gap-1.5">
+    <div role="tablist" aria-label={label} className="mb-5 flex flex-wrap gap-1.5">
       {list.map((i) => (
         <button
           key={i.id}

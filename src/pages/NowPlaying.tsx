@@ -1,9 +1,10 @@
 import { AnimatePresence } from 'motion/react';
 import { Link } from 'react-router';
 import { PlayCircle, Radar, Repeat, Zap } from 'lucide-react';
-import { useNowPlaying } from '@/hooks/queries';
+import { useJellyfinServers, useNowPlaying } from '@/hooks/queries';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StreamCard } from '@/components/widgets/StreamCard';
+import { streamKey } from '@/components/widgets/playback';
 import { NowPlayingHero } from '@/components/widgets/NowPlayingHero';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { Card } from '@/components/ui/Card';
@@ -15,6 +16,7 @@ import { PlaybackGuardCard } from '@/components/widgets/PlaybackGuardCard';
 
 export default function NowPlayingPage() {
   const q = useNowPlaying();
+  const servers = useJellyfinServers().length;
   const { user } = useAuth();
   const streams = q.data ?? [];
   const transcodes = streams.filter((s) => s.state.playMethod === 'Transcode').length;
@@ -24,7 +26,7 @@ export default function NowPlayingPage() {
       <PageHeader
         eyebrow="Jellyfin"
         title="Now Playing"
-        description="Every active stream across your server, updated live."
+        description={servers > 1 ? `Every active stream across your ${servers} Jellyfin servers, updated live.` : 'Every active stream across your server, updated live.'}
         actions={user?.isAdmin ? <BufferingLink /> : undefined}
       />
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -50,7 +52,7 @@ export default function NowPlayingPage() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
           <AnimatePresence mode="popLayout">
-            {streams.map((s, i) => <StreamCard key={s.sessionId} s={s} fetchedAt={q.dataUpdatedAt} index={i} />)}
+            {streams.map((s, i) => <StreamCard key={streamKey(s)} s={s} fetchedAt={q.dataUpdatedAt} index={i} />)}
           </AnimatePresence>
         </div>
       )}
