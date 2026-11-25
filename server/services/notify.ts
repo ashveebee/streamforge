@@ -362,7 +362,7 @@ export function removeChannel(id: string) {
 export async function testChannel(id: string) {
   const c = channels.find((x) => x.id === id);
   if (!c) throw new ChannelError('Unknown channel');
-  const p = { title: 'StreamForge test notification', message: 'If you can read this, notifications are working.', url: '/settings' };
+  const p = { title: 'StreamForge test notification', message: 'If you can read this, notifications are working.', url: '/settings/notifications' };
   try {
     await deliver(c, 'test', p);
     remember({ at: new Date().toISOString(), channel: c.name, event: 'test', title: p.title, ok: true });

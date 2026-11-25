@@ -177,7 +177,7 @@ export default function DownloadsPage() {
     <>
       <PageHeader eyebrow="Transfers" title="Download clients" description="Live speeds and every download in your torrent and usenet clients." />
       {!has ? (
-        <Card><EmptyState icon={Download} title="No download clients connected" description="Add qBittorrent, Transmission, SABnzbd or NZBGet in Settings to see real transfer speeds and manage downloads here." /></Card>
+        <Card><EmptyState icon={Download} title="No download clients connected" description="Add qBittorrent, Transmission, SABnzbd or NZBGet in Settings → Download clients to see real transfer speeds and manage downloads here." /></Card>
       ) : (
         <QueryState query={q} skeleton={<PageLoader label="Connecting to your download clients" hint="Reading speeds and queues…" />}>
           {(d) => {

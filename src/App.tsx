@@ -107,6 +107,7 @@ const router = createBrowserRouter([
       { path: '/stats', element: page(<Stats />, 'stats') },
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
+      { path: '/settings/:section', element: page(<Settings />) },
       { path: '/audit', element: page(<Audit />) },
       { path: '/now-playing/buffering', element: page(<Diagnose />) },
       { path: '/me', element: page(<Me />) },

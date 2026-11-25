@@ -294,7 +294,7 @@ Your settings are kept in the `streamforge-data` volume. See
 following `latest`.
 
 StreamForge tells admins when a new release is out: the sidebar shows the new
-version, and **Settings → Updates** lists what changed since your version and
+version, and **Settings → Updates & backup** lists what changed since your version and
 the command to update. It asks GitHub's public API every 6 hours, sending
 nothing but its version number. Pick **StreamForge update available** on a
 notification channel to hear about it there too, or set `UPDATE_CHECK=false`

@@ -103,7 +103,7 @@ export function Sidebar({
     >
       <div className={cn('flex h-11 items-center gap-2.5 px-1.5', collapsed && 'justify-center px-0')}>
         {collapsed && newVersion ? (
-          <NavLink to="/settings#updates" onClick={onNavigate} className="relative" title={`StreamForge ${newVersion} is available`} aria-label={`StreamForge ${newVersion} is available`}>
+          <NavLink to="/settings/system" onClick={onNavigate} className="relative" title={`StreamForge ${newVersion} is available`} aria-label={`StreamForge ${newVersion} is available`}>
             <LogoMark size={30} />
             <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface bg-brand" />
           </NavLink>
@@ -114,7 +114,7 @@ export function Sidebar({
           <div className="min-w-0 leading-tight">
             <div className="text-[15px] font-semibold tracking-tight">StreamForge</div>
             {newVersion ? (
-              <NavLink to="/settings#updates" onClick={onNavigate} className="text-[11px] font-medium text-brand hover:underline" title="See what’s new and how to update">
+              <NavLink to="/settings/system" onClick={onNavigate} className="text-[11px] font-medium text-brand hover:underline" title="See what’s new and how to update">
                 v{__APP_VERSION__} · {newVersion} available
               </NavLink>
             ) : (

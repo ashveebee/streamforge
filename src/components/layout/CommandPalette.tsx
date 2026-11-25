@@ -54,7 +54,11 @@ function usePages(): PageCmd[] {
     if (canSee('downloads') && cfg?.downloadClients) out.push({ key: 'p:/downloads', label: 'Downloads', path: '/downloads', icon: Download, keywords: 'qbittorrent sabnzbd transmission nzbget torrents' });
     if (canSee('system')) out.push({ key: 'p:/system', label: 'System Status', path: '/system', icon: Activity, keywords: 'health cpu disk' });
     if (user?.isAdmin) {
-      out.push({ key: 'p:/settings', label: 'Settings', path: '/settings', icon: Settings, keywords: 'configure services api key notifications backup' });
+      out.push({ key: 'p:/settings', label: 'Settings', path: '/settings', icon: Settings, keywords: 'configure services api key connect' });
+      out.push({ key: 'p:/settings/downloads', label: 'Settings · Download clients', path: '/settings/downloads', icon: Settings, keywords: 'qbittorrent transmission sabnzbd nzbget' });
+      out.push({ key: 'p:/settings/notifications', label: 'Settings · Notifications', path: '/settings/notifications', icon: Settings, keywords: 'alerts discord ntfy pushover webhook push' });
+      out.push({ key: 'p:/settings/access', label: 'Settings · Access', path: '/settings/access', icon: Settings, keywords: 'members users sign in sso oidc authentik' });
+      out.push({ key: 'p:/settings/system', label: 'Settings · Updates & backup', path: '/settings/system', icon: Settings, keywords: 'update version release backup restore' });
       out.push({ key: 'p:/audit', label: 'Audit log', path: '/audit', icon: ScrollText, keywords: 'security history changes' });
       out.push({ key: 'p:/now-playing/buffering', label: 'Why did it buffer?', path: '/now-playing/buffering', icon: Radar, keywords: 'buffering stall lag stutter diagnose' });
       out.push({ key: 'p:/rules', label: 'Rules', path: '/rules', icon: Sparkles, keywords: 'automation alerts if then' });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ArrowUpCircle, CircleCheck, Copy, ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useCheckUpdates, useUpdates, type Release } from '@/hooks/useUpdates';
 import { dayLabel, relative } from '@/lib/format';
@@ -15,16 +15,11 @@ const COMMANDS = [
 export function UpdatesSection() {
   const q = useUpdates();
   const check = useCheckUpdates();
-  const ref = useRef<HTMLElement>(null);
-  // Links to /settings#updates (sidebar, notifications) land here.
-  useEffect(() => {
-    if (q.data && location.hash === '#updates') ref.current?.scrollIntoView({ block: 'start' });
-  }, [q.data]);
   const d = q.data;
   if (!d) return null;
 
   return (
-    <section ref={ref} id="updates" className="mb-8 scroll-mt-6" aria-labelledby="updates-h">
+    <section id="updates" className="mt-8" aria-labelledby="updates-h">
       <h2 id="updates-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight">
         <ArrowUpCircle className="size-4 text-brand" /> Updates
       </h2>

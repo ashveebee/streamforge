@@ -126,7 +126,7 @@ export async function checkForUpdates() {
         emit('update_available', {
           title: `StreamForge ${top.version} is available`,
           message: `You’re running ${VERSION}. ${summary(newer)}`,
-          url: '/settings#updates',
+          url: '/settings/system',
         });
       }
     } catch (err) {
