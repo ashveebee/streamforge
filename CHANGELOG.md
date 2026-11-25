@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.0](https://github.com/ashveebee/streamforge/compare/v1.6.0...v1.7.0) (2026-11-25)
+
+
+### Features
+
+* buffering diagnosis, device playability, update notices and a tidier Settings ([8a62d99](https://github.com/ashveebee/streamforge/commit/8a62d993a224d772ea768c8da71631c63a76ba8e))
+* explain why a stream buffered ([1908fb4](https://github.com/ashveebee/streamforge/commit/1908fb433c768cbd0d3f6edcb42bf2c029f6c606))
+* learn what each device can play, and predict it for the library ([20ab29e](https://github.com/ashveebee/streamforge/commit/20ab29e6f20913d9c3a17568bcefb76a64b597c3))
+* tell admins when a new StreamForge release is out ([e627611](https://github.com/ashveebee/streamforge/commit/e6276111d7620ae399e930694a74b54670fefd68))
+
 ## [1.6.0](https://github.com/ashveebee/streamforge/compare/v1.5.0...v1.6.0) (2026-11-24)
 
 
