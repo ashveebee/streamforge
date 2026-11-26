@@ -319,7 +319,7 @@ docker run -d --name streamforge \
 The `/data` volume holds the settings database. Keep it, or you'll need to set
 everything up again after an upgrade.
 
-### 2. Connect your media server
+### 2. Choose your media server
 
 Open **http://your-server:4000**. On first launch StreamForge asks which media
 server you use. People sign in to StreamForge with their account on it.
@@ -338,11 +338,24 @@ server you use. People sign in to StreamForge with their account on it.
   API key on the server for background features, and everyone else signs in
   with their Emby account.
 
-You can add more servers of any kind from Settings afterwards.
+Each install watches the one media server you choose. Running two? Run a
+StreamForge for each.
 
 <a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin or Emby"></a>
 <a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="32%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
 <a href="docs/screenshots/setup-emby.jpg"><img src="docs/screenshots/setup-emby.jpg" width="32%" alt="Emby setup: the server address, servers found on the network, and an administrator sign-in"></a>
+
+### 3. Set up your apps
+
+After you sign in, StreamForge opens **Set up your apps** and looks for Sonarr,
+Radarr, Seerr, Prowlarr, Bazarr, Lidarr and Readarr: by Docker service name,
+on this machine and the media server's machine at their usual ports, and at
+subdomains next to your media server's. Found apps have their address filled
+in; paste each API key and click **Test and connect**. Once Seerr or Prowlarr
+is connected, StreamForge offers to connect the Sonarr and Radarr they already
+know. Apps you skip are switched off; turn them on any time in Settings.
+
+<a href="docs/screenshots/setup-apps.jpg"><img src="docs/screenshots/setup-apps.jpg" width="60%" alt="Set up your apps: Sonarr and Seerr connected, Radarr, Prowlarr and Bazarr found with their addresses filled in, and an offer to connect Radarr using Seerr's details"></a>
 
 ### Plex-only and Emby-only households
 
@@ -375,10 +388,12 @@ notes below are mostly about **Plex**.
 - **Needs:** the StreamForge server must be able to reach `plex.tv` (for
   sign-in) and your Plex server.
 
-### 3. Connect your other services
+### 4. Change them later in Settings
 
-Go to **Settings** in the sidebar. For each service you use, enter its address
-and API key, click **Test connection**, then **Save**. Changes apply
+Go to **Settings** in the sidebar. Services are grouped: media server, library
+managers, indexers and downloads, requests, metadata and subtitles, and
+storage. For each service you use, enter its address and API key, click
+**Test connection**, then **Save**. Changes apply
 immediately; no restart is needed. Skip any service you don't run.
 
 | Service | Where to find the API key |

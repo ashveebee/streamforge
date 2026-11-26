@@ -265,6 +265,7 @@ function ChooseServer({ onPick }: { onPick: (t: SetupType) => void }) {
   const card = 'flex w-full items-center gap-3 rounded-2xl border border-line bg-white/[0.02] p-4 text-left transition hover:border-line-strong hover:bg-white/[0.05]';
   return (
     <div className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <p className="mb-1 text-[11px] font-semibold tracking-[0.1em] text-ink-4 uppercase">Step 1 of 2 · Media server</p>
       <p className="mb-4 text-sm leading-relaxed text-ink-2">Which media server do you use? People will sign in to StreamForge with their account on it.</p>
       <div className="space-y-2.5">
         <button type="button" className={card} onClick={() => onPick('plex')}>
@@ -292,7 +293,9 @@ function ChooseServer({ onPick }: { onPick: (t: SetupType) => void }) {
           <ArrowRight className="size-4 text-ink-4" />
         </button>
       </div>
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">Run more than one? Pick one for sign-in and add the others from Settings.</p>
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-4">
+        StreamForge watches the one you choose. Next, it finds Sonarr, Radarr, Seerr and your other apps.
+      </p>
     </div>
   );
 }

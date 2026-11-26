@@ -43,8 +43,13 @@ import type {
 } from '../src/lib/types.js';
 
 const PORT = Number(process.env.DEMO_PORT ?? 4010);
-// DEMO_SINGLE=1 shows a household with one Jellyfin server and no Emby or Plex.
-const SINGLE = process.env.DEMO_SINGLE === '1';
+// Each install watches one media server, so the demo shows one: Jellyfin by
+// default, or Plex/Emby with DEMO_MAIN. (Leftover multi-server data below is
+// filtered out by SINGLE.)
+const SINGLE = true;
+// DEMO_APPS=1 shows setup step 2 ("Set up your apps") partway through.
+const APPS_SETUP = process.env.DEMO_APPS === '1';
+const APPS_CONNECTED = new Set<ServiceId>(['jellyfin', 'sonarr', 'seerr']);
 const START = Date.now();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -902,7 +907,7 @@ function settings(): ServiceSettingsView[] {
     id,
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
     source: id === 'infinidisk' ? 'environment' : 'database',
-    configured: true,
+    configured: !APPS_SETUP || APPS_CONNECTED.has(id),
     enabled: !disabledServices.has(id),
     canDisable: id !== 'jellyfin',
     envAvailable: id === 'infinidisk',
@@ -978,7 +983,8 @@ if (MAIN_KIND) {
       },
     };
   };
-  app.get('/api/jellyfin/now-playing', json(() => nowPlaying().filter((s) => s.serverType !== 'emby').map(plexStream)));
+  // One server: the streams that were on the demo's second server are left out.
+  app.get('/api/jellyfin/now-playing', json(() => nowPlaying().filter((s) => !s.serverType).map(plexStream)));
   const home = (req: express.Request) => !req.query.instance || req.query.instance === PLEX_HOME.id;
   app.get('/api/jellyfin/overview', (req, res) => {
     if (!home(req)) return res.json(extraOverview(PLEX));
@@ -1003,14 +1009,14 @@ if (MAIN_KIND) {
     const jf = h.services.find((s) => s.id === 'jellyfin')!;
     const row = (id: string, name: string, ms: number): ServiceHealth => ({ ...jf, id, instance: id, serverType: PLEX_HOME.type, name: `${MAIN_NAME} · ${name}`, version: MAIN_VERSION, latencyMs: ms, meta: { server: name } });
     const rest = h.services.filter((s) => s.id !== 'jellyfin' && !s.serverType);
-    return { ...h, services: [row(PLEX_HOME.id, 'Home', 34), row(SECOND.id, 'Cabin', 61), ...rest] };
+    return { ...h, services: [row(PLEX_HOME.id, 'Home', 34), ...rest] };
   }));
   const port = MAIN_KIND === 'emby' ? 8096 : 32400;
   app.get('/api/settings/media-servers', json(() => ({
     servers: [
       { id: PLEX_HOME.id, type: PLEX_HOME.type, name: 'Home', url: `http://192.168.1.10:${port}`, publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••K2pa', createdAt: '2026-08-01T10:00:00.000Z', main: true },
-      { id: SECOND.id, type: SECOND.type, name: 'Cabin', url: `http://192.168.1.40:${port}`, publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••Zq7x', createdAt: '2026-10-14T18:30:00.000Z' },
     ],
+    ignored: [],
   })));
 }
 
@@ -1028,7 +1034,7 @@ app.get('/api/config', json(() => ({
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
   jellyfinServers: PLEX_ONLY
-    ? [{ ...PLEX_HOME, primary: true }, { ...SECOND, primary: false }]
+    ? [{ ...PLEX_HOME, primary: true }]
     : [
         { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
         ...(SINGLE ? [] : [{ ...EMBY, primary: false }, { ...PLEX, primary: false }]),
@@ -1128,18 +1134,18 @@ app.get('/api/kometa/status', json(() => ({
     { id: 95, at: iso(3 * HOUR), event: 'delete', message: 'Collection “Halloween 2025” deleted', library: 'Movies' },
   ],
 })));
-// Collections made in StreamForge and on the servers, for the Kometa page.
+// Collections made in StreamForge and on the server, for the Kometa page.
 const demoLibraries = [
   { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-movies', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-movies.yml' },
   { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-shows', name: 'TV Shows', kind: 'show', kometaFile: 'config/streamforge/jellyfin-homelab-tv-shows.yml' },
-  { server: PLEX.id, serverType: 'plex', serverName: 'Cabin', id: '1', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/plex-cabin-movies.yml' },
-  { server: EMBY.id, serverType: 'emby', serverName: 'Office', id: '101', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/emby-office-movies.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-kids', name: 'Kids Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-kids-movies.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-4k', name: '4K Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-4k-movies.yml' },
 ];
 const colArt = (t: string, server?: string) => ({ itemId: slug(t), type: 'Primary', tag: 'demo', ...(server ? { server } : {}) });
 const demoCollections = [
-  { id: 'sf-oscars', name: 'Oscar Winners', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '28' }, schedule: 'always', count: 8, poster: colArt('Lanterns Over Kessa', PLEX.id), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
+  { id: 'sf-oscars', name: 'Oscar Winners', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '28' }, schedule: 'always', count: 8, poster: colArt('Lanterns Over Kessa'), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
   { id: 'sf-trending', name: 'Trending This Week', managed: true, library: demoLibraries[0], source: { type: 'tmdb_trending_weekly', limit: 30 }, schedule: 'always', count: 22, poster: colArt('Neon Harbor'), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
-  { id: 'sf-staff', name: 'Staff Picks', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '8273' }, schedule: 'always', poster: colArt('Paper Kingdoms', PLEX.id), status: 'error', error: 'TMDb list 8273 not found', createdBy: 'Sam', updatedAt: iso(9 * DAY) },
+  { id: 'sf-staff', name: 'Staff Picks', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '8273' }, schedule: 'always', poster: colArt('Paper Kingdoms'), status: 'error', error: 'TMDb list 8273 not found', createdBy: 'Sam', updatedAt: iso(9 * DAY) },
   { id: 'sf-xmas', name: 'Christmas Movies', managed: true, library: demoLibraries[2], source: { type: 'imdb_list', value: 'https://www.imdb.com/list/ls000096828/' }, schedule: { from: '12/01', to: '12/31' }, status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(20 * MIN) },
   { id: 'sf-family', name: 'Family Night', managed: true, library: demoLibraries[3], source: { type: 'manual', ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] }, schedule: 'always', status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(15 * MIN) },
   { id: 'srv~jellyfin~~bx1', name: 'New Episodes', managed: false, library: { ...demoLibraries[1], id: '', name: 'Collections' }, count: 41, poster: colArt('Atlas Station'), status: 'built' },
@@ -1158,7 +1164,7 @@ app.get('/api/kometa/collections/:id', (req, res) => {
     tmdbId: 1000 + i,
     title: t,
     year: find(t).year,
-    poster: colArt(t, PLEX.id),
+    poster: colArt(t),
     inLibrary: !missing.has(t),
     inCollection: !missing.has(t),
     new: i < 3,
@@ -1211,26 +1217,30 @@ app.get('/api/settings/kometa', json(() => ({
   collections: { configDir: '/kometa', runTimes: ['03:00'], tmdbKeySet: false, tmdbKeyFromKometa: true, folder: { ok: true, hasConfig: true } },
 })));
 
-// Extra media servers: an Emby and a Plex server next to the main Jellyfin one.
-const demoMediaServers = [
-  { id: 'emby-office', type: 'emby', name: 'Office', url: 'http://192.168.1.31:8096', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••a91e', createdAt: '2026-09-02T10:00:00.000Z' },
-  { id: 'plex-cabin', type: 'plex', name: 'Cabin', url: 'http://192.168.1.40:32400', publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••Zq7x', createdAt: '2026-10-14T18:30:00.000Z' },
-];
-app.get('/api/settings/media-servers', json(() => ({ servers: demoMediaServers })));
+// With Jellyfin, the media server lives in the service settings: no Plex/Emby server stored.
+app.get('/api/settings/media-servers', json(() => ({ servers: [], ignored: [] })));
 app.post('/api/settings/media-servers/test', (req, res) =>
   res.json({ ok: true, version: (req.body as { type?: string })?.type === 'plex' ? '1.41.2' : '4.8.10', latencyMs: 42, issues: [] }),
 );
-app.post('/api/settings/media-servers/discover', json(() => ({
-  servers: [
-    { id: 'a1', type: 'jellyfin', name: 'Homelab', url: 'http://192.168.1.10:8096', version: '10.11.2', reachable: true, added: true },
-    { id: 'b2', type: 'emby', name: 'Office', url: 'http://192.168.1.31:8096', version: '4.8.10', reachable: true, added: true },
-    { id: 'c3', type: 'plex', name: 'Cabin', url: 'http://192.168.1.40:32400', version: '1.41.2', reachable: true, added: true },
-    { id: 'd4', type: 'plex', name: 'Garage NAS', url: 'http://192.168.1.52:32400', version: '1.41.2', reachable: true, added: false },
-  ],
-})));
-app.post('/api/settings/media-servers', (_req, res) => res.status(403).json({ error: 'demo', message: 'Adding servers is switched off in the demo.' }));
 app.put('/api/settings/media-servers/:id', (_req, res) => res.status(403).json({ error: 'demo', message: 'Changes are switched off in the demo.' }));
-app.delete('/api/settings/media-servers/:id', (_req, res) => res.status(403).json({ error: 'demo', message: 'Changes are switched off in the demo.' }));
+
+/* Setup step 2: your apps. DEMO_APPS=1 shows it partway through. */
+app.get('/api/settings/setup', json(() => ({ appsDone: !APPS_SETUP })));
+app.put('/api/settings/setup', json(() => ({ appsDone: true, disabled: [] })));
+app.post('/api/settings/apps/discover', async (_req, res) => {
+  await new Promise((r) => setTimeout(r, 600));
+  res.json({
+    found: [
+      { service: 'sonarr', name: 'Sonarr', url: 'http://sonarr:8989', via: 'docker' },
+      { service: 'radarr', name: 'Radarr', url: 'http://radarr:7878', via: 'docker' },
+      { service: 'seerr', name: 'Jellyseerr', url: 'http://jellyseerr:5055', via: 'docker' },
+      { service: 'prowlarr', name: 'Prowlarr', url: 'http://prowlarr:9696', via: 'docker' },
+      { service: 'bazarr', name: 'Bazarr', url: 'https://bazarr.example.com', via: 'domain' },
+    ].map((f) => ({ ...f, configured: !APPS_SETUP || APPS_CONNECTED.has(f.service as ServiceId) })),
+    importable: APPS_SETUP ? [{ service: 'radarr', from: 'seerr', url: 'http://radarr:7878' }] : [],
+  });
+});
+app.post('/api/settings/apps/import', json(() => ({ results: [{ service: 'radarr', from: 'seerr', url: 'http://radarr:7878', ok: true }] })));
 app.get('/api/settings/instances', json(() => ({
   instances: [{ id: 'radarr-4k', kind: 'radarr', name: '4K', url: 'https://radarr-4k.example.com', enabled: true, apiKeySet: true, apiKeyHint: '••••77ab', createdAt: iso(20 * DAY) }],
 })));

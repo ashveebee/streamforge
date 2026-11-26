@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Re-creates the README screenshots from the demo data.
+# Re-creates the README and website screenshots from the demo data. Start the
+# demo in one terminal and run this in another, once per demo mode:
 #
-#   npm run demo                 # in one terminal
-#   (DEMO_SETUP=1 npm run demo shows the first-run screen, for setup.jpg:
-#    open /login and click "Find servers on my network" before capturing.)
-#   (DEMO_MAIN=plex or DEMO_MAIN=emby npm run demo shows a Plex- or Emby-only household, for plex-only.jpg;
-#    with DEMO_SETUP=1 too, pick Plex and click Sign in with Plex for setup-plex.jpg.)
-#   ./scripts/screenshots.sh     # in another
+#   npm run demo                    ./scripts/screenshots.sh         # Jellyfin household
+#   DEMO_MAIN=plex npm run demo     ./scripts/screenshots.sh plex    # Plex-only household
+#   DEMO_MAIN=emby npm run demo     ./scripts/screenshots.sh emby    # Emby-only household
+#   DEMO_SETUP=1 npm run demo       ./scripts/screenshots.sh setup   # first run, step 1
+#   DEMO_APPS=1 npm run demo        ./scripts/screenshots.sh apps    # first run, step 2
+#
+# (setup-plex.jpg and setup-emby.jpg need clicks, so they're captured by hand:
+#  DEMO_SETUP=1 DEMO_MAIN=plex, pick Plex and click Sign in with Plex.)
 #
 # Needs Google Chrome (or set CHROME=/path/to/chrome), plus sips (macOS) or
 # ImageMagick to compress. Images are written to docs/screenshots as 2x JPEGs.
@@ -22,7 +25,8 @@ if [[ -z "$CHROME" ]]; then
   done
 fi
 [[ -n "$CHROME" ]] || { echo "Chrome not found; set CHROME=/path/to/chrome" >&2; exit 1; }
-curl -sf "$URL/api/auth/me" >/dev/null || { echo "Demo not running at $URL — start it with: npm run demo" >&2; exit 1; }
+MODE="${1:-all}"
+curl -s -o /dev/null "$URL/api/auth/server" || { echo "Demo not running at $URL — start it with: npm run demo" >&2; exit 1; }
 
 mkdir -p "$OUT"
 PROFILE="$(mktemp -d)"
@@ -43,30 +47,47 @@ shot() { # name path width,height [scale]
   echo "  ✓ $1.jpg"
 }
 
-echo "Capturing screenshots from $URL"
-shot dashboard   /            1440,900
-shot now-playing /now-playing 1440,900
-shot system      /system      1440,1100
-shot stats       /stats       1440,1100
-shot library     /library     1440,900
-shot jellyfin    /jellyfin    1440,900
-shot emby        /emby        1440,900
-shot plex        /plex        1440,900
-shot sonarr      /sonarr      1440,1700
-shot seerr       /seerr       1440,900
-shot infinidisk  /infinidisk  1440,900
-shot settings    /settings    1440,1000
-shot downloads   /downloads   1440,1100
-shot me          /me          1440,1600
-shot digest      /digest      1440,1100
-shot rules       /rules       1440,900
-shot audit       /audit       1440,900
-shot bazarr      /bazarr      1440,1100
-shot buffering   /now-playing/buffering 1440,900
-shot title       /media/movie/1000 1440,1300
-shot title-tv    /media/tv/1013    1440,1300
-# Phone-sized, for the website's "in your pocket" section.
-shot phone-dashboard   /                 390,844 3
-shot phone-now-playing /now-playing      390,844 3
-shot phone-title       /media/tv/1013    390,844 3
+echo "Capturing $MODE screenshots from $URL"
+case "$MODE" in
+  all)
+    shot dashboard   /            1440,900
+    shot now-playing /now-playing 1440,900
+    shot system      /system      1440,1100
+    shot stats       /stats       1440,1100
+    shot history     /history     1440,1000
+    shot library     /library     1440,900
+    shot jellyfin    /jellyfin    1440,900
+    shot sonarr      /sonarr      1440,1700
+    shot seerr       /seerr       1440,900
+    shot infinidisk  /infinidisk  1440,900
+    shot settings    /settings    1440,1000
+    shot downloads   /downloads   1440,1100
+    shot me          /me          1440,1600
+    shot digest      /digest      1440,1100
+    shot rules       /rules       1440,900
+    shot audit       /audit       1440,900
+    shot bazarr      /bazarr      1440,1100
+    shot buffering   /now-playing/buffering 1440,900
+    shot title       /media/movie/1000 1440,1300
+    shot title-tv    /media/tv/1013    1440,1300
+    # Phone-sized, for the website's "in your pocket" section.
+    shot phone-dashboard   /                 390,844 3
+    shot phone-now-playing /now-playing      390,844 3
+    shot phone-title       /media/tv/1013    390,844 3
+    ;;
+  plex)
+    shot plex-only /     1440,900
+    shot plex      /plex 1440,900
+    ;;
+  emby)
+    shot emby /emby 1440,900
+    ;;
+  setup)
+    shot setup /login 1440,900
+    ;;
+  apps)
+    shot setup-apps /setup 1440,1500
+    ;;
+  *) echo "Unknown mode: $MODE (all, plex, emby, setup or apps)" >&2; exit 1 ;;
+esac
 echo "Saved to $OUT"

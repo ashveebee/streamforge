@@ -135,6 +135,13 @@
     @media (min-width: 900px) { .show { grid-template-columns: 5fr 7fr; gap: 56px; } .show.flip { grid-template-columns: 7fr 5fr; } .show.flip .txt { order: 2; } }
     .show .shot { border-radius: 16px; border: 1px solid var(--line-strong); overflow: hidden; box-shadow: 0 40px 80px -40px rgb(0 0 0 / .9); background: var(--surface); }
     .show .shot img { width: 100%; height: auto; }
+    .setup-shots { display: grid; gap: 16px; margin-top: 28px; align-items: start; }
+    @media (min-width: 820px) { .setup-shots { grid-template-columns: 1fr 1fr; gap: 24px; } }
+    .setup-shots figure { margin: 0; }
+    .setup-shots a { display: block; border-radius: 14px; border: 1px solid var(--line-strong); overflow: hidden; background: var(--surface); box-shadow: 0 30px 60px -36px rgb(0 0 0 / .9); }
+    .setup-shots img { display: block; width: 100%; height: auto; }
+    .setup-shots .crop { aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+    .setup-shots figcaption { margin-top: 10px; font-size: 13px; color: var(--ink-3); }
     .show h3 { font-size: clamp(22px, 3vw, 30px); letter-spacing: -.02em; margin: 10px 0 0; line-height: 1.2; }
     .show p { color: var(--ink-3); margin: 14px 0 0; }
     .ticks { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
@@ -510,7 +517,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Click a viewer in Stats to open their history</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="1800" alt="Watch history: a list of people on the left, and each play with its poster, device and time watched" loading="lazy"></div>
+          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="2000" alt="Watch history: a list of people on the left, and each play with its poster, device and time watched" loading="lazy"></div>
         </div>
 
         <div class="show flip reveal">
@@ -524,7 +531,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Request it, add it to Sonarr or Radarr, or search for a better copy</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="1800" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
+          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="2600" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
         </div>
 
         <div class="features">
@@ -950,13 +957,24 @@
             <p>Save the file above and run <code>docker compose up -d</code>, or use the one-line <code>docker run</code> from the README.</p>
           </div>
           <div class="card step reveal">
-            <h3>Connect your media server</h3>
-            <p>Open <code>http://your-server:4000</code> and pick Plex, Jellyfin or Emby. Plex: click Sign in with Plex and choose your server. Jellyfin or Emby: enter its address and sign in as an administrator.</p>
+            <h3>Choose your media server</h3>
+            <p>Open <code>http://your-server:4000</code> and pick Plex, Jellyfin or Emby. Plex: click Sign in with Plex and choose your server. Jellyfin or Emby: enter its address, or find it on your network, and sign in as an administrator.</p>
           </div>
           <div class="card step reveal">
-            <h3>Add your services</h3>
-            <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients, plus any extra Jellyfin, Emby or Plex servers. Skip any you don't use.</p>
+            <h3>Set up your apps</h3>
+            <p>StreamForge looks for Sonarr, Radarr, Seerr, Prowlarr and the rest on your Docker network, your machines and your domain, and fills in their addresses. Paste each API key to connect. Already use Seerr? It shares your Sonarr and Radarr in one click. Skip any you don't use.</p>
           </div>
+        </div>
+
+        <div class="setup-shots reveal">
+          <figure>
+            <a href="screenshots/setup.jpg"><img src="screenshots/setup.jpg" width="2880" height="1800" loading="lazy" alt="First run, step 1: choose Plex, Jellyfin or Emby"></a>
+            <figcaption>Step 1: choose your media server.</figcaption>
+          </figure>
+          <figure>
+            <a href="screenshots/setup-apps.jpg"><img class="crop" src="screenshots/setup-apps.jpg" width="2880" height="3000" loading="lazy" alt="First run, step 2: apps found on the network with their addresses filled in, and an offer to connect Radarr using Seerr's details"></a>
+            <figcaption>Step 2: your apps, found for you. Paste each key to connect.</figcaption>
+          </figure>
         </div>
         <p class="note">The <a href="guides/install.html">install guide</a> covers Docker networking, reverse proxies, Tailscale, backups and troubleshooting. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
       </div>
@@ -991,7 +1009,7 @@
           <a class="card reveal guide" href="guides/watch-history-and-stats.html" style="--c:var(--cyan)">
             <div class="ico"><svg class="i"><use href="#i-chart"/></svg></div>
             <h3>Watch history and stats</h3>
-            <p>How plays are recorded, the Watch history and Stats pages, filtering by server, and who can see what.</p>
+            <p>How plays are recorded, the Watch history and Stats pages, and who can see what.</p>
           </a>
           <a class="card reveal guide" href="guides/notifications.html" style="--c:var(--seerr)">
             <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
