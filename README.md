@@ -199,6 +199,14 @@ server.
   Sonarr/Radarr instance, Lidarr and Readarr at once, and jump to any page.
   New titles come from Seerr, where people can request them in their own
   name; admins can also add a title straight to Sonarr or Radarr.
+- **Watch history for every user.** Admins get a **Watch history** page:
+  pick a person (or everyone) and a time range to see each play with the
+  time, episode, app, device, server, how long they watched and whether it
+  transcoded, plus their most-watched titles and usual device. Plays come
+  from every media server StreamForge records. Older plays, from before
+  StreamForge was installed, are filled in from Jellyfin's own record (the
+  last time each user finished each movie and episode) or Plex's watch
+  history, so it isn't empty on day one.
 - **Your own page.** Everyone gets a page (click your name in the sidebar)
   with continue watching, next up, watch history, their Seerr requests,
   signed-in devices and two-factor settings.

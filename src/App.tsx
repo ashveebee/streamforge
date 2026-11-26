@@ -28,6 +28,7 @@ const Infinidisk = lazyPage(() => import('@/pages/Infinidisk'));
 const System = lazyPage(() => import('@/pages/System'));
 const Stats = lazyPage(() => import('@/pages/Stats'));
 const LibraryHealth = lazyPage(() => import('@/pages/LibraryHealth'));
+const History = lazyPage(() => import('@/pages/History'));
 const Rules = lazyPage(() => import('@/pages/Rules'));
 const Digest = lazyPage(() => import('@/pages/Digest'));
 const Media = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.MediaPage })));
@@ -107,6 +108,7 @@ const router = createBrowserRouter([
       { path: '/now-playing', element: page(<NowPlaying />, 'now-playing') },
       { path: '/system', element: page(<System />, 'system') },
       { path: '/stats', element: page(<Stats />, 'stats') },
+      { path: '/history', element: page(<History />) },
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
       { path: '/settings/:section', element: page(<Settings />) },

@@ -33,6 +33,7 @@ import { addItems, addOptions, checkItems } from './services/arrAdd.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { HISTORY_DAYS, watchHistory } from './services/history.js';
 import { checkNow, updateStatus } from './services/updates.js';
 import { deviceReport, PlayabilityError, playabilityStatus, titlePlayability } from './services/playability/index.js';
 import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
@@ -81,6 +82,16 @@ api.post('/health/recheck', handle(null, async (req) => {
 }));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+api.get(
+  '/history',
+  requireAdmin,
+  handle(null, (req) => {
+    const d = Number(req.query.days);
+    const user = typeof req.query.user === 'string' && req.query.user.length <= 128 ? req.query.user : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 100) : undefined;
+    return watchHistory(ctxOf(req.session!), { days: (HISTORY_DAYS as readonly number[]).includes(d) ? d : 30, user, q });
+  }),
+);
 api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));
 api.get(
   '/library/reclaim',

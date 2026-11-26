@@ -1562,6 +1562,60 @@ app.put('/api/library/watched-by-everyone/users', (req, res) => {
   demoCounted.set(b.id, b.counted);
   res.json({ ok: true });
 });
+/* Watch history for every user (demo). */
+const HIST_USERS = [
+  { name: 'Alex', id: 'u-alex', client: 'Jellyfin Web', device: 'Firefox' },
+  { name: 'Sam', id: 'u-sam', client: 'Android TV', device: 'Shield TV' },
+  { name: 'Maya', id: 'u-maya', client: 'Swiftfin', device: 'iPad' },
+  { name: 'Jordan', id: 'u-jordan', client: 'Plex for LG', device: 'Living room TV' },
+];
+const HIST_TITLES: [string, string | undefined, number][] = [
+  ['Copper Valley', 'S02E04 · The Ridge', 52], ['Neon Harbor', undefined, 118], ['The Long Winter', 'S01E07 · Thaw', 47], ['Saltwind', 'S03E01 · Undertow', 55],
+  ['Iron Bloom', undefined, 104], ['Copper Valley', 'S02E03 · Old Roads', 49], ['Atlas Station', undefined, 131], ['Quiet Orbit', undefined, 96],
+  ['The Long Winter', 'S01E06 · White Out', 51], ['Velvet Static', undefined, 109], ['Saltwind', 'S02E10 · Low Tide', 58], ['Small Hours', undefined, 92],
+];
+const histRows = (() => {
+  const rows = [];
+  let t = Date.now() - 50 * MIN;
+  for (let i = 0; i < 46; i++) {
+    const u = HIST_USERS[(i * 7 + (i >> 2)) % HIST_USERS.length]!;
+    const [title, subtitle, mins] = HIST_TITLES[(i * 5) % HIST_TITLES.length]!;
+    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client: u.client, device: u.device, server: u.name === 'Jordan' ? 'Cabin' : 'Homelab', method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
+    t -= (3 + ((i * 11) % 17)) * HOUR;
+  }
+  return rows;
+})();
+app.get('/api/history', (req, res) => {
+  const days = Number(req.query.days ?? 30);
+  const user = String(req.query.user ?? '').toLowerCase();
+  const q = String(req.query.q ?? '').toLowerCase();
+  const since = days ? Date.now() - days * DAY : 0;
+  const inRange = histRows.filter((r) => Date.parse(r.at) >= since);
+  const rows = inRange.filter((r) => (!user || r.user.toLowerCase() === user) && (!q || `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q)));
+  const top = new Map<string, { title: string; plays: number; type: string }>();
+  for (const r of rows) top.set(r.title, { title: r.title, type: r.type, plays: (top.get(r.title)?.plays ?? 0) + 1 });
+  res.json({
+    days,
+    users: HIST_USERS.map((u) => {
+      const mine = inRange.filter((r) => r.user === u.name);
+      return { name: u.name, id: u.id, plays: mine.length, watchedMs: mine.reduce((n, r) => n + r.watchedMs, 0), lastAt: mine[0]?.at };
+    }),
+    summary: {
+      plays: rows.length,
+      watchedMs: rows.reduce((n, r) => n + r.watchedMs, 0),
+      titles: top.size,
+      movies: rows.filter((r) => r.type === 'movie').length,
+      episodes: rows.filter((r) => r.type === 'episode').length,
+      transcodePct: rows.length ? Math.round((rows.filter((r) => r.method === 'Transcode').length / rows.length) * 100) : undefined,
+      top: [...top.values()].sort((a, b) => b.plays - a.plays).slice(0, 4),
+      device: user ? `${rows[0]?.client} · ${rows[0]?.device}` : undefined,
+    },
+    rows,
+    total: rows.length,
+    recordingSince: Date.now() - 140 * DAY,
+    serverHistory: 'jellyfin',
+  });
+});
 app.get('/api/settings/sso', json(() => ({
   enabled: true,
   issuer: 'https://auth.example.com/application/o/streamforge/',

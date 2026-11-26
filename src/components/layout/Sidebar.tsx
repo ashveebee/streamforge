@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, Images, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, History, Images, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
 import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useServiceConfig } from '@/hooks/queries';
@@ -174,6 +174,7 @@ export function Sidebar({
         />}
         <NavItem to="/digest" icon={Newspaper} label="This week" collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/history" icon={History} label="Watch history" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
