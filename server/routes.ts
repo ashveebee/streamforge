@@ -27,7 +27,8 @@ import { buildDigest, digestSettings, sendDigest, updateDigest } from './service
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
 import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails, seasonEpisodes } from './services/media.js';
 import { myOverview, myRequests } from './services/me.js';
-import { addToArr, requestMedia, search } from './services/search.js';
+import { requestMedia, search } from './services/search.js';
+import { addItems, addOptions, checkItems } from './services/arrAdd.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
@@ -605,8 +606,73 @@ api.post(
   handle(null, async (req) => {
     const b = addBody.safeParse(req.body ?? {});
     if (!b.success) throw new HttpError(400, 'Invalid request');
-    const r = await addToArr(b.data.kind, b.data, b.data.instance);
-    audit(req, `[search] added ${r.title} to ${r.instance}`);
+    // Quick add from search: the choices last used for this instance (or its defaults).
+    const opts = await addOptions(b.data.kind, b.data.instance);
+    const d = opts.defaults;
+    if (!d.qualityProfileId || !d.rootFolderPath) throw new HttpError(400, 'Set up a quality profile and root folder in Sonarr/Radarr first.');
+    const r = await addItems(b.data.kind, opts.instance, [{ tmdbId: b.data.tmdbId, tvdbId: b.data.tvdbId, title: b.data.title }], { ...d, qualityProfileId: d.qualityProfileId, rootFolderPath: d.rootFolderPath }, false);
+    const one = r.results[0]!;
+    if (one.status === 'skipped') throw new HttpError(409, `${one.title} is already in ${one.message?.replace('Already in ', '') ?? r.instance}.`);
+    if (one.status === 'failed') throw new HttpError(502, one.message ?? 'Couldn’t add it');
+    audit(req, `[search] added ${one.title} to ${r.instance}`);
+    return { ok: true, title: one.title, instance: r.instance };
+  }),
+);
+
+/* ------------------------ add to Sonarr/Radarr (bulk) ------------------------ */
+
+const kindParam = z.enum(['sonarr', 'radarr']);
+const itemSchema = z.object({ tmdbId: z.number().int().positive().optional(), tvdbId: z.number().int().positive().optional(), title: z.string().max(200).optional(), year: z.number().int().optional() }).strict();
+
+api.get(
+  '/arr/add-options',
+  requireAdmin,
+  handle(null, async (req) => {
+    const kind = kindParam.safeParse(req.query.kind);
+    if (!kind.success) throw new HttpError(400, 'Invalid request');
+    return addOptions(kind.data, typeof req.query.instance === 'string' ? req.query.instance : undefined);
+  }),
+);
+
+api.post(
+  '/arr/add-check',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ kind: kindParam, items: z.array(itemSchema).min(1).max(200) }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    return { items: await checkItems(b.data.kind, b.data.items) };
+  }),
+);
+
+api.post(
+  '/arr/add',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z
+      .object({
+        kind: kindParam,
+        instance: z.string().max(64).optional(),
+        items: z.array(itemSchema).min(1).max(200),
+        choices: z
+          .object({
+            qualityProfileId: z.number().int().positive(),
+            rootFolderPath: z.string().min(1).max(500),
+            minimumAvailability: z.enum(['announced', 'inCinemas', 'released']).optional(),
+            seriesMonitor: z.enum(['all', 'future', 'missing', 'existing', 'firstSeason', 'lastSeason', 'pilot', 'none']).optional(),
+            monitored: z.boolean(),
+            search: z.boolean(),
+            tag: z.boolean(),
+          })
+          .strict(),
+        /** Where the titles came from, for the audit log. */
+        from: z.string().max(120).optional(),
+      })
+      .strict()
+      .safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const r = await addItems(b.data.kind, b.data.instance, b.data.items, b.data.choices);
+    const n = r.results.filter((x) => x.status === 'added').length;
+    if (n) audit(req, `[${b.data.kind}] added ${n} title${n === 1 ? '' : 's'} to ${r.instance}${b.data.from ? ` from ${b.data.from}` : ''}: ${r.results.filter((x) => x.status === 'added').map((x) => x.title).slice(0, 20).join(', ')}`);
     return r;
   }),
 );

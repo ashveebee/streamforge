@@ -40,7 +40,8 @@ import {
   type Season,
   type WatchState,
 } from '@/hooks/useMedia';
-import { useAddMedia, useRequestMedia } from '@/hooks/useSearch';
+import { useRequestMedia } from '@/hooks/useSearch';
+import { AddToArrDialog } from '@/components/media/AddToArrDialog';
 import { bytes, dayLabel, relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
@@ -156,10 +157,11 @@ function AvailableOnCard({ list }: { list: NonNullable<Details['availableOn']> }
 
 function Actions({ d }: { d: Details }) {
   const request = useRequestMedia();
-  const add = useAddMedia();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
   const refresh = useInvalidateMedia();
   const done = () => refresh(d.type, d.tmdbId);
-  const err = (request.error ?? add.error) as Error | null;
+  const err = request.error as Error | null;
   const partial = d.type === 'tv' && (d.availability === 'partial' || d.seasons?.some((s) => s.status === 'available'));
   return (
     <>
@@ -196,10 +198,21 @@ function Actions({ d }: { d: Details }) {
         </Button>
       )}
       {d.can.add && (
-        <Button disabled={add.isPending || add.isSuccess} onClick={() => add.mutate({ kind: d.type === 'tv' ? 'sonarr' : 'radarr', tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
-          {add.isPending ? <LoaderCircle className="size-4 animate-spin" /> : add.isSuccess ? <Check className="size-4" /> : <Plus className="size-4" />}
-          {add.isSuccess ? `Added to ${add.data?.instance}` : `Add to ${d.type === 'tv' ? 'Sonarr' : 'Radarr'}`}
+        <Button disabled={added} onClick={() => setAdding(true)}>
+          {added ? <Check className="size-4" /> : <Plus className="size-4" />}
+          {added ? 'Added' : `Add to ${d.type === 'tv' ? 'Sonarr' : 'Radarr'}…`}
         </Button>
+      )}
+      {adding && (
+        <AddToArrDialog
+          kind={d.type === 'tv' ? 'sonarr' : 'radarr'}
+          items={[{ tmdbId: d.tmdbId, title: d.title, year: d.year }]}
+          onClose={() => setAdding(false)}
+          onDone={() => {
+            setAdded(true);
+            done();
+          }}
+        />
       )}
       {d.trailer && (
         <a href={d.trailer} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-4 text-sm font-medium text-white transition hover:bg-white/[0.12]">
