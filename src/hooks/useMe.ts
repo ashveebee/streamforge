@@ -35,6 +35,32 @@ export const useMyRequests = (enabled: boolean) =>
   useQuery({ queryKey: ['me', 'requests'], queryFn: ({ signal }) => api<{ linked: boolean; requests: SeerrRequest[] }>('/me/requests', { signal }), enabled, refetchInterval: 60_000 });
 export const useMySessions = () => useQuery({ queryKey: ['me', 'sessions'], queryFn: ({ signal }) => api<{ sessions: SignedInSession[] }>('/auth/sessions', { signal }) });
 
+/** Your account on another media server: linked by you, or found by name. */
+export interface MyAccount {
+  server: string;
+  name: string;
+  type: 'jellyfin' | 'plex' | 'emby';
+  linked?: { id: string; name: string };
+  matched?: { id: string; name: string };
+  /** The server's accounts, for admins to pick from. */
+  users?: { id: string; name: string }[];
+  reachable: boolean;
+}
+
+export const useMyAccounts = () => useQuery({ queryKey: ['me', 'accounts'], queryFn: ({ signal }) => api<MyAccount[]>('/me/accounts', { signal }) });
+
+export function useLinkAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { server: string; accountId: string | null }) => api<MyAccount[]>(`/me/accounts/${encodeURIComponent(b.server)}`, { method: 'PUT', body: { accountId: b.accountId } }),
+    onSuccess: (data) => {
+      qc.setQueryData(['me', 'accounts'], data);
+      // Episode ticks depend on who "you" are on each server.
+      void qc.invalidateQueries({ queryKey: ['media'] });
+    },
+  });
+}
+
 export function useEndSession() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (id: string) => api(`/auth/sessions/${id}`, { method: 'DELETE' }), onSuccess: () => void qc.invalidateQueries({ queryKey: ['me', 'sessions'] }) });

@@ -776,7 +776,14 @@ export function remoteHeaders(srv: Pick<JfServerTarget, 'apiKey' | 'type'>): Rec
   return { 'X-Emby-Authorization': authHeader(undefined, REMOTE_DEVICE).Authorization, 'X-Emby-Token': srv.apiKey };
 }
 
-export function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
+/** Item queries that can quietly skip libraries when made with an API key and no user. */
+const USER_SCOPED = new Set(['/Items', '/Items/Counts']);
+
+export async function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  if (USER_SCOPED.has(path) && !query?.userId && !query?.UserId) {
+    const userId = await remoteAdminId(srv);
+    if (userId) query = { ...query, userId };
+  }
   return requestJson<T>(buildUrl(remoteBase(srv), path, query), { headers: remoteHeaders(srv), service: 'jellyfin' });
 }
 
@@ -978,6 +985,19 @@ export async function controlRemoteSession(srv: JfServerTarget, sessionId: strin
 /* ------------------------------------------------------------------ */
 
 /** Every series and movie with its external ids, like `libraryItems`, via the server's API key. */
+/**
+ * An admin user on another server. Item queries made with only an API key and
+ * no user can skip whole libraries (Jellyfin 12 returns a partial,
+ * collection-heavy list), so `remote` runs them as an admin who sees everything.
+ */
+async function remoteAdminId(srv: JfServerTarget): Promise<string | undefined> {
+  return cache.get(`jfx:${srv.id}:adminId`, 60 * 60_000, async () => {
+    const users = await remote<JfUser[]>(srv, '/Users').catch(() => [] as JfUser[]);
+    const live = users.filter((u) => !u.Policy?.IsDisabled);
+    return (live.find((u) => u.Policy?.IsAdministrator) ?? live[0])?.Id;
+  });
+}
+
 export async function remoteLibraryItems(srv: JfServerTarget) {
   return cache.get(`jfx:${srv.id}:libitems`, 10 * 60_000, async () => {
     const res = await remote<{ Items: { Id: string; Name: string; Type: string; ProductionYear?: number; ProviderIds?: Record<string, string> }[] }>(srv, '/Items', {

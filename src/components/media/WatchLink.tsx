@@ -198,6 +198,7 @@ export function WatchLink({
   jellyfinUrl,
   play,
   className,
+  style,
   children,
   chooser,
 }: {
@@ -205,6 +206,7 @@ export function WatchLink({
   jellyfinUrl?: string;
   play?: boolean;
   className?: string;
+  style?: React.CSSProperties;
   children: ReactNode | ((app: string) => ReactNode);
   /** Adds a small button to pick the app again. */
   chooser?: boolean;
@@ -214,14 +216,14 @@ export function WatchLink({
   const label = typeof children === 'function' ? children(m.enabled ? targetName(m.choice ?? m.suggested) : 'Jellyfin') : children;
   if (!m.enabled) {
     return jellyfinUrl ? (
-      <a href={jellyfinUrl} target="_blank" rel="noreferrer noopener" className={className}>
+      <a href={jellyfinUrl} target="_blank" rel="noreferrer noopener" className={className} style={style}>
         {label}
       </a>
     ) : null;
   }
   const open = (t: OpenWith) => go(itemUrl(t, itemId, { jellyfinUrl, web: m.web, play }));
   const main = (
-    <button type="button" className={cn(className, chooser && 'flex-1 rounded-r-none')} onClick={() => (m.choice ? open(m.choice) : setAsking(true))}>
+    <button type="button" className={cn(className, chooser && 'flex-1 rounded-r-none')} style={style} onClick={() => (m.choice ? open(m.choice) : setAsking(true))}>
       {label}
     </button>
   );
@@ -232,7 +234,7 @@ export function WatchLink({
       ) : (
         <span className="inline-flex items-stretch">
           {main}
-          <button type="button" onClick={() => setAsking(true)} aria-label="Choose the app to open with" title="Open with…" className={cn(className, 'rounded-l-none border-l border-black/15 px-2')}>
+          <button type="button" onClick={() => setAsking(true)} aria-label="Choose the app to open with" title="Open with…" className={cn(className, 'rounded-l-none border-l border-black/15 px-2')} style={style}>
             <ChevronDown className="size-4" />
           </button>
         </span>

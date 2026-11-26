@@ -615,12 +615,13 @@ export interface PlaybackStats {
   recording: boolean;
   recordingSince?: string;
   totals: { plays: number; hours?: number; users: number; transcodeShare?: number };
-  daily: { date: string; plays: number; direct: number; transcode: number; hours: number }[];
+  /** `byServer`: plays per server id, for colouring by server. */
+  daily: { date: string; plays: number; direct: number; transcode: number; hours: number; byServer: Record<string, number> }[];
   /** [weekday Mon..Sun][hour 0..23] → plays started. */
   heatmap: number[][];
-  topUsers: { name: string; plays: number; hours: number }[];
-  topTitles: { name: string; plays: number; hours: number; link?: string }[];
-  topClients: { name: string; plays: number; hours: number }[];
+  topUsers: { name: string; plays: number; hours: number; byServer: Record<string, number> }[];
+  topTitles: { name: string; plays: number; hours: number; byServer: Record<string, number>; link?: string }[];
+  topClients: { name: string; plays: number; hours: number; byServer: Record<string, number> }[];
 }
 
 export interface StorageForecast {

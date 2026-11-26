@@ -60,7 +60,6 @@ import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
 import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { ServerTag } from '@/components/ui/ServerTag';
-import { Menu } from '@/components/ui/Menu';
 import { Avatar } from '@/components/ui/Image';
 
 const AVAILABILITY: Record<Availability, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
@@ -210,8 +209,14 @@ function AvailableOnCard({ d }: { d: Details }) {
                 ) : null}
               </div>
               {a?.url && /^https?:\/\//.test(a.url) && (
-                <a href={a.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border border-line-strong px-2.5 text-xs font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink">
-                  Open <ExternalLink className="size-3" />
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border px-2.5 text-xs font-semibold transition hover:brightness-125"
+                  style={{ color: MEDIA_SERVERS[type].color, borderColor: `color-mix(in srgb, ${MEDIA_SERVERS[type].color} 45%, transparent)`, background: `color-mix(in srgb, ${MEDIA_SERVERS[type].color} 12%, transparent)` }}
+                >
+                  <Play className="size-3 fill-current" /> Play
                 </a>
               )}
             </li>
@@ -279,24 +284,15 @@ function Actions({ d }: { d: Details }) {
   const partial = d.type === 'tv' && (d.availability === 'partial' || d.seasons?.some((s) => s.status === 'available'));
   return (
     <>
-      {d.jellyfin && <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />}
-      <PlayElsewhere d={d} />
-      {/* Not on the main Jellyfin server: open it where it is instead. */}
-      {!d.jellyfin && d.availableOn?.find((a) => a.url) && (() => {
-        const a = d.availableOn.find((x) => x.url)!;
-        return (
-          <a
-            href={a.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
-            style={{ background: MEDIA_SERVERS[a.type].color }}
-          >
-            <Play className="size-4" /> Play on {MEDIA_SERVERS[a.type].name}
-            {d.availableOn.length > 1 && <span className="font-normal opacity-70">· {a.name}</span>}
-          </a>
-        );
-      })()}
+      {d.jellyfin && (
+        <PlayButton
+          itemId={d.jellyfin.itemId}
+          url={d.jellyfin.url}
+          library={d.library}
+          server={(d.availableOn?.length ?? 0) > 1 ? d.availableOn?.find((a) => a.server === 'jellyfin')?.name ?? 'Jellyfin' : undefined}
+        />
+      )}
+      <PlayOnServers d={d} />
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -339,31 +335,42 @@ function Actions({ d }: { d: Details }) {
   );
 }
 
-/** The other servers' copies: opens the title in that server's own app. */
-function PlayElsewhere({ d }: { d: Details }) {
-  const first = !d.jellyfin ? d.availableOn?.find((x) => x.url) : undefined;
-  const others = (d.availableOn ?? []).filter((a) => a.url && /^https?:\/\//.test(a.url) && a.server !== (d.jellyfin ? 'jellyfin' : first?.server));
-  if (!others.length) return null;
+/**
+ * A play button for every server that has the title (opens it in that
+ * server's own app). The main Jellyfin server's button comes from PlayButton.
+ */
+function PlayOnServers({ d }: { d: Details }) {
+  const servers = (d.availableOn ?? []).filter((a) => a.url && /^https?:\/\//.test(a.url) && !(d.jellyfin && a.server === 'jellyfin'));
+  if (!servers.length) return null;
+  const several = (d.availableOn?.length ?? 0) > 1;
   return (
-    <Menu
-      label="Play on another server"
-      buttonClassName="inline-flex h-10 items-center gap-1.5 rounded-xl border border-white/20 bg-white/[0.06] px-3 text-sm font-medium text-white transition hover:bg-white/[0.12]"
-      trigger={
-        <>
-          {d.jellyfin || first ? 'Other servers' : 'Play on…'} <ChevronDown className="size-3.5" />
-        </>
-      }
-      items={others.map((a) => ({
-        label: `Open on ${a.name}`,
-        hint: [MEDIA_SERVERS[a.type].name, copiesLabel(a.files)].filter(Boolean).join(' · '),
-        icon: Play,
-        onSelect: () => window.open(a.url, '_blank', 'noopener,noreferrer'),
-      }))}
-    />
+    <>
+      {servers.map((a) => {
+        const copies = copiesLabel(a.files);
+        return (
+          <a
+            key={a.server}
+            href={a.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={[`Play on ${a.name}`, MEDIA_SERVERS[a.type].name, copies].filter(Boolean).join(' · ')}
+            className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
+            style={{ background: MEDIA_SERVERS[a.type].color }}
+          >
+            <Play className="size-4 fill-current" />
+            <span>
+              Play on {MEDIA_SERVERS[a.type].name}
+              {several && <span className="font-normal opacity-70"> · {a.name}</span>}
+            </span>
+          </a>
+        );
+      })}
+    </>
   );
 }
 
-function PlayButton({ itemId, url, library }: { itemId: string; url?: string; library?: LibraryInfo }) {
+/** Plays on the main Jellyfin server. `server` (with several servers) colours it Jellyfin purple and names it. */
+function PlayButton({ itemId, url, library, server }: { itemId: string; url?: string; library?: LibraryInfo; server?: string }) {
   const next = library?.nextUp;
   const resume = library?.watch?.progress;
   return (
@@ -372,11 +379,13 @@ function PlayButton({ itemId, url, library }: { itemId: string; url?: string; li
       jellyfinUrl={next?.url ?? url}
       play={!!(next || resume)}
       chooser
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
+      className={cn('inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition', server ? 'hover:brightness-110' : 'bg-white hover:bg-white/90')}
+      style={server ? { background: MEDIA_SERVERS.jellyfin.color } : undefined}
     >
       {(app) => (
         <>
           <Play className="size-4 fill-current" /> {next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : `Play in ${app}`}
+          {server && <span className="font-normal opacity-70">· {server}</span>}
         </>
       )}
     </WatchLink>

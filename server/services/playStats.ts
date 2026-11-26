@@ -2,7 +2,7 @@ import { db } from '../lib/db.js';
 import { isConfigured } from '../settings.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
-import { canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
+import { allLibraryItems, canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
 import { titleLinks } from './history.js';
 import { mediaServers } from './mediaServers.js';
 import * as plex from './plex.js';
@@ -117,6 +117,18 @@ const dayKey = (t: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+/**
+ * Jellyfin 12's activity log names episodes "Show - Episode" (no S01E02), so
+ * the show is found by matching the longest " - " prefix that's a series in a library.
+ */
+export function splitSeries(title: string, isSeries: (name: string) => boolean) {
+  for (let i = title.lastIndexOf(' - '); i > 0; i = title.lastIndexOf(' - ', i - 1)) {
+    const series = title.slice(0, i);
+    if (isSeries(series)) return { series, episode: title.slice(i + 3) };
+  }
+  return undefined;
+}
+
 /** "Alex is playing Some Show - S01E02 - Pilot on Living Room TV" → parts. */
 export function parsePlaybackName(name: string) {
   const m = name.match(/^(.+?) (?:is playing|has finished playing|is watching) (.+?) on (.+)$/);
@@ -151,27 +163,50 @@ function fromRecorder(since: number): Play[] {
     .map((r) => ({ server: r.server ?? main, user: r.user_name, title: r.title, group: r.series ?? r.title, client: r.client ?? undefined, method: r.method, at: r.started_at, watchedMs: r.watched_ms }));
 }
 
+/** Plays from each server's own history: Plex's watch history, Jellyfin's or Emby's activity log. */
 async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
-  // Plex: its watch history has who played what and when, like Jellyfin's activity log.
+  const fromLog = (server: string, entries: { name: string; date: string }[]) =>
+    entries.flatMap((e) => {
+      const p = parsePlaybackName(e.name);
+      return p ? [{ ...p, server, at: Date.parse(e.date) }] : [];
+    });
+  const main = mainExtra();
+  const sources: Promise<Play[]>[] = [];
+  // The main server: a Jellyfin signed in with (user token), or a main Plex/Emby.
   const p = mainPlex();
-  if (p) return (await plex.playsSince(p, since)).map((x) => ({ server: p.id, user: x.user, title: x.title, group: x.group, at: x.at }));
   const emby = mainEmby();
-  const entries = emby ? await jellyfin.remotePlaybackEntries(emby, new Date(since)) : await jellyfin.playbackEntries(ctx, new Date(since));
-  const out: Play[] = [];
-  for (const e of entries) {
-    const p = parsePlaybackName(e.name);
-    if (p) out.push({ ...p, server: mainId(), at: Date.parse(e.date) });
+  if (p) sources.push(plex.playsSince(p, since).then((xs) => xs.map((x) => ({ server: p.id, user: x.user, title: x.title, group: x.group, at: x.at }))));
+  else if (emby) sources.push(jellyfin.remotePlaybackEntries(emby, new Date(since)).then((es) => fromLog(emby.id, es)));
+  else if (isConfigured('jellyfin')) sources.push(jellyfin.playbackEntries(ctx, new Date(since)).then((es) => fromLog(mainId(), es)));
+  // Every extra server, so history isn't limited to whichever server was added first.
+  for (const srv of mediaServers()) {
+    if (srv.id === main?.id) continue;
+    sources.push(
+      srv.type === 'plex'
+        ? plex.playsSince(srv, since).then((xs) => xs.map((x) => ({ server: srv.id, user: x.user, title: x.title, group: x.group, at: x.at })))
+        : jellyfin.remotePlaybackEntries(srv, new Date(since)).then((es) => fromLog(srv.id, es)),
+    );
   }
-  return out;
+  // A server that's down just drops out; the rest still count.
+  const results = await Promise.allSettled(sources);
+  const plays = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  // Group "Show - Episode" plays under their show when the log didn't say S01E02.
+  if (plays.some((x) => x.group === x.title && x.title.includes(' - '))) {
+    const lib = await allLibraryItems(ctx).catch(() => undefined);
+    const shows = new Set((lib?.items ?? []).filter((i) => i.type === 'Series').map((i) => i.name.toLowerCase()));
+    for (const x of plays) if (x.group === x.title) x.group = splitSeries(x.title, (n) => shows.has(n.toLowerCase()))?.series ?? x.group;
+  }
+  return plays;
 }
 
 function top<K extends string>(plays: Play[], key: (p: Play) => K | undefined, n = 10) {
-  const m = new Map<K, { name: K; plays: number; hours: number }>();
+  const m = new Map<K, { name: K; plays: number; hours: number; byServer: Record<string, number> }>();
   for (const p of plays) {
     const k = key(p);
     if (!k) continue;
-    const e = m.get(k) ?? { name: k, plays: 0, hours: 0 };
+    const e = m.get(k) ?? { name: k, plays: 0, hours: 0, byServer: {} };
     e.plays++;
+    e.byServer[p.server] = (e.byServer[p.server] ?? 0) + 1;
     e.hours += (p.watchedMs ?? 0) / 3_600_000;
     m.set(k, e);
   }
@@ -205,16 +240,17 @@ export async function playbackStats(ctx: JfCtx, days: number, server?: string) {
   const selected = server && known.some((x) => x.id === server) ? server : undefined;
   if (selected) plays = plays.filter((p) => p.server === selected);
 
-  const byDay = new Map<string, { date: string; plays: number; direct: number; transcode: number; hours: number }>();
+  const byDay = new Map<string, { date: string; plays: number; direct: number; transcode: number; hours: number; byServer: Record<string, number> }>();
   for (let i = 0; i < days; i++) {
     const k = dayKey(since + i * 86_400_000 + 3_600_000);
-    byDay.set(k, { date: k, plays: 0, direct: 0, transcode: 0, hours: 0 });
+    byDay.set(k, { date: k, plays: 0, direct: 0, transcode: 0, hours: 0, byServer: {} });
   }
   const heat = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const p of plays) {
     const b = byDay.get(dayKey(p.at));
     if (b) {
       b.plays++;
+      b.byServer[p.server] = (b.byServer[p.server] ?? 0) + 1;
       if (p.method === 'Transcode') b.transcode++;
       else if (p.method) b.direct++;
       b.hours += (p.watchedMs ?? 0) / 3_600_000;

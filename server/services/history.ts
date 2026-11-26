@@ -1,8 +1,10 @@
 import { cache } from '../lib/cache.js';
 import { db } from '../lib/db.js';
-import { jf, serverToken, type JfCtx } from './jellyfin.js';
+import { jf, remotePlaybackEntries, serverToken, type JfCtx, type JfServerTarget } from './jellyfin.js';
 import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import * as plex from './plex.js';
+import { mediaServers } from './mediaServers.js';
+import { parsePlaybackName, splitSeries } from './playStats.js';
 
 /*
  * Watch history for every user, for admins.
@@ -133,15 +135,31 @@ async function jellyfinHistory(ctx: JfCtx) {
   });
 }
 
-/** Plex's own watch history (main Plex server only). */
-async function plexHistory(since: number) {
-  const p = mainPlex();
-  if (!p) return [];
-  const plays = await plex.playsSince(p, since).catch(() => []);
+/** A Plex server's own watch history. */
+async function plexHistory(srv: JfServerTarget, since: number) {
+  const plays = await plex.playsSince(srv, since).catch(() => []);
   return plays.map((x, n): HistoryRow => {
     const ep = x.group !== x.title ? x.title.slice(x.group.length).replace(/^\s*-\s*/, '').replace(/\s-\s/, ' · ') : undefined;
-    return { id: `plex:${x.userId ?? x.user}:${x.at}:${n}`, user: x.user, at: new Date(x.at).toISOString(), title: x.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', serverId: p.id, source: 'server' };
+    return { id: `plex:${srv.id}:${x.userId ?? x.user}:${x.at}:${n}`, user: x.user, at: new Date(x.at).toISOString(), title: x.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', serverId: srv.id, source: 'server' };
   });
+}
+
+/** A Jellyfin or Emby server's activity log ("Alex is playing Show - S01E02 - Pilot on TV"). */
+async function activityHistory(srv: JfServerTarget, since: number) {
+  const entries = await remotePlaybackEntries(srv, new Date(since)).catch(() => []);
+  return entries.flatMap((e, n): HistoryRow[] => {
+    const p = parsePlaybackName(e.name);
+    if (!p) return [];
+    const ep = p.group !== p.title ? p.title.slice(p.group.length).replace(/^\s*-\s*/, '').replace(/\s-\s/, ' · ') : undefined;
+    return [{ id: `log:${srv.id}:${e.date}:${n}`, user: p.user, at: new Date(e.date).toISOString(), title: p.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', client: p.client, serverId: srv.id, source: 'server' }];
+  });
+}
+
+/** Every extra server's own history, so it isn't limited to whichever server was added first. */
+async function extraHistory(since: number) {
+  const main = mainExtra();
+  const rows = await Promise.all(mediaServers().filter((x) => x.id !== main?.id).map((x) => (x.type === 'plex' ? plexHistory(x, since) : activityHistory(x, since))));
+  return rows.flat();
 }
 
 function fromPlay(r: PlayRow): HistoryRow {
@@ -205,9 +223,14 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const plays = recorded(since).map(fromPlay);
   const first = firstRecorded();
   const p = mainPlex();
-  const jfMain = !p && !mainEmby();
-  const jfData = jfMain ? await jellyfinHistory(ctx).catch(() => undefined) : undefined;
-  const serverRows = jfData ? jfData.rows : await plexHistory(since);
+  const e = mainEmby();
+  const jfMain = !p && !e;
+  const [jfData, mainRows, extraRows] = await Promise.all([
+    jfMain ? jellyfinHistory(ctx).catch(() => undefined) : undefined,
+    p ? plexHistory(p, since) : e ? activityHistory(e, since) : [],
+    extraHistory(since),
+  ]);
+  const serverRows = [...(jfData?.rows ?? mainRows), ...extraRows];
   // Only the server's history from before StreamForge recorded that user, so nothing is listed twice.
   const older = serverRows.filter((r) => Date.parse(r.at) >= since && Date.parse(r.at) < (first.get(norm(r.user)) ?? Infinity));
   const merged = [...plays, ...older].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
@@ -217,6 +240,11 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const servers = new Map((idx?.servers ?? []).map((x) => [x.id, x]));
   const seen = new Map<string, { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }>();
   for (const r of merged) {
+    // "Show - Episode" from an activity log without S01E02: split it when the show is in a library.
+    if (r.source === 'server' && !r.subtitle && r.title.includes(' - ')) {
+      const split = splitSeries(r.title, (n) => idx?.anywhere.get(key(n))?.type === 'Series');
+      if (split) Object.assign(r, { title: split.series, subtitle: split.episode, type: 'episode' });
+    }
     const srv = r.serverId ? servers.get(r.serverId) : undefined;
     if (srv) {
       r.serverType = srv.type;

@@ -109,7 +109,7 @@ export default function HistoryPage() {
         title="Watch history"
         description={
           d?.recordingSince
-            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
+            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${(d.servers?.length ?? 0) > 1 ? 'each server' : SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
             : 'What each person on your servers has watched.'
         }
       />
@@ -183,6 +183,11 @@ export default function HistoryPage() {
                       aria-selected={server === s.id}
                       onClick={() => set('server', s.id)}
                       className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition', server === s.id ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2')}
+                      style={
+                        server === s.id && s.type
+                          ? { borderColor: `color-mix(in oklab, ${SERVER_COLOR[s.type]} 55%, transparent)`, background: `color-mix(in oklab, ${SERVER_COLOR[s.type]} 14%, transparent)` }
+                          : undefined
+                      }
                     >
                       {s.type ? <ServerTag type={s.type} name={s.name} /> : s.name}
                       {s.type && <span className="text-ink-4 tabular">{num(s.plays)}</span>}
@@ -249,7 +254,13 @@ export default function HistoryPage() {
                                     {data.servers.length > 1 && r.serverType && <ServerTag type={r.serverType} name={r.serverName} className="shrink-0 text-ink-3" />}
                                     {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">Transcode</Pill>}
                                     <span className="hidden truncate md:inline">
-                                      {r.source === 'recorded' ? [r.client, r.device].filter(Boolean).join(' · ') : `From ${d?.serverHistory ? SERVER_LABEL[d.serverHistory] : 'the server'}’s own history`}
+                                      {r.source === 'recorded'
+                                        ? [r.client, r.device].filter(Boolean).join(' · ')
+                                        : r.serverType
+                                          ? r.serverType === 'plex'
+                                            ? 'From Plex watch history'
+                                            : `From the ${r.serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log${r.client ? ` · ${r.client}` : ''}`
+                                          : 'From the server’s own history'}
                                     </span>
                                   </div>
                                 </div>

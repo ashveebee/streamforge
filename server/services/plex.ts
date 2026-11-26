@@ -674,11 +674,18 @@ const SEARCH_TYPES = new Set(['movie', 'show', 'episode', 'artist', 'album']);
 
 /** Library search, in the same shape as the other search sources. */
 export async function search(srv: JfServerTarget, q: string, limit = 12) {
-  const res = await plex<Container<{ Hub?: { type: string; Metadata?: PlexMetadata[] }[] }>>(srv, '/hubs/search', { query: q, limit });
+  const res = await plex<Container<{ Hub?: { type: string; Metadata?: (PlexMetadata & { Guid?: { id: string }[] })[] }[] }>>(srv, '/hubs/search', {
+    query: q,
+    limit,
+    includeGuids: 1,
+  });
   const items = (res.MediaContainer.Hub ?? []).filter((h) => SEARCH_TYPES.has(h.type)).flatMap((h) => h.Metadata ?? []);
   return items.slice(0, limit).map((m) => {
     const a = artworkFor(m, srv.id);
     const kind = TYPE[m.type] ?? m.type;
+    // Movies and shows open their title page (matched by TMDB id across every server).
+    const tmdb = m.Guid?.find((g) => g.id.startsWith('tmdb://'))?.id.slice(7);
+    const titlePage = tmdb && /^\d+$/.test(tmdb) && (m.type === 'movie' || m.type === 'show') ? `/media/${m.type === 'movie' ? 'movie' : 'tv'}/${tmdb}` : undefined;
     return {
       key: `plex:${srv.id}:${m.ratingKey}`,
       source: 'plex' as const,
@@ -687,7 +694,7 @@ export async function search(srv: JfServerTarget, q: string, limit = 12) {
       year: m.year,
       image: a.poster ? `/api/jellyfin/image/items/${a.poster.itemId}/Primary?w=120&tag=${a.poster.tag}&server=${encodeURIComponent(srv.id)}` : undefined,
       status: 'available' as const,
-      path: `/plex?instance=${encodeURIComponent(srv.id)}`,
+      path: titlePage ?? `/plex?instance=${encodeURIComponent(srv.id)}`,
     };
   });
 }
@@ -853,4 +860,92 @@ export async function itemFiles(srv: JfServerTarget, ratingKey: string, isAdmin:
     };
   });
   return { files, added: m?.addedAt ? new Date(m.addedAt * 1000).toISOString() : undefined };
+}
+
+/* ------------------------------ title details ----------------------------- */
+
+interface PlexDetail extends PlexMetadata {
+  tagline?: string;
+  studio?: string;
+  originallyAvailableAt?: string;
+  Role?: { tag: string; role?: string }[];
+}
+
+/**
+ * A movie or show's details from Plex, for title pages when nothing else
+ * (Seerr, Sonarr/Radarr, a main Jellyfin) knows the title.
+ */
+export async function itemDetails(srv: JfServerTarget, ratingKey: string) {
+  if (!isValidId(ratingKey)) return undefined;
+  return cache.get(`plex:${srv.id}:details:${ratingKey}`, 10 * 60_000, async () => {
+    const res = await plex<Container<{ Metadata?: PlexDetail[] }>>(srv, `/library/metadata/${ratingKey}`);
+    const m = res.MediaContainer.Metadata?.[0];
+    if (!m) return undefined;
+    const seasons =
+      m.type === 'show'
+        ? ((await plex<Container<{ Metadata?: { index?: number; leafCount?: number }[] }>>(srv, `/library/metadata/${ratingKey}/children`).catch(() => undefined))?.MediaContainer.Metadata ?? [])
+            .filter((x) => typeof x.index === 'number')
+            .map((x) => ({ number: x.index!, episodes: x.leafCount ?? 0 }))
+        : [];
+    const a = artworkFor(m, srv.id);
+    const img = (r: ArtworkRef | undefined, w: number) => (r ? `/api/jellyfin/image/items/${r.itemId}/${r.type}?w=${w}&tag=${r.tag}&server=${encodeURIComponent(srv.id)}` : undefined);
+    return {
+      title: m.title,
+      year: m.year,
+      releaseDate: m.originallyAvailableAt,
+      overview: m.summary,
+      tagline: m.tagline,
+      genres: (m.Genre ?? []).map((g) => g.tag),
+      certification: m.contentRating,
+      runtimeMin: m.duration ? Math.round(m.duration / 60_000) : undefined,
+      rating: m.audienceRating ?? m.rating,
+      studio: m.studio,
+      poster: img(a.poster, 500),
+      backdrop: img(a.backdrop, 1600),
+      cast: (m.Role ?? []).slice(0, 20).map((r) => ({ name: r.tag, character: r.role, image: undefined as string | undefined })),
+      seasons,
+    };
+  });
+}
+
+/* ---------------------------- per-episode watch ---------------------------- */
+
+/** The server's accounts (id → name), for naming who watched what. Account 1 is the owner. */
+export async function accountList(srv: JfServerTarget) {
+  return (await accounts(srv)).map((a) => ({ id: String(a.id), name: a.name! }));
+}
+
+/**
+ * Who has watched each episode of one season of a show: accounts from the
+ * server's watch history, plus the owner's own watched state and progress
+ * (the server token is the owner's). Keyed by episode number.
+ */
+export async function seasonWatch(srv: JfServerTarget, showKey: string, season: number) {
+  if (!isValidId(showKey)) return new Map<number, { accounts: Set<string>; ownerProgress?: number }>();
+  const [leaves, plays] = await Promise.all([
+    cache.get(`plex:${srv.id}:leaves:${showKey}`, 60_000, () =>
+      plex<Container<{ Metadata?: { index?: number; parentIndex?: number; viewCount?: number; viewOffset?: number; duration?: number }[] }>>(srv, `/library/metadata/${showKey}/allLeaves`),
+    ).catch(() => undefined),
+    cache.get(`plex:${srv.id}:history:big`, 5 * 60_000, async () => {
+      const res = await plex<Container<{ Metadata?: PlexHistory[] }>>(srv, '/status/sessions/history/all', {
+        sort: 'viewedAt:desc',
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 5000,
+      });
+      return res.MediaContainer.Metadata ?? [];
+    }).catch(() => [] as PlexHistory[]),
+  ]);
+  const out = new Map<number, { accounts: Set<string>; ownerProgress?: number }>();
+  const at = (n: number) => out.get(n) ?? out.set(n, { accounts: new Set() }).get(n)!;
+  for (const e of leaves?.MediaContainer.Metadata ?? []) {
+    if (e.parentIndex !== season || e.index === undefined) continue;
+    if (e.viewCount) at(e.index).accounts.add('1');
+    else if (e.viewOffset && e.duration) at(e.index).ownerProgress = Math.round((e.viewOffset / e.duration) * 100);
+  }
+  const key = `/library/metadata/${showKey}`;
+  for (const h of plays) {
+    if (h.grandparentKey !== key || h.parentIndex !== season || h.index === undefined || !h.accountID) continue;
+    at(h.index).accounts.add(String(h.accountID));
+  }
+  return out;
 }

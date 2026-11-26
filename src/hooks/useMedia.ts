@@ -201,6 +201,18 @@ export const useJellyfinMedia = (itemId: string) =>
 export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
 
 /** One episode of a season, whether or not you have it. */
+/** One server's watch state for an episode: by you (solid tick) and/or others (outlined tick). */
+export interface EpisodeWatch {
+  server: string;
+  type: 'jellyfin' | 'plex' | 'emby';
+  name: string;
+  me: boolean;
+  progress?: number;
+  others: number;
+  /** Admins only. */
+  otherNames?: string[];
+}
+
 export interface SeasonEpisode {
   number: number;
   season: number;
@@ -217,6 +229,8 @@ export interface SeasonEpisode {
   path?: string;
   file?: Omit<MediaFile, 'audio' | 'subtitles'> & { audio: Partial<MediaFile['audio'][number]>[]; subtitles: Partial<MediaFile['subtitles'][number]>[] };
   jellyfin?: { id: string; url?: string; watch?: WatchState };
+  /** Watched on each server (only servers with something to show). */
+  watched?: EpisodeWatch[];
   sonarr?: { instance: string; episodeId: number };
 }
 

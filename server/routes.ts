@@ -7,6 +7,7 @@ import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup,
 import { arrRouter } from './arrRoutes.js';
 import { clientRouter } from './clientRoutes.js';
 import { ctxOf, requireAdmin, requireAuth } from './auth.js';
+import { myAccounts, setLink } from './services/watchState.js';
 import { allowedAreas, canSee, requireArea } from './access.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
@@ -591,7 +592,8 @@ api.get(
     const tmdbId = Number(req.params.tmdbId);
     const season = Number(req.params.season);
     if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !Number.isInteger(season) || season < 0 || season > 1000) throw new HttpError(400, 'Invalid season');
-    return seasonEpisodes(ctxOf(req.session!), tmdbId, season, { isAdmin: !!req.session!.isAdmin, can: (a) => canSee(req, a as never) });
+    const se = req.session!;
+    return seasonEpisodes(ctxOf(se), tmdbId, season, { isAdmin: !!se.isAdmin, can: (a) => canSee(req, a as never), me: { userId: se.userId, userName: se.userName, isAdmin: !!se.isAdmin } });
   }),
 );
 api.get(
@@ -629,6 +631,18 @@ api.post(
 
 api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken, req.session!.userName)));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
+/** Your account on each other media server, so "watched by you" works across servers. */
+const meOf = (req: Request) => ({ userId: req.session!.userId, userName: req.session!.userName, isAdmin: !!req.session!.isAdmin });
+api.get('/me/accounts', handle(null, (req) => myAccounts(ctxOf(req.session!), meOf(req))));
+api.put(
+  '/me/accounts/:server',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ accountId: z.string().min(1).max(100).nullable() }).strict().parse(req.body);
+    await setLink(ctxOf(req.session!), meOf(req), String(req.params.server), b.accountId);
+    return myAccounts(ctxOf(req.session!), meOf(req));
+  }),
+);
 
 /* --------------------------------- digest -------------------------------- */
 

@@ -49,6 +49,14 @@ interface JfItem {
   ImageTags?: { Primary?: string };
   SeriesId?: string;
   SeriesPrimaryImageTag?: string;
+  ProviderIds?: Record<string, string>;
+}
+
+/** Title page for an Emby/extra-server movie or series, matched across servers by TMDB id. */
+function titlePage(i: JfItem) {
+  const tmdb = i.ProviderIds?.Tmdb ?? i.ProviderIds?.tmdb;
+  if (!tmdb || !/^\d+$/.test(tmdb) || (i.Type !== 'Movie' && i.Type !== 'Series')) return undefined;
+  return `/media/${i.Type === 'Movie' ? 'movie' : 'tv'}/${tmdb}`;
 }
 
 /**
@@ -62,7 +70,7 @@ async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget, asServ
     Recursive: true,
     Limit: PER_SOURCE * 2,
     IncludeItemTypes: 'Movie,Series,Episode,MusicAlbum,MusicArtist,Book,AudioBook',
-    Fields: 'PrimaryImageAspectRatio',
+    Fields: 'PrimaryImageAspectRatio,ProviderIds',
     EnableTotalRecordCount: false,
   };
   const res = emby
@@ -81,7 +89,7 @@ async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget, asServ
       image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}${on}` : undefined,
       status: 'available',
       path: emby
-        ? `/${emby.type}${asServer ? `?instance=${encodeURIComponent(emby.id)}` : ''}`
+        ? (titlePage(i) ?? `/${emby.type}${asServer ? `?instance=${encodeURIComponent(emby.id)}` : ''}`)
         : ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type)
           ? `/media/jellyfin/${i.Id}`
           : '/jellyfin',
