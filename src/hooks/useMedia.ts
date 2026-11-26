@@ -24,6 +24,8 @@ export interface WatchState {
 
 export interface MediaFile {
   id: string;
+  /** Set when copies from several servers are shown together. */
+  serverType?: 'jellyfin' | 'plex' | 'emby';
   name?: string;
   container?: string;
   size?: number;
@@ -99,9 +101,32 @@ export interface AvailableOn {
   main: boolean;
   itemId: string;
   url?: string;
+  /** A movie's copies on this server. */
+  files?: MediaFile[];
+  /** When it was added to this server. */
+  added?: string;
+  /** Plays StreamForge knows of on this server (admins). */
+  plays?: number;
+}
+
+/** Someone who has watched the title, and where (admins). */
+export interface TitleWatcher {
+  user: string;
+  at: string;
+  plays: number;
+  serverId?: string;
+  serverName?: string;
+  serverType?: 'jellyfin' | 'plex' | 'emby';
+  client?: string;
+  device?: string;
+  watchedMs?: number;
+  source: 'recorded' | 'server';
 }
 
 export interface MediaDetails {
+  /** Every media server StreamForge knows, so the page can say where the title isn't. */
+  servers?: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; main: boolean }[];
+  watchers?: TitleWatcher[];
   /** Every media server the title is on, the sign-in server first. */
   availableOn?: AvailableOn[];
   type: MediaType;

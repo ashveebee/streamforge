@@ -35,6 +35,8 @@ import {
   type CastMember,
   type Episode,
   type LibraryInfo,
+  type MediaFile,
+  type TitleWatcher,
   type MediaDetails as Details,
   type MediaType,
   type Season,
@@ -43,6 +45,7 @@ import {
 import { useRequestMedia } from '@/hooks/useSearch';
 import { AddToArrDialog } from '@/components/media/AddToArrDialog';
 import { bytes, dayLabel, relative } from '@/lib/format';
+import { History as HistoryIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -56,6 +59,9 @@ import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
 import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
+import { ServerTag } from '@/components/ui/ServerTag';
+import { Menu } from '@/components/ui/Menu';
+import { Avatar } from '@/components/ui/Image';
 
 const AVAILABILITY: Record<Availability, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
   available: { label: 'Available', tone: 'ok' },
@@ -77,7 +83,7 @@ function Back() {
   );
 }
 
-function Hero({ title, year, tagline, poster, backdrop, facts, children }: { title: string; year?: number; tagline?: string; poster?: string; backdrop?: string; facts: React.ReactNode; children?: React.ReactNode }) {
+function Hero({ title, year, tagline, poster, backdrop, facts, servers, children }: { title: string; year?: number; tagline?: string; poster?: string; backdrop?: string; facts: React.ReactNode; servers?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <section className="relative -mx-4 mb-6 overflow-hidden sm:mx-0 sm:rounded-[1.5rem] sm:border sm:border-line">
       <div className="absolute inset-0">
@@ -87,8 +93,8 @@ function Hero({ title, year, tagline, poster, backdrop, facts, children }: { tit
       </div>
       {/* Phones: poster beside the title, facts and buttons full width below.
           Wider: poster on the left, everything else stacked beside it. */}
-      <div className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 p-4 pt-20 sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-[1fr_auto_auto] sm:gap-x-6 sm:p-8 sm:pt-40">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="self-end sm:row-span-3">
+      <div className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 p-4 pt-20 sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-[1fr_auto_auto_auto] sm:gap-x-6 sm:p-8 sm:pt-40">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="self-end sm:row-span-4">
           <FadeImage src={poster} alt="" eager className="aspect-[2/3] rounded-xl shadow-2xl ring-1 ring-white/15" fallback={<div className="grid size-full place-items-center bg-surface-3"><Clapperboard className="size-8 text-ink-4" /></div>} />
         </motion.div>
         <div className="min-w-0 self-end">
@@ -98,6 +104,7 @@ function Hero({ title, year, tagline, poster, backdrop, facts, children }: { tit
           {tagline && <p className="mt-1 text-[13px] text-white/60 italic sm:text-sm">{tagline}</p>}
         </div>
         <div className="col-span-2 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/70 sm:col-span-1 sm:col-start-2 sm:mt-3">{facts}</div>
+        {servers && <div className="col-span-2 mt-3 sm:col-span-1 sm:col-start-2">{servers}</div>}
         {children && (
           <div className="col-span-2 mt-4 grid grid-cols-2 gap-2 sm:col-span-1 sm:col-start-2 sm:mt-5 sm:flex sm:flex-wrap sm:items-center max-sm:[&>*]:justify-center max-sm:[&>:first-child:nth-last-child(odd)]:col-span-2 max-sm:[&>p]:col-span-2">
             {children}
@@ -128,31 +135,138 @@ function Cast({ cast }: { cast: CastMember[] }) {
   );
 }
 
-/** Every media server the title is on, with a link to open it in that server's app. */
-function AvailableOnCard({ list }: { list: NonNullable<Details['availableOn']> }) {
+/** "4K DV · 1080p": the distinct copies of a movie on one server, best first. */
+function copiesLabel(files: MediaFile[] | undefined) {
+  const labels = [...(files ?? [])]
+    .sort((a, b) => (b.video?.height ?? 0) - (a.video?.height ?? 0))
+    .map((f) => [f.video?.resolution, f.video?.range === 'DOVI' ? 'DV' : f.video?.range].filter(Boolean).join(' '))
+    .filter(Boolean);
+  return [...new Set(labels)].join(' · ') || undefined;
+}
+
+/** Every server StreamForge knows, with whether this title is on it. */
+function serverRows(d: Details) {
+  const on = d.availableOn ?? [];
+  const known = d.servers?.length ? d.servers : on.map((a) => ({ id: a.server, name: a.name, type: a.type, main: a.main }));
+  return known.map((x) => ({ ...x, entry: on.find((a) => a.server === x.id) }));
+}
+
+/** Under the title: which servers have it, and the best copy on each. */
+function ServerChips({ d }: { d: Details }) {
+  const rows = serverRows(d);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-1 text-xs text-white/60">On your servers</span>
+      {rows.map((r) => (
+        <span
+          key={r.id}
+          className={cn(
+            'inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs backdrop-blur',
+            r.entry ? 'border-white/15 bg-white/[0.06] text-white' : 'border-dashed border-white/15 text-white/45',
+          )}
+        >
+          {r.entry ? <ServerTag type={r.type} name={r.name} /> : <span className="inline-flex items-center gap-1.5"><i className="size-[7px] rounded-full border border-white/50" />{r.name}</span>}
+          <span className="text-white/50">{r.entry ? (copiesLabel(r.entry.files) ?? '') : 'not here'}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Every media server, with the title's copies on each, plays there, and a link to open it. */
+function AvailableOnCard({ d }: { d: Details }) {
+  const rows = serverRows(d);
+  const have = rows.filter((r) => r.entry).length;
   return (
     <Card>
-      <CardHeader icon={Server} title="Available on" subtitle={list.length === 1 ? '1 media server' : `${list.length} media servers`} />
+      <CardHeader icon={Server} title="Where it’s available" subtitle={rows.length > 1 ? `On ${have} of your ${rows.length} media servers` : '1 media server'} />
       <CardBody>
-        <ul className="space-y-1">
-          {list.map((a) => (
-            <li key={a.server} className="flex items-center gap-3 rounded-lg px-1.5 py-1.5">
-              <ServiceIcon id={a.type} size={30} />
+        <ul className="divide-y divide-line">
+          {rows.map(({ id, name, type, main, entry: a }) => (
+            <li key={id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+              <ServiceIcon id={type} size={32} className={cn(!a && 'opacity-40')} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium">{a.name}</div>
-                <div className="text-[11px] text-ink-4">{MEDIA_SERVERS[a.type].name}{a.main ? ' · sign-in server' : ''}</div>
+                <div className={cn('truncate text-[13px] font-medium', !a && 'text-ink-3')}>{name}</div>
+                <div className="text-[11px] text-ink-4">
+                  {MEDIA_SERVERS[type].name}
+                  {main ? ' · sign-in server' : ''}
+                  {!a && ' · not in its library'}
+                </div>
+                {a?.files && a.files.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {a.files.map((f) => (
+                      <span key={f.id} className="rounded-md border border-line-strong px-1.5 py-px text-[11px] text-ink-3">
+                        <b className="font-semibold text-ink-2">{f.video?.resolution ?? f.container?.toUpperCase() ?? 'File'}</b>
+                        {f.video?.range ? ` ${f.video.range === 'DOVI' ? 'DV' : f.video.range}` : ''}
+                        {f.size ? ` · ${bytes(f.size)}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {a && (a.added || a.plays) ? (
+                  <div className="mt-1 text-[11px] text-ink-4">
+                    {[a.added && `Added ${relative(a.added)}`, a.plays && `${a.plays} play${a.plays === 1 ? '' : 's'} here`].filter(Boolean).join(' · ')}
+                  </div>
+                ) : null}
               </div>
-              {a.url && /^https?:\/\//.test(a.url) && (
-                <a href={a.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 text-xs font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink">
+              {a?.url && /^https?:\/\//.test(a.url) && (
+                <a href={a.url} target="_blank" rel="noreferrer noopener" className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border border-line-strong px-2.5 text-xs font-medium text-ink-2 transition hover:bg-white/[0.06] hover:text-ink">
                   Open <ExternalLink className="size-3" />
                 </a>
               )}
             </li>
           ))}
         </ul>
+        {rows.length > 1 && <p className="mt-3 text-[11px] text-ink-4">Matched across servers by TMDb, TVDB and IMDb id, so different file names still count as the same title.</p>}
       </CardBody>
     </Card>
   );
+}
+
+/** Everyone who has watched it, on which server and device (admins). */
+function WhoWatched({ list, runtimeMin }: { list: TitleWatcher[]; runtimeMin?: number }) {
+  return (
+    <Card>
+      <CardHeader icon={HistoryIcon} title="Who’s watched it" subtitle="Across every server" />
+      <CardBody>
+        <ul className="-mx-2">
+          {list.map((w) => {
+            const pctWatched = w.watchedMs && runtimeMin ? Math.min(100, Math.round((w.watchedMs / (runtimeMin * 60_000)) * 100)) : undefined;
+            const state = w.source === 'server' || (pctWatched !== undefined && pctWatched >= 90) ? 'Finished' : pctWatched ? `${pctWatched}%` : 'Watched';
+            return (
+              <li key={w.user}>
+                <Link
+                  to={`/history?user=${encodeURIComponent(w.user)}&days=0${w.serverId ? `&server=${encodeURIComponent(w.serverId)}` : ''}`}
+                  className="group flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.04]"
+                >
+                  <Avatar name={w.user} size={28} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium transition group-hover:text-brand">{w.user}</div>
+                    <div className="truncate text-[11px] text-ink-4">
+                      {state} · {relative(w.at)}
+                      {w.plays > 1 ? ` · ${w.plays} plays` : ''}
+                    </div>
+                  </div>
+                  <div className="hidden min-w-0 items-center gap-2 text-[11px] text-ink-3 sm:flex">
+                    {w.serverType && <ServerTag type={w.serverType} name={w.serverName} />}
+                    {(w.device || w.client) && <span className="truncate text-ink-4">{w.device ?? w.client}</span>}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** Media info for every copy on every server, as tabs. */
+function allCopies(d: Details): { files: MediaFile[]; subtitle?: string } {
+  const withFiles = (d.availableOn ?? []).filter((a) => a.files?.length);
+  if (withFiles.length < 2) return { files: d.library?.files ?? withFiles[0]?.files ?? [] };
+  const files = withFiles.flatMap((a) => a.files!.map((f) => ({ ...f, id: `${a.server}:${f.id}`, serverType: a.type, name: `${a.name} · ${f.video?.resolution ?? f.name ?? 'Version'}` })));
+  return { files, subtitle: `${files.length} copies on ${withFiles.length} servers` };
 }
 
 function Actions({ d }: { d: Details }) {
@@ -166,6 +280,7 @@ function Actions({ d }: { d: Details }) {
   return (
     <>
       {d.jellyfin && <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />}
+      <PlayElsewhere d={d} />
       {/* Not on the main Jellyfin server: open it where it is instead. */}
       {!d.jellyfin && d.availableOn?.find((a) => a.url) && (() => {
         const a = d.availableOn.find((x) => x.url)!;
@@ -221,6 +336,30 @@ function Actions({ d }: { d: Details }) {
       )}
       {err && <p role="alert" className="basis-full text-xs text-bad">{err.message}</p>}
     </>
+  );
+}
+
+/** The other servers' copies: opens the title in that server's own app. */
+function PlayElsewhere({ d }: { d: Details }) {
+  const first = !d.jellyfin ? d.availableOn?.find((x) => x.url) : undefined;
+  const others = (d.availableOn ?? []).filter((a) => a.url && /^https?:\/\//.test(a.url) && a.server !== (d.jellyfin ? 'jellyfin' : first?.server));
+  if (!others.length) return null;
+  return (
+    <Menu
+      label="Play on another server"
+      buttonClassName="inline-flex h-10 items-center gap-1.5 rounded-xl border border-white/20 bg-white/[0.06] px-3 text-sm font-medium text-white transition hover:bg-white/[0.12]"
+      trigger={
+        <>
+          {d.jellyfin || first ? 'Other servers' : 'Play on…'} <ChevronDown className="size-3.5" />
+        </>
+      }
+      items={others.map((a) => ({
+        label: `Open on ${a.name}`,
+        hint: [MEDIA_SERVERS[a.type].name, copiesLabel(a.files)].filter(Boolean).join(' · '),
+        icon: Play,
+        onSelect: () => window.open(a.url, '_blank', 'noopener,noreferrer'),
+      }))}
+    />
   );
 }
 
@@ -578,10 +717,12 @@ function DetailsView({ d }: { d: Details }) {
         tagline={d.tagline}
         poster={d.poster}
         backdrop={d.backdrop}
+        servers={(d.servers?.length ?? 0) > 1 && (d.availableOn?.length ?? 0) > 0 ? <ServerChips d={d} /> : undefined}
         facts={
           <Facts
             items={[
               <Pill key="a" tone={a.tone}>{a.label}</Pill>,
+              (d.servers?.length ?? 0) > 1 && d.availableOn?.length ? <span key="n" className="text-white">On {d.availableOn.length} of {d.servers!.length} servers</span> : null,
               <span key="t">{d.type === 'tv' ? 'Series' : 'Movie'}</span>,
               watchLabel(d.library?.watch, d.type === 'tv') && (
                 <span key="w" className="text-white">
@@ -615,11 +756,15 @@ function DetailsView({ d }: { d: Details }) {
           )}
           {d.library?.nextUp && <UpNext e={d.library.nextUp} />}
           <Seasons seasons={d.seasons} tmdbId={d.type === 'tv' ? d.tmdbId : undefined} seriesId={d.library?.itemId} />
-          {d.library && <MediaInfo files={d.library.files} />}
+          {(() => {
+            const c = allCopies(d);
+            return c.files.length ? <MediaInfo files={c.files} subtitle={c.subtitle} /> : null;
+          })()}
+          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} />}
           <Cast cast={d.cast} />
         </div>
         <div className="min-w-0 space-y-5">
-          {d.availableOn && d.availableOn.length > 0 && <AvailableOnCard list={d.availableOn} />}
+          {d.availableOn && d.availableOn.length > 0 && <AvailableOnCard d={d} />}
           {d.library && <YourLibrary lib={d.library} />}
           {d.library && <WillItPlay itemId={d.library.itemId} />}
           {d.library && <TitleInfo lib={d.library} />}

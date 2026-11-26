@@ -1758,7 +1758,7 @@ app.get('/api/media/:type/:id', (req, res) => {
       })()
     : undefined;
   const pending = seerr().recent.filter((q) => q.title === t.title);
-  res.json({
+  const body = {
     type: tv ? 'tv' : 'movie',
     tmdbId: Number(req.params.id),
     title: t.title,
@@ -1869,6 +1869,31 @@ app.get('/api/media/:type/:id', (req, res) => {
     requests: pending.map((q) => ({ id: q.id, status: q.status, requestedBy: q.requestedBy, createdAt: q.createdAt, is4k: q.is4k, seasons: q.seasons })),
     can: { request: !inLib || (tv && seasons!.some((x) => x.status !== 'available')), add: !inLib, search: inLib, approve: true },
     sources: { seerr: true, jellyfin: inLib },
+  };
+  // Three servers: the movie is on Homelab (two copies) and Cabin, not on Office.
+  if (inLib && !tv) {
+    const [jfOn, plexOn] = body.availableOn as Record<string, unknown>[];
+    Object.assign(jfOn!, { files: body.library?.files, added: body.library?.added, plays: 5 });
+    Object.assign(plexOn!, {
+      added: iso(55 * DAY),
+      plays: 2,
+      files: [{ id: 'p1', container: 'mkv', size: 9.8 * GB, bitrate: 14_000_000, video: { codec: 'HEVC', resolution: '1080p', width: 1920, height: 804, range: 'HDR10', bitDepth: 10, fps: 23.98 }, audio: [{ language: 'eng', codec: 'EAC3', channels: '5.1', isDefault: true }], subtitles: [{ language: 'eng', codec: 'SRT', forced: false, external: true, sdh: false, isDefault: false }] }],
+    });
+  }
+  res.json({
+    ...body,
+    servers: [
+      { id: 'jellyfin', name: 'Homelab', type: 'jellyfin', main: true },
+      { id: PLEX.id, name: PLEX.name, type: 'plex', main: false },
+      { id: EMBY.id, name: EMBY.name, type: 'emby', main: false },
+    ],
+    watchers: inLib
+      ? [
+          { user: 'Alex', at: iso(3 * DAY), plays: 2, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', client: 'Jellyfin Android TV', device: 'Living Room TV', watchedMs: 43 * MIN, source: 'recorded' },
+          { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: PLEX.id, serverName: PLEX.name, serverType: 'plex', client: 'Plex for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' },
+          { user: 'Sam', at: iso(61 * DAY), plays: 1, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', source: 'server' },
+        ]
+      : undefined,
   });
 });
 app.post('/api/media/search', (_req, res) => res.json({ ok: true, instance: 'Radarr' }));

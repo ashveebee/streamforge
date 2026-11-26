@@ -3,8 +3,11 @@ import { HttpError } from '../lib/handle.js';
 import { isConfigured, publicUrl } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
-import { jf, libraryItems, type JfCtx } from './jellyfin.js';
-import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry } from './mainServer.js';
+import { jf, libraryItems, remote as jfRemote, type JfCtx } from './jellyfin.js';
+import { titleWatchers } from './history.js';
+import { mediaServer } from './mediaServers.js';
+import * as plex from './plex.js';
+import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
 /*
@@ -150,7 +153,7 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
   const [s, lib, everywhere] = await Promise.all([
     seerrDetails(type, tmdbId),
     notJellyfinMain() ? [] : libraryItems(ctx).catch(() => []),
-    allLibraryItems(ctx).catch(() => ({ items: [] as LibraryEntry[] })),
+    allLibraryItems(ctx).catch(() => ({ items: [] as LibraryEntry[], servers: [] as LibraryServer[], failed: [] as string[] })),
   ]);
   const jfItem = lib.find((i) => i.tmdb === String(tmdbId) && i.type === (type === 'movie' ? 'Movie' : 'Series'));
   const [arr, library] = await Promise.all([
@@ -167,7 +170,26 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     .filter((i) => i.type === kind && idKeys(i).some((k) => wanted.has(k)))
     .filter((i, n, all) => all.findIndex((x) => x.server.id === i.server.id) === n)
     .sort((a, b) => Number(b.server.main) - Number(a.server.main) || a.server.name.localeCompare(b.server.name))
-    .map((i) => ({ server: i.server.id, type: i.server.type, name: i.server.name, main: i.server.main, itemId: i.id, url: openLink(i.server, i.id) }));
+    .map((i) => ({ server: i.server.id, type: i.server.type, name: i.server.name, main: i.server.main, itemId: i.id, url: openLink(i.server, i.id), files: undefined as FileInfo[] | undefined, added: undefined as string | undefined }));
+  // Each server's copies of a movie (quality, size, tracks) and when it was added there.
+  if (type === 'movie') {
+    await Promise.all(
+      availableOn.map(async (a) => {
+        if (a.server === 'jellyfin' && jfItem) {
+          a.files = library?.files;
+          a.added = library?.added;
+          return;
+        }
+        const srv = mediaServer(a.server);
+        if (!srv) return;
+        const got = await (srv.type === 'plex' ? plex.itemFiles(srv, a.itemId, opts.isAdmin) : remoteFiles(srv, a.itemId, opts.isAdmin)).catch(() => undefined);
+        if (got) Object.assign(a, got);
+      }),
+    );
+  }
+  // Admins see who has watched it, on which server, and how many plays each server has had.
+  const watchedName = jfItem?.name ?? s?.title ?? s?.name ?? meta?.title;
+  const watchers = opts.isAdmin && availableOn.length && watchedName ? await titleWatchers(ctx, watchedName).catch(() => undefined) : undefined;
   if (!s && !meta && !jfItem && !availableOn.length) throw new HttpError(404, 'StreamForge couldn’t find this title. Connect Seerr for full details of titles you don’t have yet.', 'not_found');
 
   const date = s?.releaseDate ?? s?.firstAirDate;
@@ -263,7 +285,10 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     availability,
     jellyfin: jfItem ? { itemId: jfItem.id, url: jellyfinUrl(jfItem.id) } : undefined,
     /** Every media server the title is on, the sign-in server first. */
-    availableOn,
+    availableOn: availableOn.map((a) => ({ ...a, plays: watchers?.perServer[a.server] })),
+    /** Every media server StreamForge knows, so the page can say where it isn't. */
+    servers: everywhere.servers.map((x) => ({ id: x.id, name: x.name, type: x.type, main: x.main })),
+    watchers: watchers?.people,
     library: library ? { ...library, seasons: undefined, cast: undefined, overview: undefined, tagline: undefined, genres: undefined, certification: undefined } : undefined,
     arr: arr.map(({ inst, movie, series }) => ({
       kind: inst.kind,
@@ -419,6 +444,17 @@ function fileInfo(src: JfSource, isAdmin: boolean) {
       .filter((x) => x.Type === 'Subtitle')
       .map((t) => ({ title: t.DisplayTitle ?? t.Title, language: t.Language, codec: t.Codec?.toUpperCase(), forced: !!t.IsForced, external: !!t.IsExternal, sdh: !!t.IsHearingImpaired, isDefault: !!t.IsDefault })),
   };
+}
+
+type FileInfo = ReturnType<typeof fileInfo>;
+
+/** A movie's copies on another Jellyfin or Emby server, and when it was added there. */
+async function remoteFiles(srv: NonNullable<ReturnType<typeof mediaServer>>, itemId: string, isAdmin: boolean) {
+  const res = await cache.get(`${srv.id}:files:${itemId}`, 10 * 60_000, () =>
+    jfRemote<{ Items?: (JfItem & { DateCreated?: string })[] }>(srv, '/Items', { Ids: itemId, Fields: 'MediaSources,DateCreated,Path', EnableImages: false }),
+  );
+  const item = res.Items?.[0];
+  return { files: (item?.MediaSources ?? []).map((src) => fileInfo(src, isAdmin)), added: item?.DateCreated };
 }
 
 function watchState(u: JfUserData | undefined, runtimeTicks?: number) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AudioLines, Captions, FileVideo } from 'lucide-react';
 import { bitrate, bytes } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { ServerTag } from '@/components/ui/ServerTag';
 import type { Episode, MediaFile } from '@/hooks/useMedia';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 
@@ -48,14 +49,14 @@ export function Track({ title, sub, flags }: { title: string; sub?: string; flag
 }
 
 /** The file(s) Jellyfin plays: video, audio and subtitle tracks. */
-export function MediaInfo({ files }: { files: MediaFile[] }) {
+export function MediaInfo({ files, subtitle }: { files: MediaFile[]; subtitle?: string }) {
   const [open, setOpen] = useState(0);
   if (!files.length) return null;
   const f = files[Math.min(open, files.length - 1)]!;
   const v = f.video;
   return (
     <Card>
-      <CardHeader icon={FileVideo} accent="var(--color-jellyfin)" title="Media info" subtitle={files.length > 1 ? `${files.length} versions` : f.container?.toUpperCase()} />
+      <CardHeader icon={FileVideo} accent="var(--color-jellyfin)" title="Media info" subtitle={subtitle ?? (files.length > 1 ? `${files.length} versions` : f.container?.toUpperCase())} />
       <CardBody className="space-y-4">
         {files.length > 1 && (
           <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 no-scrollbar">
@@ -65,7 +66,7 @@ export function MediaInfo({ files }: { files: MediaFile[] }) {
                 onClick={() => setOpen(i)}
                 className={cn('shrink-0 rounded-lg border px-2.5 py-1 text-[12px] transition', i === open ? 'border-brand/50 bg-brand/10 text-ink' : 'border-line text-ink-3 hover:text-ink')}
               >
-                {x.name || x.video?.resolution || `Version ${i + 1}`}
+                {x.serverType ? <ServerTag type={x.serverType} name={x.name} /> : x.name || x.video?.resolution || `Version ${i + 1}`}
               </button>
             ))}
           </div>

@@ -787,3 +787,70 @@ export async function collectionItems(srv: JfServerTarget, collectionId: string)
     return { id: m.ratingKey, title: m.title, year: m.year, tmdb: id('tmdb'), tvdb: id('tvdb'), poster: art(m.thumb, srv.id) };
   });
 }
+
+/* ------------------------------ title copies ------------------------------ */
+
+interface PlexFileMedia extends Omit<PlexMedia, 'Part'> {
+  id?: number | string;
+  width?: number;
+  height?: number;
+  Part?: { id?: number | string; size?: number; file?: string; Stream?: (PlexStream & { language?: string; title?: string; forced?: boolean; key?: string; hearingImpaired?: boolean })[] }[];
+}
+
+const plexResolution = (w?: number, h?: number, label?: string) => {
+  if (w && h) {
+    if (w >= 3800 || h >= 2100) return '4K';
+    if (w >= 2500 || h >= 1400) return '1440p';
+    if (w >= 1900 || h >= 1000) return '1080p';
+    if (w >= 1200 || h >= 700) return '720p';
+    return `${h}p`;
+  }
+  return label ? (label === '4k' ? '4K' : /^\d+$/.test(label) ? `${label}p` : label.toUpperCase()) : undefined;
+};
+const plexChannels = (c?: number) => (c === 8 ? '7.1' : c === 6 ? '5.1' : c === 2 ? 'Stereo' : c === 1 ? 'Mono' : c ? `${c} ch` : undefined);
+
+/**
+ * A movie's copies on a Plex server, shaped like StreamForge's media info:
+ * resolution, HDR, codecs, size and audio/subtitle tracks, plus when it was added.
+ */
+export async function itemFiles(srv: JfServerTarget, ratingKey: string, isAdmin: boolean) {
+  if (!isValidId(ratingKey)) return { files: [], added: undefined };
+  const res = await cache.get(`plex:${srv.id}:files:${ratingKey}`, 10 * 60_000, () =>
+    plex<Container<{ Metadata?: (Omit<PlexMetadata, 'Media'> & { addedAt?: number; Media?: PlexFileMedia[] })[] }>>(srv, `/library/metadata/${ratingKey}`),
+  );
+  const m = res.MediaContainer.Metadata?.[0];
+  const files = (m?.Media ?? []).map((media, i) => {
+    const part = media.Part?.[0];
+    const streams = part?.Stream ?? [];
+    const v = streams.find((s) => s.streamType === 1);
+    const dv = v?.DOVIPresent || /dolby vision|dovi/i.test(v?.displayTitle ?? '');
+    const range = dv ? 'DOVI' : v?.colorTrc === 'smpte2084' || /hdr10/i.test(v?.displayTitle ?? '') ? 'HDR10' : v?.colorTrc === 'arib-std-b67' ? 'HLG' : undefined;
+    return {
+      id: String(media.id ?? `${ratingKey}-${i}`),
+      name: undefined as string | undefined,
+      container: media.container,
+      size: part?.size,
+      bitrate: media.bitrate ? media.bitrate * 1000 : undefined,
+      path: isAdmin ? part?.file : undefined,
+      video: v || media.videoResolution
+        ? {
+            codec: (v?.codec ?? media.videoCodec)?.toUpperCase(),
+            resolution: plexResolution(v?.width ?? media.width, v?.height ?? media.height, media.videoResolution),
+            width: v?.width ?? media.width,
+            height: v?.height ?? media.height,
+            range,
+            bitDepth: v?.bitDepth,
+            fps: v?.frameRate ? Math.round(v.frameRate * 100) / 100 : undefined,
+            bitrate: v?.bitrate ? v.bitrate * 1000 : undefined,
+          }
+        : undefined,
+      audio: streams
+        .filter((s) => s.streamType === 2)
+        .map((a) => ({ title: a.displayTitle ?? a.title, language: a.language, codec: a.codec?.toUpperCase(), channels: plexChannels(a.channels), isDefault: !!(a.default ?? a.selected) })),
+      subtitles: streams
+        .filter((s) => s.streamType === 3)
+        .map((t) => ({ title: t.displayTitle ?? t.title, language: t.language, codec: t.codec?.toUpperCase(), forced: !!t.forced, external: !!t.key, sdh: !!t.hearingImpaired, isDefault: !!(t.default ?? t.selected) })),
+    };
+  });
+  return { files, added: m?.addedAt ? new Date(m.addedAt * 1000).toISOString() : undefined };
+}

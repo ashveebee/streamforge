@@ -106,8 +106,13 @@ server.
 
     **Every server counts.** Plays are recorded from every server, so Stats,
     your history, the weekly digest and cleanup suggestions include them all.
-    Title pages show **Available on** with every server that has the title
-    and an Open link for each. ⌘K search covers every server's library.
+    Title pages show which servers have the title, right under its name, and
+    the best copy on each (say 4K DV on one, 1080p on another). **Where it's
+    available** lists every server, with each copy's quality and size, when
+    it was added, plays there and an Open link, and greys out servers that
+    don't have it. **Media info** has a tab for each copy on each server,
+    **Other servers** opens it in another server's app, and admins see
+    **Who's watched it**, with the server and device each person used. ⌘K search covers every server's library.
     Library health only flags a download as missing when no server has it.
     Sign-in, continue watching, playback alerts and the buffering diagnosis
     use the main server (the one people sign in with).

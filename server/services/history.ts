@@ -292,3 +292,35 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
     serverHistory: jfData ? 'jellyfin' : p ? 'plex' : undefined,
   };
 }
+
+/**
+ * Who has watched one title, across every server: each person's latest play
+ * (where, on what, how much) and how many plays each server has had.
+ */
+export async function titleWatchers(ctx: JfCtx, title: string) {
+  const h = await watchHistory(ctx, { days: 0, q: title });
+  const rows = h.rows.filter((r) => key(r.title) === key(title));
+  const people = new Map<string, HistoryRow & { plays: number }>();
+  const perServer = new Map<string, number>();
+  for (const r of rows) {
+    if (r.serverId) perServer.set(r.serverId, (perServer.get(r.serverId) ?? 0) + 1);
+    const p = people.get(norm(r.user));
+    if (p) p.plays++;
+    else people.set(norm(r.user), { ...r, plays: 1 });
+  }
+  return {
+    people: [...people.values()].map((r) => ({
+      user: r.user,
+      at: r.at,
+      plays: r.plays,
+      serverId: r.serverId,
+      serverName: r.serverName,
+      serverType: r.serverType,
+      client: r.client,
+      device: r.device,
+      watchedMs: r.watchedMs,
+      source: r.source,
+    })),
+    perServer: Object.fromEntries(perServer),
+  };
+}
