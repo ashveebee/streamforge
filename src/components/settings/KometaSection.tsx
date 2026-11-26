@@ -1,3 +1,4 @@
+import { cn } from '@/lib/cn';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Images, RefreshCw } from 'lucide-react';
@@ -104,7 +105,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 /** Kometa sends webhooks to StreamForge; this shows the address to put in its config. */
-export function KometaSection() {
+/** `grouped`: shown inside a Settings group, so a smaller heading. */
+export function KometaSection({ grouped = false }: { grouped?: boolean } = {}) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings', 'kometa'], queryFn: () => api<KometaSettings>('/settings/kometa') });
   const status = useKometaStatus(!!q.data?.enabled);
@@ -124,11 +126,11 @@ export function KometaSection() {
   const heard = status.data?.runs[0]?.at ?? status.data?.errors[0]?.at;
 
   return (
-    <section className="mt-8" aria-labelledby="kometa-h">
-      <h2 id="kometa-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight">
+    <section className={grouped ? 'pt-1' : 'mt-8'} aria-labelledby="kometa-h">
+      <h2 id="kometa-h" className={cn('mb-1 flex items-center gap-2 font-semibold tracking-tight', grouped ? 'px-1 text-[14px]' : 'text-lg')}>
         <Images className="size-4 text-[#f59e0b]" /> Kometa
       </h2>
-      <p className="mb-3 text-xs text-ink-3">
+      <p className={cn('mb-3 text-xs text-ink-3', grouped && 'px-1')}>
         Kometa builds collections, overlays and playlists on a schedule. Point its webhooks at StreamForge to see each run, its errors and what changed, and get alerts when a
         run fails. Connect its config folder to make collections from StreamForge.
       </p>
