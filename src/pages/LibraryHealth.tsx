@@ -12,6 +12,7 @@ import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { ReclaimCard } from '@/components/widgets/ReclaimCard';
+import { WatchedByEveryoneCard } from '@/components/widgets/WatchedByEveryoneCard';
 import { DevicePlaybackCard } from '@/components/widgets/DevicePlaybackCard';
 
 function ItemList({ items, total, empty }: { items: LibraryHealthItem[]; total: number; empty: string }) {
@@ -132,6 +133,7 @@ export default function LibraryHealthPage() {
                 <p className="text-xs text-ink-4">{several ? 'Your media servers couldn’t be reached' : `${name} couldn’t be reached`}, so the library cross-checks are skipped.</p>
               )}
               {d.hasJellyfin && <ReclaimCard />}
+              {d.hasJellyfin && !other && <WatchedByEveryoneCard />}
             </div>
           )
         }

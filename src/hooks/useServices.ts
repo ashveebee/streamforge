@@ -138,6 +138,27 @@ export function useReclaimAction() {
   });
 }
 
+export interface WatchedByEveryone {
+  supported: boolean;
+  users: { id: string; name: string; admin: boolean; watched: number; counted: boolean }[];
+  total: number;
+  reclaimable: number;
+  kept: number;
+  items: ReclaimItem[];
+  checkedAt: string;
+}
+
+export const useWatchedByEveryone = () =>
+  useQuery({ queryKey: ['library', 'reclaim', 'everyone'], queryFn: ({ signal }) => api<WatchedByEveryone>('/library/watched-by-everyone', { signal }), placeholderData: (p) => p, staleTime: 60_000 });
+
+export function useCountUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: { id: string; counted: boolean }) => api('/library/watched-by-everyone/users', { method: 'PUT', body: b }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library', 'reclaim', 'everyone'] }),
+  });
+}
+
 /* ------------------------------ playback guard ------------------------------ */
 
 export interface GuardSettings {

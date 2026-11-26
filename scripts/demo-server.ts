@@ -1533,6 +1533,35 @@ app.get('/api/library/reclaim', json(() => ({
     { key: 'd', kind: 'movie', instance: 'radarr', arrId: 4, title: 'Lanterns Over Kessa', year: 2024, size: 33 * GB, added: iso(480 * DAY), poster: poster('Lanterns Over Kessa') },
   ],
 })));
+const demoCounted = new Map([['u-alex', true], ['u-sam', true], ['u-maya', true], ['u-guest', false]]);
+app.get('/api/library/watched-by-everyone', json(() => {
+  const items = [
+    { key: 'w1', kind: 'movie', instance: 'radarr-4k', instanceName: '4K', arrId: 11, title: 'Neon Harbor', year: 2024, size: 71 * GB, added: iso(410 * DAY), poster: poster('Neon Harbor') },
+    { key: 'w2', kind: 'series', instance: 'sonarr', arrId: 12, title: 'Saltwind', year: 2021, size: 58 * GB, added: iso(900 * DAY), poster: poster('Saltwind'), ended: true },
+    { key: 'w3', kind: 'movie', instance: 'radarr', arrId: 13, title: 'The Glass Meridian', year: 2025, size: 24 * GB, added: iso(200 * DAY), poster: poster('The Glass Meridian') },
+    { key: 'w4', kind: 'movie', instance: 'radarr', arrId: 14, title: 'Iron Bloom', year: 2023, size: 19 * GB, added: iso(300 * DAY), poster: poster('Iron Bloom') },
+    { key: 'w5', kind: 'movie', instance: 'radarr', arrId: 15, title: 'Atlas Station', year: 2022, size: 12 * GB, added: iso(520 * DAY), poster: poster('Atlas Station') },
+  ];
+  return {
+    supported: true,
+    users: [
+      { id: 'u-alex', name: 'Alex', admin: true, watched: 412, counted: demoCounted.get('u-alex') },
+      { id: 'u-sam', name: 'Sam', admin: false, watched: 233, counted: demoCounted.get('u-sam') },
+      { id: 'u-maya', name: 'Maya', admin: false, watched: 187, counted: demoCounted.get('u-maya') },
+      { id: 'u-guest', name: 'Guest', admin: false, watched: 0, counted: demoCounted.get('u-guest') },
+    ],
+    total: items.length,
+    reclaimable: items.reduce((n, i) => n + i.size, 0),
+    kept: 0,
+    items,
+    checkedAt: iso(2 * MIN),
+  };
+}));
+app.put('/api/library/watched-by-everyone/users', (req, res) => {
+  const b = req.body as { id: string; counted: boolean };
+  demoCounted.set(b.id, b.counted);
+  res.json({ ok: true });
+});
 app.get('/api/settings/sso', json(() => ({
   enabled: true,
   issuer: 'https://auth.example.com/application/o/streamforge/',

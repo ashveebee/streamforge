@@ -23,7 +23,7 @@ import { collectionDetail, collectionList, collectionSettings, createCollection,
 import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
 import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
-import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
+import { excludedUsers, keepItem, reclaim, reclaimSuggestions, setExcludedUsers, UNWATCHED_DAYS, watchedByEveryone } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
 import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails, seasonEpisodes } from './services/media.js';
@@ -87,6 +87,20 @@ api.get(
   handle('jellyfin', (req) => {
     const d = Number(req.query.days);
     return reclaimSuggestions(ctxOf(req.session!), (UNWATCHED_DAYS as readonly number[]).includes(d) ? d : 365);
+  }),
+);
+api.get('/library/watched-by-everyone', handle('jellyfin', (req) => watchedByEveryone(ctxOf(req.session!))));
+api.put(
+  '/library/watched-by-everyone/users',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ id: z.string().max(64), counted: z.boolean() }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const ex = excludedUsers();
+    if (b.data.counted) ex.delete(b.data.id);
+    else ex.add(b.data.id);
+    setExcludedUsers([...ex]);
+    return { ok: true };
   }),
 );
 const reclaimBody = z

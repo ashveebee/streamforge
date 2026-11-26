@@ -221,6 +221,14 @@ server.
 - **Cleanup suggestions.** Library health lists big movies and series nobody
   has watched in 3–24 months, with the space each would free. Keep, stop
   monitoring, or delete them from there.
+- **Watched by everyone.** Library health also lists the movies and series
+  every Jellyfin user has finished, biggest first, so you can free space
+  without removing something someone still means to watch. Choose who counts
+  (leave out an admin or test account that never watches anything), tick
+  titles, and delete them or stop monitoring them through Sonarr or Radarr in
+  one go, so they aren't downloaded again. A series counts once every episode
+  is watched. This needs Jellyfin as the main server, because it uses
+  Jellyfin's watched state for each user.
 - **Transcode and bandwidth alerts.** Get alerted when too many streams
   transcode at once, total bandwidth passes a limit, or a 4K file is being
   transcoded (optionally messaging the viewer).
