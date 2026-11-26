@@ -1905,25 +1905,47 @@ app.get('/api/:kind/missing', (req, res) => {
 app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
 app.post('/api/seerr/requests/:id/:decision', (_req, res) => res.json({ ok: true }));
 app.post('/api/jellyfin/sessions/:id/control', (_req, res) => res.json({ ok: true }));
+const STAT_SERVERS = [
+  { id: 'jellyfin', name: 'Homelab', type: 'jellyfin' as const, share: 0.6, clients: ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Findroid'], users: ['Alex', 'Maya', 'Leo', 'Sam'] },
+  { id: PLEX.id, name: PLEX.name, type: 'plex' as const, share: 0.28, clients: ['Plex for LG', 'Plex Web', 'Plex for iOS'], users: ['Priya', 'Alex', 'Jordan'] },
+  { id: EMBY.id, name: EMBY.name, type: 'emby' as const, share: 0.12, clients: ['Emby Theater', 'Emby for Android'], users: ['Maya', 'Sam'] },
+];
 app.get('/api/jellyfin/stats', (req, res) => {
   const days = Number(req.query.days) || 30;
-  const r = rng(`stats${days}`);
+  const pickedServer = STAT_SERVERS.find((x) => x.id === req.query.server);
+  const share = pickedServer?.share ?? 1;
+  const r = rng(`stats${days}${pickedServer?.id ?? ''}`);
   const daily = Array.from({ length: days }, (_, i) => {
     const d = new Date(Date.now() - (days - 1 - i) * DAY);
     const weekend = d.getDay() === 0 || d.getDay() === 6;
-    const direct = Math.round(r() * 6 + (weekend ? 5 : 2));
-    const transcode = Math.round(r() * 3);
+    const direct = Math.round((r() * 6 + (weekend ? 5 : 2)) * share);
+    const transcode = Math.round(r() * 3 * share);
     return { date: d.toISOString().slice(0, 10), plays: direct + transcode, direct, transcode, hours: Math.round((direct + transcode) * 0.8 * 10) / 10 };
   });
   const heatmap = Array.from({ length: 7 }, (_, w) =>
-    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r())),
+    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r() * share)),
   );
   const plays = daily.reduce((a, d) => a + d.plays, 0);
   const tc = daily.reduce((a, d) => a + d.transcode, 0);
-  const users = ['Alex', 'Maya', 'Leo', 'Priya', 'Sam'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
+  const users = (pickedServer?.users ?? ['Alex', 'Maya', 'Leo', 'Priya', 'Sam']).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
   const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, link: titleLink(name), plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
-  const clients = ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Infuse'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
-  res.json({ days, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays, hours: Math.round(plays * 0.8), users: 5, transcodeShare: tc / plays }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
+  const clients = (pickedServer?.clients ?? ['Jellyfin Android TV', 'Jellyfin Web', 'Plex for LG', 'Swiftfin', 'Emby Theater']).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
+  // Server plays add up to the all-servers total for the same range.
+  // The all-servers total, worked out the same way without a server picked.
+  const ra = rng(`stats${days}`);
+  const allPlays = Array.from({ length: days }, (_, i) => {
+    const d = new Date(Date.now() - (days - 1 - i) * DAY);
+    const weekend = d.getDay() === 0 || d.getDay() === 6;
+    return Math.round(ra() * 6 + (weekend ? 5 : 2)) + Math.round(ra() * 3);
+  }).reduce((a, b) => a + b, 0);
+  const servers = STAT_SERVERS.map((x, i) => {
+    // Shares rounded so the servers add up to the total exactly.
+    const before = STAT_SERVERS.slice(0, i).reduce((n, y) => n + Math.round(allPlays * y.share), 0);
+    return { id: x.id, name: x.name, type: x.type, plays: i === STAT_SERVERS.length - 1 ? allPlays - before : Math.round(allPlays * x.share) };
+  });
+  // The picked server's total matches its count in the filter.
+  const shown = pickedServer ? servers.find((x) => x.id === pickedServer.id)!.plays : plays;
+  res.json({ days, servers, server: pickedServer?.id, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays: shown, hours: Math.round(shown * 0.8), users: users.length, transcodeShare: plays ? tc / plays : undefined }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
 });
 const cleanup: CleanupStatus = {
   settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },

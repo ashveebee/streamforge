@@ -336,7 +336,8 @@ api.get(
   '/jellyfin/stats',
   handle('jellyfin', (req) => {
     const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
-    return playbackStats(ctxOf(req.session!), days);
+    const server = typeof req.query.server === 'string' && req.query.server.length <= 64 ? req.query.server : undefined;
+    return playbackStats(ctxOf(req.session!), days, server);
   }),
 );
 

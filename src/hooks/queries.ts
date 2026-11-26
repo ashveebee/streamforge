@@ -439,8 +439,11 @@ export function useSessionControl() {
   });
 }
 
-export const usePlaybackStats = (days: number) =>
-  useQuery({ ...poll<PlaybackStats>(['jellyfin', 'stats', String(days)], `/jellyfin/stats?days=${days}`, 5 * 60 * SECOND), placeholderData: (p) => p });
+export const usePlaybackStats = (days: number, server = '') =>
+  useQuery({
+    ...poll<PlaybackStats>(['jellyfin', 'stats', String(days), server], `/jellyfin/stats?days=${days}${server ? `&server=${encodeURIComponent(server)}` : ''}`, 5 * 60 * SECOND),
+    placeholderData: (p) => p,
+  });
 
 /* ---------------------------- storage forecast ---------------------------- */
 

@@ -154,8 +154,10 @@ server.
   through the last 30 days estimates when each volume will be full.
 - **Playback stats.** A Stats page shows plays per day split by direct play vs
   transcode, watch time, top viewers, titles and clients, and a weekday-by-hour
-  heatmap. Watch time and transcode figures need a Jellyfin API key (see
-  *Notes on data sources*).
+  heatmap. With more than one media server, a **Played on** filter shows all
+  servers together or one at a time. Viewer names open their watch history and
+  titles open their pages. Watch time and transcode figures need a Jellyfin API
+  key (see *Notes on data sources*).
 - **Library health.** Cross-checks Sonarr, Radarr and Jellyfin by TVDB/TMDB/IMDb
   id. It lists monitored series with missing episodes, files that could be
   upgraded (with a search button), downloads Jellyfin doesn't have, and Jellyfin

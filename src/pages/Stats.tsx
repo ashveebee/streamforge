@@ -5,6 +5,7 @@ import { BarChart3, Clock, MonitorSmartphone, Play, Repeat2, Users } from 'lucid
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useMainServer, usePlaybackStats } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
+import { ServerTag, SERVER_NAME } from '@/components/ui/ServerTag';
 import { pct } from '@/lib/format';
 import type { PlaybackStats } from '@/lib/types';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -147,13 +148,17 @@ function TopList({ title, icon, rows, hours, linkFor }: { title: string; icon: t
 
 export default function StatsPage() {
   const [days, setDays] = useState<number>(30);
-  const q = usePlaybackStats(days);
+  const [server, setServer] = useState('');
+  const q = usePlaybackStats(days, server);
+  const servers = q.data?.servers ?? [];
+  const several = servers.length > 1;
+  const picked = servers.find((x) => x.id === server);
   const main = useMainServer();
   const { user } = useAuth();
   return (
     <>
       <PageHeader
-        eyebrow={main.name}
+        eyebrow={several ? (picked ? `${picked.name} · ${SERVER_NAME[picked.type]}` : 'All media servers') : main.name}
         title="Playback stats"
         description="Who watches what, when, and how it gets to them."
         actions={
@@ -177,6 +182,23 @@ export default function StatsPage() {
           const hours = d.totals.hours !== undefined;
           return (
             <div className="space-y-5">
+              {several && (
+                <div role="tablist" aria-label="Media server" className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-xs text-ink-4">Played on</span>
+                  {[{ id: '', name: 'All servers', type: undefined, plays: d.servers.reduce((n, x) => n + x.plays, 0) }, ...d.servers].map((x) => (
+                    <button
+                      key={x.id || '*'}
+                      role="tab"
+                      aria-selected={server === x.id}
+                      onClick={() => setServer(x.id)}
+                      className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition', server === x.id ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2')}
+                    >
+                      {x.type ? <ServerTag type={x.type} name={x.name} /> : x.name}
+                      <span className="text-ink-4 tabular">{x.plays}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {(d.source !== 'recorder' || !d.recording) && (
                 <p className="rounded-xl border border-line bg-white/[0.02] px-4 py-3 text-xs text-ink-3">
                   {!d.recording
@@ -199,7 +221,7 @@ export default function StatsPage() {
               </div>
               <DailyChart d={d} />
               <div className="grid gap-5 xl:grid-cols-3">
-                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}` : undefined} />
+                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}${d.server ? `&server=${encodeURIComponent(d.server)}` : ''}` : undefined} />
                 <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} linkFor={(r) => r.link} />
                 <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} />
               </div>

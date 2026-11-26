@@ -6,7 +6,7 @@ import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
-import { SERVER_COLOR, SERVER_NAME, SOURCE_LABEL, useSaveCollection, type CollectionInput, type Library, type SourceType } from '@/hooks/useKometa';
+import { SERVER_NAME, SOURCE_LABEL, useSaveCollection, type CollectionInput, type Library, type SourceType } from '@/hooks/useKometa';
 
 const input =
   'h-10 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink placeholder:text-ink-4 outline-none transition focus:border-brand/60 focus:ring-4 focus:ring-brand/10 aria-[invalid=true]:border-bad/60 [&>option]:bg-surface-2 [&>optgroup]:bg-surface-2';
@@ -255,11 +255,4 @@ export function CollectionForm({
 }
 
 /** A dot in the server's colour with its name. */
-export function ServerTag({ type, name, className }: { type: Library['serverType']; name?: string; className?: string }) {
-  return (
-    <span className={cn('inline-flex items-center gap-1.5', className)}>
-      <i className="size-[7px] rounded-full" style={{ background: SERVER_COLOR[type] }} />
-      {name ?? SERVER_NAME[type]}
-    </span>
-  );
-}
+export { ServerTag } from '@/components/ui/ServerTag';

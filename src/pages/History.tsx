@@ -5,11 +5,10 @@ import { Clapperboard, History as HistoryIcon, LoaderCircle, MonitorPlay, Search
 import { api, jfImage, jfUserImage } from '@/lib/api';
 import { dayLabel, duration, num, relative, timeOfDay } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { ServerTag, SERVER_COLOR } from '@/components/ui/ServerTag';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
-import { ServerTag } from '@/components/kometa/CollectionForm';
-import { SERVER_COLOR } from '@/hooks/useKometa';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState } from '@/components/ui/States';

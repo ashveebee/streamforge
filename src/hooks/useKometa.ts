@@ -107,8 +107,7 @@ export function useDeleteCollection() {
   });
 }
 
-export const SERVER_COLOR: Record<ServerType, string> = { jellyfin: 'var(--color-jellyfin)', plex: 'var(--color-plex)', emby: 'var(--color-emby)' };
-export const SERVER_NAME: Record<ServerType, string> = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' };
+export { SERVER_COLOR, SERVER_NAME } from '@/components/ui/ServerTag';
 export const KOMETA_COLOR = '#f59e0b';
 
 export const SOURCE_LABEL: Record<SourceType, string> = {

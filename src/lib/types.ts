@@ -607,6 +607,10 @@ export interface MissingPage {
 
 export interface PlaybackStats {
   days: number;
+  /** Every media server, with its plays in the range; a filter shows when there's more than one. */
+  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
+  /** The server the figures are narrowed to, if any. */
+  server?: string;
   source: 'recorder' | 'activity' | 'mixed';
   recording: boolean;
   recordingSince?: string;
