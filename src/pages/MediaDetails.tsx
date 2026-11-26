@@ -224,10 +224,10 @@ function AvailableOnCard({ d }: { d: Details }) {
 }
 
 /** Everyone who has watched it, on which server and device (admins). */
-function WhoWatched({ list, runtimeMin }: { list: TitleWatcher[]; runtimeMin?: number }) {
+function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runtimeMin?: number; several: boolean }) {
   return (
     <Card>
-      <CardHeader icon={HistoryIcon} title="Who’s watched it" subtitle="Across every server" />
+      <CardHeader icon={HistoryIcon} title="Who’s watched it" subtitle={several ? 'Across every server' : `${list.length} ${list.length === 1 ? 'person' : 'people'}`} />
       <CardBody>
         <ul className="-mx-2">
           {list.map((w) => {
@@ -248,7 +248,7 @@ function WhoWatched({ list, runtimeMin }: { list: TitleWatcher[]; runtimeMin?: n
                     </div>
                   </div>
                   <div className="hidden min-w-0 items-center gap-2 text-[11px] text-ink-3 sm:flex">
-                    {w.serverType && <ServerTag type={w.serverType} name={w.serverName} />}
+                    {several && w.serverType && <ServerTag type={w.serverType} name={w.serverName} />}
                     {(w.device || w.client) && <span className="truncate text-ink-4">{w.device ?? w.client}</span>}
                   </div>
                 </Link>
@@ -760,11 +760,11 @@ function DetailsView({ d }: { d: Details }) {
             const c = allCopies(d);
             return c.files.length ? <MediaInfo files={c.files} subtitle={c.subtitle} /> : null;
           })()}
-          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} />}
+          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} several={serverRows(d).length > 1} />}
           <Cast cast={d.cast} />
         </div>
         <div className="min-w-0 space-y-5">
-          {d.availableOn && d.availableOn.length > 0 && <AvailableOnCard d={d} />}
+          {d.availableOn && d.availableOn.length > 0 && (serverRows(d).length > 1 || !d.library) && <AvailableOnCard d={d} />}
           {d.library && <YourLibrary lib={d.library} />}
           {d.library && <WillItPlay itemId={d.library.itemId} />}
           {d.library && <TitleInfo lib={d.library} />}

@@ -246,7 +246,7 @@ export default function HistoryPage() {
                                   {r.subtitle && <div className="truncate text-[11px] text-ink-3">{r.subtitle}</div>}
                                   <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] text-ink-4">
                                     {!selected && <span className="truncate text-ink-3 sm:hidden">{r.user}</span>}
-                                    {r.serverType && <ServerTag type={r.serverType} name={r.serverName} className="shrink-0 text-ink-3" />}
+                                    {data.servers.length > 1 && r.serverType && <ServerTag type={r.serverType} name={r.serverName} className="shrink-0 text-ink-3" />}
                                     {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">Transcode</Pill>}
                                     <span className="hidden truncate md:inline">
                                       {r.source === 'recorded' ? [r.client, r.device].filter(Boolean).join(' · ') : `From ${d?.serverHistory ? SERVER_LABEL[d.serverHistory] : 'the server'}’s own history`}

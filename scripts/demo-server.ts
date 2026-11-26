@@ -43,6 +43,8 @@ import type {
 } from '../src/lib/types.js';
 
 const PORT = Number(process.env.DEMO_PORT ?? 4010);
+// DEMO_SINGLE=1 shows a household with one Jellyfin server and no Emby or Plex.
+const SINGLE = process.env.DEMO_SINGLE === '1';
 const START = Date.now();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -1029,8 +1031,7 @@ app.get('/api/config', json(() => ({
     ? [{ ...PLEX_HOME, primary: true }, { ...SECOND, primary: false }]
     : [
         { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
-        { ...EMBY, primary: false },
-        { ...PLEX, primary: false },
+        ...(SINGLE ? [] : [{ ...EMBY, primary: false }, { ...PLEX, primary: false }]),
       ],
   mainServer: MAIN_KIND ?? 'jellyfin',
   kometa: true,
@@ -1069,14 +1070,14 @@ const enabledHealth = () => {
   };
   // Extra media servers listed right after the main Jellyfin server.
   const [main, ...rest] = h.services;
-  return { ...h, services: [main!, emby, plex, ...rest, extra].filter((s) => !disabledServices.has(s.kind)) };
+  return { ...h, services: [main!, ...(SINGLE ? [] : [emby, plex]), ...rest, extra].filter((s) => !disabledServices.has(s.kind)) };
 };
 app.get('/api/health', json(enabledHealth));
 app.post('/api/health/recheck', json(enabledHealth));
 app.get('/api/system/host', json(host));
 app.get('/api/downloads', json(downloads));
 
-app.get('/api/jellyfin/now-playing', json(nowPlaying));
+app.get('/api/jellyfin/now-playing', json(() => (SINGLE ? nowPlaying().filter((x) => !x.server || x.server === 'jellyfin') : nowPlaying())));
 app.get('/api/jellyfin/overview', (req, res) => {
   const srv = demoServer(req);
   res.json(srv ? extraOverview(srv) : jellyfinOverview());
@@ -1587,8 +1588,8 @@ const histRows = (() => {
   for (let i = 0; i < 46; i++) {
     const u = HIST_USERS[(i * 7 + (i >> 2)) % HIST_USERS.length]!;
     const [title, subtitle, mins] = HIST_TITLES[(i * 5) % HIST_TITLES.length]!;
-    const srv = u.servers[i % u.servers.length]!;
-    const client = srv.type === 'plex' ? (u.name === 'Jordan' ? 'Plex for LG' : 'Plex Web') : srv.type === 'emby' ? 'Emby Theater' : u.client;
+    const srv = SINGLE ? HIST_SERVERS.homelab : u.servers[i % u.servers.length]!;
+    const client = srv.type === 'plex' ? (u.name === 'Jordan' ? 'Plex for LG' : 'Plex Web') : SINGLE && u.name === 'Jordan' ? 'Jellyfin for LG' : srv.type === 'emby' ? 'Emby Theater' : u.client;
     rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client, device: u.device, serverId: srv.id, serverType: srv.type, serverName: srv.name, poster: { itemId: slug(title), ...(srv.id === 'jellyfin' ? {} : { server: srv.id }) }, link: titleLink(title), method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
     t -= (3 + ((i * 11) % 17)) * HOUR;
   }
@@ -1871,10 +1872,11 @@ app.get('/api/media/:type/:id', (req, res) => {
     sources: { seerr: true, jellyfin: inLib },
   };
   // Three servers: the movie is on Homelab (two copies) and Cabin, not on Office.
+  if (SINGLE) body.availableOn = body.availableOn.slice(0, 1);
   if (inLib && !tv) {
     const [jfOn, plexOn] = body.availableOn as Record<string, unknown>[];
     Object.assign(jfOn!, { files: body.library?.files, added: body.library?.added, plays: 5 });
-    Object.assign(plexOn!, {
+    if (plexOn) Object.assign(plexOn, {
       added: iso(55 * DAY),
       plays: 2,
       files: [{ id: 'p1', container: 'mkv', size: 9.8 * GB, bitrate: 14_000_000, video: { codec: 'HEVC', resolution: '1080p', width: 1920, height: 804, range: 'HDR10', bitDepth: 10, fps: 23.98 }, audio: [{ language: 'eng', codec: 'EAC3', channels: '5.1', isDefault: true }], subtitles: [{ language: 'eng', codec: 'SRT', forced: false, external: true, sdh: false, isDefault: false }] }],
@@ -1884,13 +1886,14 @@ app.get('/api/media/:type/:id', (req, res) => {
     ...body,
     servers: [
       { id: 'jellyfin', name: 'Homelab', type: 'jellyfin', main: true },
-      { id: PLEX.id, name: PLEX.name, type: 'plex', main: false },
-      { id: EMBY.id, name: EMBY.name, type: 'emby', main: false },
+      ...(SINGLE ? [] : [{ id: PLEX.id, name: PLEX.name, type: 'plex', main: false }, { id: EMBY.id, name: EMBY.name, type: 'emby', main: false }]),
     ],
     watchers: inLib
       ? [
           { user: 'Alex', at: iso(3 * DAY), plays: 2, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', client: 'Jellyfin Android TV', device: 'Living Room TV', watchedMs: 43 * MIN, source: 'recorded' },
-          { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: PLEX.id, serverName: PLEX.name, serverType: 'plex', client: 'Plex for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' },
+          SINGLE
+            ? { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', client: 'Jellyfin for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' }
+            : { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: PLEX.id, serverName: PLEX.name, serverType: 'plex', client: 'Plex for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' },
           { user: 'Sam', at: iso(61 * DAY), plays: 1, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', source: 'server' },
         ]
       : undefined,
@@ -1937,7 +1940,8 @@ const STAT_SERVERS = [
 ];
 app.get('/api/jellyfin/stats', (req, res) => {
   const days = Number(req.query.days) || 30;
-  const pickedServer = STAT_SERVERS.find((x) => x.id === req.query.server);
+  const statServers = SINGLE ? [{ ...STAT_SERVERS[0]!, share: 1, clients: ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Findroid'] }] : STAT_SERVERS;
+  const pickedServer = SINGLE ? undefined : STAT_SERVERS.find((x) => x.id === req.query.server);
   const share = pickedServer?.share ?? 1;
   const r = rng(`stats${days}${pickedServer?.id ?? ''}`);
   const daily = Array.from({ length: days }, (_, i) => {
@@ -1954,7 +1958,7 @@ app.get('/api/jellyfin/stats', (req, res) => {
   const tc = daily.reduce((a, d) => a + d.transcode, 0);
   const users = (pickedServer?.users ?? ['Alex', 'Maya', 'Leo', 'Priya', 'Sam']).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
   const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, link: titleLink(name), plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
-  const clients = (pickedServer?.clients ?? ['Jellyfin Android TV', 'Jellyfin Web', 'Plex for LG', 'Swiftfin', 'Emby Theater']).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
+  const clients = (pickedServer?.clients ?? (SINGLE ? statServers[0]!.clients : ['Jellyfin Android TV', 'Jellyfin Web', 'Plex for LG', 'Swiftfin', 'Emby Theater'])).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
   // Server plays add up to the all-servers total for the same range.
   // The all-servers total, worked out the same way without a server picked.
   const ra = rng(`stats${days}`);
@@ -1963,10 +1967,10 @@ app.get('/api/jellyfin/stats', (req, res) => {
     const weekend = d.getDay() === 0 || d.getDay() === 6;
     return Math.round(ra() * 6 + (weekend ? 5 : 2)) + Math.round(ra() * 3);
   }).reduce((a, b) => a + b, 0);
-  const servers = STAT_SERVERS.map((x, i) => {
+  const servers = statServers.map((x, i) => {
     // Shares rounded so the servers add up to the total exactly.
-    const before = STAT_SERVERS.slice(0, i).reduce((n, y) => n + Math.round(allPlays * y.share), 0);
-    return { id: x.id, name: x.name, type: x.type, plays: i === STAT_SERVERS.length - 1 ? allPlays - before : Math.round(allPlays * x.share) };
+    const before = statServers.slice(0, i).reduce((n, y) => n + Math.round(allPlays * y.share), 0);
+    return { id: x.id, name: x.name, type: x.type, plays: i === statServers.length - 1 ? allPlays - before : Math.round(allPlays * x.share) };
   });
   // The picked server's total matches its count in the filter.
   const shown = pickedServer ? servers.find((x) => x.id === pickedServer.id)!.plays : plays;
