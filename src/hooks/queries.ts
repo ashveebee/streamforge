@@ -229,8 +229,12 @@ export const useSetupState = (enabled: boolean) =>
 export function useFinishSetup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<{ appsDone: boolean }>('/settings/setup', { method: 'PUT', body: { appsDone: true } }),
-    onSuccess: (d) => qc.setQueryData(['settings', 'setup'], d),
+    mutationFn: () => api<{ appsDone: boolean; disabled: ServiceId[] }>('/settings/setup', { method: 'PUT', body: { appsDone: true } }),
+    onSuccess: (d) => {
+      qc.setQueryData(['settings', 'setup'], { appsDone: d.appsDone });
+      // Skipped apps were switched off: refresh the sidebar, settings and health.
+      void qc.invalidateQueries({ predicate: (q) => !(q.queryKey[0] === 'settings' && q.queryKey[1] === 'setup') });
+    },
   });
 }
 

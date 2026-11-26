@@ -47,6 +47,7 @@ import {
   infinidiskSettings,
   isComplete,
   isConfigured,
+  isEnabled,
   resetSettings,
   resolve,
   saveSettings,
@@ -235,6 +236,8 @@ settingsRouter.put('/services/:id', (req, res) => {
   }
   const previous = resolve(id).settings;
   saveSettings(id, s, req.session!.userName);
+  // Entering a service's details means it's wanted: switch it back on if setup turned it off.
+  if (s.url && canDisable(id) && !isEnabled(id)) setEnabled(id, true);
   // Sessions belong to the old Jellyfin server; they mean nothing on a new one.
   const signedOut = id === 'jellyfin' && origin(previous.url) !== origin(s.url);
   if (signedOut) sessions.clear();
@@ -475,8 +478,12 @@ settingsRouter.put('/setup', (req, res) => {
   const parsed = z.object({ appsDone: z.boolean() }).strict().safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, 'Expected { appsDone: boolean }');
   writePref(SETUP_PREF, { appsDone: parsed.data.appsDone });
-  if (parsed.data.appsDone) audit(req, '[settings] finished setting up apps');
-  res.json({ appsDone: appsDone() });
+  // Apps left out of setup are switched off, so they're hidden instead of
+  // showing as "not configured" everywhere. Settings turns them back on.
+  const skipped = parsed.data.appsDone ? SERVICE_IDS.filter((id) => id !== 'jellyfin' && canDisable(id) && !describe(id).configured) : [];
+  for (const id of skipped) setEnabled(id, false);
+  if (parsed.data.appsDone) audit(req, `[settings] finished setting up apps${skipped.length ? `; switched off ${skipped.map((id) => SERVICE_NAMES[id]).join(', ')}` : ''}`);
+  res.json({ appsDone: appsDone(), disabled: skipped });
 });
 
 /** Looks for the apps around the media server (a few seconds). */
@@ -502,6 +509,7 @@ settingsRouter.post('/apps/import', async (req, res) => {
     const test = await runTest(b.service, candidate);
     if (test.ok) {
       saveSettings(b.service, candidate, req.session!.userName);
+      setEnabled(b.service, true);
       audit(req, `[settings] ${SERVICE_NAMES[b.service]} connected using details from ${SERVICE_NAMES[b.from]}`);
     }
     results.push({ service: b.service, from: b.from, url: b.url, ok: test.ok, message: test.ok ? undefined : test.message });

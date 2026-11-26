@@ -349,7 +349,7 @@ export default function SetupAppsPage() {
         )}
 
         <footer className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
-          <span className="mr-auto text-xs text-ink-4">{finish.error ? <span className="text-bad">{(finish.error as Error).message}</span> : 'You can add or change apps later in Settings.'}</span>
+          <span className="mr-auto text-xs text-ink-4">{finish.error ? <span className="text-bad">{(finish.error as Error).message}</span> : 'Apps you don’t connect are switched off. Turn them on any time in Settings.'}</span>
           <Button variant={connected ? 'primary' : 'ghost'} disabled={finish.isPending} onClick={done}>
             {finish.isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}
             {connected ? 'Finish setup' : 'Skip for now'} <ArrowRight className="size-4" />
