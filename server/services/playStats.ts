@@ -2,6 +2,7 @@ import { db } from '../lib/db.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
 import { canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
+import { titleLinks } from './history.js';
 import { mediaServers } from './mediaServers.js';
 import * as plex from './plex.js';
 
@@ -215,7 +216,10 @@ export async function playbackStats(ctx: JfCtx, days: number) {
     daily: [...byDay.values()].map((d) => ({ ...d, hours: Math.round(d.hours * 10) / 10 })),
     heatmap: heat,
     topUsers: top(plays, (p) => p.user),
-    topTitles: top(plays, (p) => p.group),
+    topTitles: await (async () => {
+      const link = await titleLinks(ctx);
+      return top(plays, (p) => p.group).map((t) => ({ ...t, link: link(t.name) }));
+    })(),
     topClients: top(plays, (p) => p.client, 6),
   };
 }

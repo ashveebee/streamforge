@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
+import { useAuth } from '@/hooks/useAuth';
 import { BarChart3, Clock, MonitorSmartphone, Play, Repeat2, Users } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useMainServer, usePlaybackStats } from '@/hooks/queries';
@@ -106,7 +108,7 @@ function Heatmap({ d }: { d: PlaybackStats }) {
   );
 }
 
-function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Users; rows: PlaybackStats['topUsers']; hours: boolean }) {
+function TopList({ title, icon, rows, hours, linkFor }: { title: string; icon: typeof Users; rows: (PlaybackStats['topUsers'][number] & { link?: string })[]; hours: boolean; linkFor?: (r: { name: string; link?: string }) => string | undefined }) {
   const max = Math.max(1, ...rows.map((r) => (hours ? r.hours : r.plays)));
   return (
     <Card className="h-full">
@@ -119,7 +121,11 @@ function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Use
               return (
                 <li key={r.name}>
                   <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="truncate">{r.name}</span>
+                    {linkFor?.(r) ? (
+                      <Link to={linkFor(r)!} className="truncate transition hover:text-brand focus-visible:text-brand">{r.name}</Link>
+                    ) : (
+                      <span className="truncate">{r.name}</span>
+                    )}
                     <span className="shrink-0 text-xs text-ink-3 tabular">
                       {hours ? `${r.hours} h · ` : ''}{r.plays} play{r.plays === 1 ? '' : 's'}
                     </span>
@@ -143,6 +149,7 @@ export default function StatsPage() {
   const [days, setDays] = useState<number>(30);
   const q = usePlaybackStats(days);
   const main = useMainServer();
+  const { user } = useAuth();
   return (
     <>
       <PageHeader
@@ -192,8 +199,8 @@ export default function StatsPage() {
               </div>
               <DailyChart d={d} />
               <div className="grid gap-5 xl:grid-cols-3">
-                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} />
-                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} />
+                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}` : undefined} />
+                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} linkFor={(r) => r.link} />
                 <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} />
               </div>
               <Heatmap d={d} />

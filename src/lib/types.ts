@@ -615,7 +615,7 @@ export interface PlaybackStats {
   /** [weekday Mon..Sun][hour 0..23] → plays started. */
   heatmap: number[][];
   topUsers: { name: string; plays: number; hours: number }[];
-  topTitles: { name: string; plays: number; hours: number }[];
+  topTitles: { name: string; plays: number; hours: number; link?: string }[];
   topClients: { name: string; plays: number; hours: number }[];
 }
 

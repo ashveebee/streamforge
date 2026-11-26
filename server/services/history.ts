@@ -1,7 +1,7 @@
 import { cache } from '../lib/cache.js';
 import { db } from '../lib/db.js';
 import { jf, serverToken, type JfCtx } from './jellyfin.js';
-import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryServer } from './mainServer.js';
+import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import * as plex from './plex.js';
 
 /*
@@ -37,6 +37,8 @@ export interface HistoryRow {
   serverName?: string;
   /** The movie or series poster, served through StreamForge's image proxy. */
   poster?: { itemId: string; server?: string };
+  /** StreamForge's page for the title, when it can be found. */
+  link?: string;
   method?: string;
   watchedMs?: number;
   /** Where the row came from: StreamForge's recorder, or the server's own history. */
@@ -167,18 +169,32 @@ function fromPlay(r: PlayRow): HistoryRow {
 
 const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-/** Every server's movies and series by name, to find posters and server names. */
+/** Every server's movies and series by name, to find posters, links and server names. */
 async function libraryIndex(ctx: JfCtx) {
   return cache.get('history:library', 10 * 60_000, async () => {
     const lib = await allLibraryItems(ctx);
-    const byServer = new Map<string, string>();
-    const anywhere = new Map<string, { server: string; id: string }>();
+    const byServer = new Map<string, LibraryEntry>();
+    const anywhere = new Map<string, LibraryEntry>();
     for (const i of lib.items) {
-      byServer.set(`${i.server.id}|${key(i.name)}`, i.id);
-      if (!anywhere.has(key(i.name)) || i.server.main) anywhere.set(key(i.name), { server: i.server.id, id: i.id });
+      byServer.set(`${i.server.id}|${key(i.name)}`, i);
+      const cur = anywhere.get(key(i.name));
+      // Prefer a copy with a TMDb id (it gets a full title page), then the main server's.
+      if (!cur || (!cur.tmdb && i.tmdb) || (!!cur.tmdb === !!i.tmdb && i.server.main && !cur.server.main)) anywhere.set(key(i.name), i);
     }
     return { byServer, anywhere, servers: lib.servers };
   });
+}
+
+/** StreamForge's title page for a library entry: by TMDb id, or the main Jellyfin server's own item page. */
+const entryLink = (e: LibraryEntry) => (e.tmdb ? `/media/${e.type === 'Series' ? 'tv' : 'movie'}/${e.tmdb}` : e.server.id === 'jellyfin' && e.server.main ? `/media/jellyfin/${e.id}` : undefined);
+
+/** Finds title pages by name, for lists like the Stats page's most watched. */
+export async function titleLinks(ctx: JfCtx) {
+  const idx = await libraryIndex(ctx).catch(() => undefined);
+  return (name: string) => {
+    const e = idx?.anywhere.get(key(name));
+    return e ? entryLink(e) : undefined;
+  };
 }
 
 /** The image proxy wants no server id for the main Jellyfin server. */
@@ -208,12 +224,12 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
     }
     const k = key(r.title);
     const onServer = r.serverId ? idx?.byServer.get(`${r.serverId}|${k}`) : undefined;
-    if (onServer) r.poster = { itemId: onServer, server: imageServer(srv, r.serverId!) };
+    const elsewhere = idx?.anywhere.get(k);
+    if (onServer) r.poster = { itemId: onServer.id, server: imageServer(srv, r.serverId!) };
     else if (r.poster && r.serverId) r.poster = { itemId: r.poster.itemId, server: imageServer(srv, r.serverId) };
-    else {
-      const elsewhere = idx?.anywhere.get(k);
-      if (elsewhere) r.poster = { itemId: elsewhere.id, server: imageServer(servers.get(elsewhere.server), elsewhere.server) };
-    }
+    else if (elsewhere) r.poster = { itemId: elsewhere.id, server: imageServer(elsewhere.server, elsewhere.server.id) };
+    // Link to the title page; a copy elsewhere may know the TMDb id when this server's doesn't.
+    r.link = (onServer && entryLink(onServer)) || (elsewhere && entryLink(elsewhere)) || (r.serverId === 'jellyfin' && r.poster && !r.poster.server ? `/media/jellyfin/${r.poster.itemId}` : undefined);
     if (r.serverId && r.serverType) {
       const v = seen.get(r.serverId) ?? { id: r.serverId, name: r.serverName ?? r.serverId, type: r.serverType, plays: 0 };
       v.plays++;
@@ -242,10 +258,10 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const rows = all.filter((r) => (!opts.user || norm(r.user) === norm(opts.user)) && (!q || norm(`${r.title} ${r.subtitle ?? ''}`).includes(q)));
 
   // A summary of whatever is selected.
-  const top = new Map<string, { title: string; plays: number; type: HistoryRow['type'] }>();
+  const top = new Map<string, { title: string; plays: number; type: HistoryRow['type']; link?: string }>();
   const devices = new Map<string, number>();
   for (const r of rows) {
-    const t = top.get(r.title) ?? { title: r.title, plays: 0, type: r.type };
+    const t = top.get(r.title) ?? { title: r.title, plays: 0, type: r.type, link: r.link };
     t.plays++;
     top.set(r.title, t);
     const d = [r.client, r.device].filter(Boolean).join(' · ');

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Clapperboard, History as HistoryIcon, LoaderCircle, MonitorPlay, Search, Tv, Users } from 'lucide-react';
 import { api, jfImage, jfUserImage } from '@/lib/api';
@@ -27,6 +27,7 @@ interface HistoryRow {
   serverType?: 'jellyfin' | 'plex' | 'emby';
   serverName?: string;
   poster?: { itemId: string; server?: string };
+  link?: string;
   method?: string;
   watchedMs?: number;
   source: 'recorded' | 'server';
@@ -35,7 +36,7 @@ interface HistoryResult {
   days: number;
   servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
   users: { name: string; plays: number; watchedMs: number; lastAt?: string; id?: string; imageTag?: string }[];
-  summary: { plays: number; watchedMs: number; titles: number; movies: number; episodes: number; transcodePct?: number; top: { title: string; plays: number; type: string }[]; device?: string };
+  summary: { plays: number; watchedMs: number; titles: number; movies: number; episodes: number; transcodePct?: number; top: { title: string; plays: number; type: string; link?: string }[]; device?: string };
   rows: HistoryRow[];
   total: number;
   recordingSince?: number;
@@ -50,6 +51,18 @@ const RANGES = [
   { days: 0, label: 'All time' },
 ];
 const SERVER_LABEL = { jellyfin: 'Jellyfin', plex: 'Plex' } as const;
+
+/** A history row: the whole row opens the title's page when StreamForge has one. */
+function RowLink({ to, children }: { to?: string; children: React.ReactNode }) {
+  const cls = '-mx-2 flex items-center gap-3 rounded-xl px-2 py-2';
+  return to ? (
+    <Link to={to} className={cn(cls, 'group transition hover:bg-white/[0.04] focus-visible:bg-white/[0.04]')}>
+      {children}
+    </Link>
+  ) : (
+    <div className={cls}>{children}</div>
+  );
+}
 
 function Stat({ value, label }: { value: React.ReactNode; label: string }) {
   return (
@@ -192,7 +205,7 @@ export default function HistoryPage() {
                     {data.summary.top.map((t) => (
                       <span key={t.title} className="inline-flex items-center gap-1.5">
                         {t.type === 'episode' ? <Tv className="size-3.5 text-ink-4" /> : <Clapperboard className="size-3.5 text-ink-4" />}
-                        {t.title} <span className="text-ink-4 tabular">×{t.plays}</span>
+                        {t.link ? <Link to={t.link} className="transition hover:text-brand">{t.title}</Link> : t.title} <span className="text-ink-4 tabular">×{t.plays}</span>
                       </span>
                     ))}
                     {data.summary.device && (
@@ -215,7 +228,8 @@ export default function HistoryPage() {
                           <h3 className="mb-1 py-1 text-[11px] font-semibold tracking-wide text-ink-4 uppercase">{dayLabel(g[0]!.at)}</h3>
                           <ul className="divide-y divide-line">
                             {g.map((r) => (
-                              <li key={r.id} className="flex items-center gap-3 py-2">
+                              <li key={r.id}>
+                                <RowLink to={r.link}>
                                 <span className="w-14 shrink-0 text-[11px] tabular text-ink-4">{timeOfDay(r.at)}</span>
                                 <div
                                   className="relative h-[54px] w-9 shrink-0 overflow-hidden rounded-md bg-white/[0.04] ring-1 ring-white/10"
@@ -229,7 +243,7 @@ export default function HistoryPage() {
                                 </div>
                                 {!selected && <span className="hidden w-20 shrink-0 truncate text-xs text-ink-2 sm:block" title={r.user}>{r.user}</span>}
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-[13px] font-medium">{r.title}</div>
+                                  <div className="truncate text-[13px] font-medium transition group-hover:text-brand">{r.title}</div>
                                   {r.subtitle && <div className="truncate text-[11px] text-ink-3">{r.subtitle}</div>}
                                   <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] text-ink-4">
                                     {!selected && <span className="truncate text-ink-3 sm:hidden">{r.user}</span>}
@@ -241,6 +255,7 @@ export default function HistoryPage() {
                                   </div>
                                 </div>
                                 <span className="w-14 shrink-0 text-right text-xs tabular text-ink-2">{r.watchedMs ? duration(r.watchedMs) : ''}</span>
+                              </RowLink>
                               </li>
                             ))}
                           </ul>

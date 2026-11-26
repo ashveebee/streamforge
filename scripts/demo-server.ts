@@ -117,6 +117,8 @@ const byTitle = new Map(ALL.map((t) => [slug(t.title), t]));
 const find = (title: string) => byTitle.get(slug(title))!;
 /** Fictional TMDB ids for the demo catalogue. */
 const tmdbOf = (title: string) => 1000 + ALL.findIndex((t) => slug(t.title) === slug(title));
+/** A demo title's details page, when it's in the demo catalogue. */
+const titleLink = (title: string) => (byTitle.has(slug(title)) ? `/media/${find(title).kind === 'series' ? 'tv' : 'movie'}/${tmdbOf(title)}` : undefined);
 
 const USERS = [
   { id: 'u-alex', name: 'Alex', isAdmin: true },
@@ -1587,7 +1589,7 @@ const histRows = (() => {
     const [title, subtitle, mins] = HIST_TITLES[(i * 5) % HIST_TITLES.length]!;
     const srv = u.servers[i % u.servers.length]!;
     const client = srv.type === 'plex' ? (u.name === 'Jordan' ? 'Plex for LG' : 'Plex Web') : srv.type === 'emby' ? 'Emby Theater' : u.client;
-    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client, device: u.device, serverId: srv.id, serverType: srv.type, serverName: srv.name, poster: { itemId: slug(title), ...(srv.id === 'jellyfin' ? {} : { server: srv.id }) }, method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
+    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client, device: u.device, serverId: srv.id, serverType: srv.type, serverName: srv.name, poster: { itemId: slug(title), ...(srv.id === 'jellyfin' ? {} : { server: srv.id }) }, link: titleLink(title), method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
     t -= (3 + ((i * 11) % 17)) * HOUR;
   }
   return rows;
@@ -1602,8 +1604,8 @@ app.get('/api/history', (req, res) => {
   const servers = Object.values(HIST_SERVERS).map((x) => ({ ...x, plays: ranged.filter((r) => r.serverId === x.id).length })).filter((x) => x.plays).sort((a, b) => b.plays - a.plays);
   const inRange = ranged.filter((r) => !server || r.serverId === server);
   const rows = inRange.filter((r) => (!user || r.user.toLowerCase() === user) && (!q || `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q)));
-  const top = new Map<string, { title: string; plays: number; type: string }>();
-  for (const r of rows) top.set(r.title, { title: r.title, type: r.type, plays: (top.get(r.title)?.plays ?? 0) + 1 });
+  const top = new Map<string, { title: string; plays: number; type: string; link?: string }>();
+  for (const r of rows) top.set(r.title, { title: r.title, type: r.type, link: r.link, plays: (top.get(r.title)?.plays ?? 0) + 1 });
   res.json({
     days,
     servers,
@@ -1919,7 +1921,7 @@ app.get('/api/jellyfin/stats', (req, res) => {
   const plays = daily.reduce((a, d) => a + d.plays, 0);
   const tc = daily.reduce((a, d) => a + d.transcode, 0);
   const users = ['Alex', 'Maya', 'Leo', 'Priya', 'Sam'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
-  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
+  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, link: titleLink(name), plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
   const clients = ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Infuse'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
   res.json({ days, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays, hours: Math.round(plays * 0.8), users: 5, transcodeShare: tc / plays }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
 });
