@@ -128,6 +128,8 @@
     .card .ico svg.i { width: 20px; height: 20px; }
     .card h3 { margin: 18px 0 6px; font-size: 18px; letter-spacing: -.01em; }
     .card p { margin: 0; color: var(--ink-3); font-size: 15px; }
+    a.card.guide { display: block; text-decoration: none; }
+    a.card.guide h3::after { content: " →"; color: var(--ink-3); }
 
     .show { display: grid; gap: 32px; align-items: center; margin-top: 72px; }
     @media (min-width: 900px) { .show { grid-template-columns: 5fr 7fr; gap: 56px; } .show.flip { grid-template-columns: 7fr 5fr; } .show.flip .txt { order: 2; } }
@@ -333,6 +335,7 @@
         <a href="#tour">Tour</a>
         <a href="#phone">Phone</a>
         <a href="#install">Install</a>
+        <a href="guides/index.html">Guides</a>
         <a href="#license">License</a>
       </nav>
       <a class="btn btn-ghost btn-sm" href="https://github.com/ashveebee/streamforge">
@@ -483,6 +486,62 @@
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Transcode alerts</h3>
             <p>Hear about it when too many streams transcode, bandwidth passes your limit, or someone transcodes 4K, and optionally message the viewer.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="servers" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">Every server, every viewer</div>
+          <h2>Know <span class="grad-text">who watched what, and where</span></h2>
+          <p class="section-lede">Run one server or five. StreamForge records plays on all of them, shows which server has each title, and builds Kometa collections for you.</p>
+        </div>
+
+        <div class="show reveal">
+          <div class="txt">
+            <div class="eyebrow">Watch history</div>
+            <h3>Every person's history, across every server</h3>
+            <p>Pick someone, or everyone, and a time range. Each play shows the poster, the episode, the server and device, how long they watched and whether it transcoded.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Filled in from Jellyfin's or Plex's own history, so it isn't empty on day one</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Filter by server, person, time range or title</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Stats get the same server filter; click a viewer to open their history</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="1800" alt="Watch history: a list of people on the left, and each play with its poster, server, device and time watched" loading="lazy"></div>
+        </div>
+
+        <div class="show flip reveal">
+          <div class="txt">
+            <div class="eyebrow">Title pages</div>
+            <h3>Which server has it, and in what quality</h3>
+            <p>Under every title: a chip for each server with its best copy, like 4K Dolby Vision on one and 1080p on another, or "not here".</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Media info for every copy on every server</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Who's watched it, on which server and device</li>
+              <li><svg class="i"><use href="#i-check"/></svg>With a single server it stays simple: none of this clutter appears</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/title-servers.jpg" width="2880" height="1800" alt="A movie page showing it is on two of three servers, with the copies on each server" loading="lazy"></div>
+        </div>
+
+        <div class="features">
+          <article class="card reveal" style="--c:#f59e0b">
+            <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
+            <h3>Kometa collections</h3>
+            <p>Make collections from TMDb, IMDb or Trakt lists, trending titles or your own picks, shown all year or just in December. Kometa builds them on its next run, and its run reports show up in StreamForge.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--radarr)">
+            <div class="ico"><svg class="i"><use href="#i-download"/></svg></div>
+            <h3>Add to Sonarr and Radarr</h3>
+            <p>Add one title, or tick every missing title in a collection and add them in one go, with your choice of instance, quality profile, folder and whether to search now.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--ok)">
+            <div class="ico"><svg class="i"><use href="#i-users"/></svg></div>
+            <h3>Watched by everyone</h3>
+            <p>Movies and shows every person has already finished, biggest first. Choose who counts, then delete or stop monitoring them through Sonarr or Radarr, so nothing comes back.</p>
           </article>
         </div>
       </div>
@@ -900,7 +959,47 @@
             <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients, plus any extra Jellyfin, Emby or Plex servers. Skip any you don't use.</p>
           </div>
         </div>
-        <p class="note">Full guide, Docker networking tips, backups and troubleshooting are in the <a href="https://github.com/ashveebee/streamforge#installation">installation docs</a>. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
+        <p class="note">The <a href="guides/install.html">install guide</a> covers Docker networking, reverse proxies, Tailscale, backups and troubleshooting. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
+      </div>
+    </section>
+
+    <section id="guides" style="padding-top:0">
+      <div class="wrap">
+        <div class="eyebrow">Guides</div>
+        <h2>Step-by-step guides</h2>
+        <p class="section-lede">From the first <code>docker compose up</code> to Kometa collections, with the exact settings to use.</p>
+        <div class="features">
+          <a class="card reveal guide" href="guides/install.html" style="--c:var(--violet)">
+            <div class="ico"><svg class="i"><use href="#i-box"/></svg></div>
+            <h3>Install and configure</h3>
+            <p>Docker Compose, first run with Plex, Jellyfin or Emby, connecting every service, Docker networking, reverse proxies and Tailscale.</p>
+          </a>
+          <a class="card reveal guide" href="guides/media-servers.html" style="--c:var(--jellyfin)">
+            <div class="ico"><svg class="i"><use href="#i-film"/></svg></div>
+            <h3>Media servers</h3>
+            <p>Adding more Jellyfin, Plex and Emby servers, finding API keys and Plex tokens, and what works on each.</p>
+          </a>
+          <a class="card reveal guide" href="guides/kometa.html" style="--c:#f59e0b">
+            <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
+            <h3>Kometa</h3>
+            <p>Run reports through webhooks, then collections from StreamForge: sharing the config folder, <code>collection_files</code>, and every option.</p>
+          </a>
+          <a class="card reveal guide" href="guides/sonarr-radarr.html" style="--c:var(--sonarr)">
+            <div class="ico"><svg class="i"><use href="#i-download"/></svg></div>
+            <h3>Sonarr and Radarr</h3>
+            <p>4K and anime instances, adding titles one at a time or in bulk, and freeing up space.</p>
+          </a>
+          <a class="card reveal guide" href="guides/watch-history-and-stats.html" style="--c:var(--cyan)">
+            <div class="ico"><svg class="i"><use href="#i-chart"/></svg></div>
+            <h3>Watch history and stats</h3>
+            <p>How plays are recorded, the Watch history and Stats pages, filtering by server, and who can see what.</p>
+          </a>
+          <a class="card reveal guide" href="guides/notifications.html" style="--c:var(--seerr)">
+            <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
+            <h3>Notifications</h3>
+            <p>Discord, ntfy, Pushover, webhooks and push to your phone, and every event you can subscribe to.</p>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -946,6 +1045,7 @@
       <span>StreamForge · Not affiliated with Jellyfin, Emby, Plex, the *arr projects, Seerr or Infinidisk.</span>
       <nav aria-label="Footer">
         <a href="https://github.com/ashveebee/streamforge">GitHub</a>
+        <a href="guides/index.html">Guides</a>
         <a href="https://github.com/ashveebee/streamforge/releases">Releases</a>
         <a href="https://github.com/ashveebee/streamforge/issues">Issues</a>
         <a href="https://github.com/ashveebee/streamforge/blob/main/LICENSE">License</a>

@@ -11,7 +11,7 @@ Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
 server.
 
-[**Website**](https://ashveebee.github.io/streamforge/) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
+[**Website**](https://ashveebee.github.io/streamforge/) · [**Guides**](docs/guides/README.md) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
 
 ![StreamForge dashboard: the stream playing now, health of every service, download activity and storage](docs/screenshots/dashboard.jpg)
 
@@ -55,6 +55,10 @@ server.
   <tr>
     <td><a href="docs/screenshots/bazarr.jpg"><img src="docs/screenshots/bazarr.jpg" alt="Bazarr: episodes and movies missing subtitles"></a><br><b>Bazarr.</b> Missing subtitles with search buttons.</td>
     <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/history.jpg"><img src="docs/screenshots/history.jpg" alt="Watch history: people on the left, and each play with its poster, server, device and time watched"></a><br><b>Watch history.</b> Everyone's plays on every server, with a filter per server.</td>
+    <td><a href="docs/screenshots/title-servers.jpg"><img src="docs/screenshots/title-servers.jpg" alt="A movie page showing which servers have it and the copies on each"></a><br><b>Title pages.</b> Which servers have it, and the copies on each.</td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/buffering.jpg"><img src="docs/screenshots/buffering.jpg" alt="Buffering diagnosis: a stream that stalled, the likely cause with evidence, and what to try"></a><br><b>Why did it buffer?</b> Spots streams that stalled and explains the likely cause, from the transcoder to your upload.</td>
@@ -287,7 +291,16 @@ server.
 ## Installation
 
 StreamForge runs as a single Docker container (images for `amd64` and `arm64`).
-All you need is Docker and a Jellyfin server it can reach.
+All you need is Docker and a Jellyfin, Plex or Emby server it can reach.
+
+> **Guides:** the [install and configure guide](docs/guides/install.md) walks
+> through everything below in more detail, including reverse proxies and
+> Tailscale. There are also guides for
+> [media servers](docs/guides/media-servers.md), [Kometa](docs/guides/kometa.md),
+> [Sonarr and Radarr](docs/guides/sonarr-radarr.md),
+> [watch history and stats](docs/guides/watch-history-and-stats.md) and
+> [notifications](docs/guides/notifications.md). They're also on the
+> [website](https://ashveebee.github.io/streamforge/guides/).
 
 ### 1. Start the container
 
@@ -451,6 +464,9 @@ Jellyfin** and **Open in Sonarr** then use it.
 
 ### Kometa
 
+> The [Kometa guide](docs/guides/kometa.md) has the full step-by-step setup,
+> every collection option and troubleshooting.
+
 [Kometa](https://kometa.wiki) (previously Plex Meta Manager) builds collections,
 overlays and playlists on a schedule. It has no API, but it can send webhooks,
 and StreamForge can receive them:
@@ -608,6 +624,21 @@ This runs a mock API (`scripts/demo-server.ts`) with fictional streams,
 libraries, queues and requests, and generated artwork. To re-create the README
 screenshots after changing the UI, keep the demo running and run
 `./scripts/screenshots.sh` (needs Google Chrome).
+
+The demo shows a household with a main Jellyfin server plus an Emby and a Plex
+server. Other set-ups:
+
+| Variable | Shows |
+| --- | --- |
+| `DEMO_SINGLE=1` | One Jellyfin server and nothing else |
+| `DEMO_MAIN=plex` / `DEMO_MAIN=emby` | A Plex-only or Emby-only household |
+| `DEMO_SETUP=1` | The first-run setup screen |
+| `DEMO_SIGNED_OUT=1` | The sign-in screen |
+
+For example `DEMO_SINGLE=1 npm run demo`.
+
+To preview the guides as website pages, run
+`node scripts/build-guides.mjs` (they're written to `_site/guides`).
 
 ### Production build
 

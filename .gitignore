@@ -7,3 +7,4 @@ dist-server
 *.log
 .DS_Store
 data
+_site/
