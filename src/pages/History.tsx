@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Clapperboard, History as HistoryIcon, LoaderCircle, MonitorPlay, Search, Tv, Users } from 'lucide-react';
-import { api, jfUserImage } from '@/lib/api';
+import { api, jfImage, jfUserImage } from '@/lib/api';
 import { dayLabel, duration, num, relative, timeOfDay } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { Avatar } from '@/components/ui/Image';
+import { Avatar, FadeImage } from '@/components/ui/Image';
+import { ServerTag } from '@/components/kometa/CollectionForm';
+import { SERVER_COLOR } from '@/hooks/useKometa';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState } from '@/components/ui/States';
@@ -21,13 +23,17 @@ interface HistoryRow {
   type: 'movie' | 'episode' | 'other';
   client?: string;
   device?: string;
-  server?: string;
+  serverId?: string;
+  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverName?: string;
+  poster?: { itemId: string; server?: string };
   method?: string;
   watchedMs?: number;
   source: 'recorded' | 'server';
 }
 interface HistoryResult {
   days: number;
+  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
   users: { name: string; plays: number; watchedMs: number; lastAt?: string; id?: string; imageTag?: string }[];
   summary: { plays: number; watchedMs: number; titles: number; movies: number; episodes: number; transcodePct?: number; top: { title: string; plays: number; type: string }[]; device?: string };
   rows: HistoryRow[];
@@ -58,6 +64,7 @@ export default function HistoryPage() {
   const [params, setParams] = useSearchParams();
   const user = params.get('user') ?? '';
   const days = Number(params.get('days') ?? 30);
+  const server = params.get('server') ?? '';
   const [q, setQ] = useState('');
   const set = (k: string, v: string) => {
     const n = new URLSearchParams(params);
@@ -66,8 +73,9 @@ export default function HistoryPage() {
     setParams(n, { replace: true });
   };
   const query = useQuery({
-    queryKey: ['history', days, user, q],
-    queryFn: ({ signal }) => api<HistoryResult>(`/history?days=${days}${user ? `&user=${encodeURIComponent(user)}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`, { signal }),
+    queryKey: ['history', days, user, q, server],
+    queryFn: ({ signal }) =>
+      api<HistoryResult>(`/history?days=${days}${user ? `&user=${encodeURIComponent(user)}` : ''}${server ? `&server=${encodeURIComponent(server)}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`, { signal }),
     placeholderData: (p) => p,
     staleTime: 30_000,
   });
@@ -153,6 +161,24 @@ export default function HistoryPage() {
                 </label>
               </div>
 
+              {(data.servers.length > 1 || server) && (
+                <div role="tablist" aria-label="Media server" className="-mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-xs text-ink-4">Played on</span>
+                  {[{ id: '', name: 'All servers', type: undefined, plays: 0 }, ...data.servers].map((s) => (
+                    <button
+                      key={s.id || '*'}
+                      role="tab"
+                      aria-selected={server === s.id}
+                      onClick={() => set('server', s.id)}
+                      className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition', server === s.id ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2')}
+                    >
+                      {s.type ? <ServerTag type={s.type} name={s.name} /> : s.name}
+                      {s.type && <span className="text-ink-4 tabular">{num(s.plays)}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat value={num(data.summary.plays)} label={`Plays · ${data.summary.movies} movies, ${data.summary.episodes} episodes`} />
                 <Stat value={data.summary.watchedMs ? duration(data.summary.watchedMs) : '—'} label="Time watched (recorded plays)" />
@@ -190,16 +216,30 @@ export default function HistoryPage() {
                           <ul className="divide-y divide-line">
                             {g.map((r) => (
                               <li key={r.id} className="flex items-center gap-3 py-2">
-                                <span className="w-16 shrink-0 text-[11px] tabular text-ink-4">{timeOfDay(r.at)}</span>
-                                {!selected && <span className="w-24 shrink-0 truncate text-xs text-ink-2" title={r.user}>{r.user}</span>}
+                                <span className="w-14 shrink-0 text-[11px] tabular text-ink-4">{timeOfDay(r.at)}</span>
+                                <div
+                                  className="relative h-[54px] w-9 shrink-0 overflow-hidden rounded-md bg-white/[0.04] ring-1 ring-white/10"
+                                  style={r.serverType ? { boxShadow: `inset 0 -2px 0 ${SERVER_COLOR[r.serverType]}` } : undefined}
+                                >
+                                  {r.poster ? (
+                                    <FadeImage src={jfImage({ itemId: r.poster.itemId, type: 'Primary', server: r.poster.server }, 90)} alt="" className="absolute inset-0" />
+                                  ) : (
+                                    <span className="grid h-full place-items-center">{r.type === 'episode' ? <Tv className="size-3.5 text-ink-4" /> : <Clapperboard className="size-3.5 text-ink-4" />}</span>
+                                  )}
+                                </div>
+                                {!selected && <span className="hidden w-20 shrink-0 truncate text-xs text-ink-2 sm:block" title={r.user}>{r.user}</span>}
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate text-[13px] font-medium">{r.title}</div>
                                   {r.subtitle && <div className="truncate text-[11px] text-ink-3">{r.subtitle}</div>}
+                                  <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] text-ink-4">
+                                    {!selected && <span className="truncate text-ink-3 sm:hidden">{r.user}</span>}
+                                    {r.serverType && <ServerTag type={r.serverType} name={r.serverName} className="shrink-0 text-ink-3" />}
+                                    {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">Transcode</Pill>}
+                                    <span className="hidden truncate md:inline">
+                                      {r.source === 'recorded' ? [r.client, r.device].filter(Boolean).join(' · ') : `From ${d?.serverHistory ? SERVER_LABEL[d.serverHistory] : 'the server'}’s own history`}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="hidden min-w-0 shrink text-right text-[11px] text-ink-4 md:block">
-                                  {r.source === 'recorded' ? [r.client, r.device, r.server].filter(Boolean).join(' · ') : `From ${d?.serverHistory ? SERVER_LABEL[d.serverHistory] : 'the server'}’s history`}
-                                </div>
-                                {r.method === 'Transcode' && <Pill tone="warn">Transcode</Pill>}
                                 <span className="w-14 shrink-0 text-right text-xs tabular text-ink-2">{r.watchedMs ? duration(r.watchedMs) : ''}</span>
                               </li>
                             ))}

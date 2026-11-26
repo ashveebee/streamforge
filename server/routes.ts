@@ -89,7 +89,8 @@ api.get(
     const d = Number(req.query.days);
     const user = typeof req.query.user === 'string' && req.query.user.length <= 128 ? req.query.user : undefined;
     const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 100) : undefined;
-    return watchHistory(ctxOf(req.session!), { days: (HISTORY_DAYS as readonly number[]).includes(d) ? d : 30, user, q });
+    const server = typeof req.query.server === 'string' && req.query.server.length <= 64 ? req.query.server : undefined;
+    return watchHistory(ctxOf(req.session!), { days: (HISTORY_DAYS as readonly number[]).includes(d) ? d : 30, user, q, server });
   }),
 );
 api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));

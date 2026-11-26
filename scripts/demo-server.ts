@@ -1563,11 +1563,16 @@ app.put('/api/library/watched-by-everyone/users', (req, res) => {
   res.json({ ok: true });
 });
 /* Watch history for every user (demo). */
+const HIST_SERVERS = {
+  homelab: { id: 'jellyfin', name: 'Homelab', type: 'jellyfin' as const },
+  cabin: { id: PLEX.id, name: PLEX.name, type: 'plex' as const },
+  office: { id: EMBY.id, name: EMBY.name, type: 'emby' as const },
+};
 const HIST_USERS = [
-  { name: 'Alex', id: 'u-alex', client: 'Jellyfin Web', device: 'Firefox' },
-  { name: 'Sam', id: 'u-sam', client: 'Android TV', device: 'Shield TV' },
-  { name: 'Maya', id: 'u-maya', client: 'Swiftfin', device: 'iPad' },
-  { name: 'Jordan', id: 'u-jordan', client: 'Plex for LG', device: 'Living room TV' },
+  { name: 'Alex', id: 'u-alex', client: 'Jellyfin Web', device: 'Firefox', servers: [HIST_SERVERS.homelab, HIST_SERVERS.homelab, HIST_SERVERS.cabin] },
+  { name: 'Sam', id: 'u-sam', client: 'Android TV', device: 'Shield TV', servers: [HIST_SERVERS.homelab] },
+  { name: 'Maya', id: 'u-maya', client: 'Swiftfin', device: 'iPad', servers: [HIST_SERVERS.homelab, HIST_SERVERS.office] },
+  { name: 'Jordan', id: 'u-jordan', client: 'Plex for LG', device: 'Living room TV', servers: [HIST_SERVERS.cabin] },
 ];
 const HIST_TITLES: [string, string | undefined, number][] = [
   ['Copper Valley', 'S02E04 · The Ridge', 52], ['Neon Harbor', undefined, 118], ['The Long Winter', 'S01E07 · Thaw', 47], ['Saltwind', 'S03E01 · Undertow', 55],
@@ -1580,7 +1585,9 @@ const histRows = (() => {
   for (let i = 0; i < 46; i++) {
     const u = HIST_USERS[(i * 7 + (i >> 2)) % HIST_USERS.length]!;
     const [title, subtitle, mins] = HIST_TITLES[(i * 5) % HIST_TITLES.length]!;
-    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client: u.client, device: u.device, server: u.name === 'Jordan' ? 'Cabin' : 'Homelab', method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
+    const srv = u.servers[i % u.servers.length]!;
+    const client = srv.type === 'plex' ? (u.name === 'Jordan' ? 'Plex for LG' : 'Plex Web') : srv.type === 'emby' ? 'Emby Theater' : u.client;
+    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client, device: u.device, serverId: srv.id, serverType: srv.type, serverName: srv.name, poster: { itemId: slug(title), ...(srv.id === 'jellyfin' ? {} : { server: srv.id }) }, method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
     t -= (3 + ((i * 11) % 17)) * HOUR;
   }
   return rows;
@@ -1589,13 +1596,17 @@ app.get('/api/history', (req, res) => {
   const days = Number(req.query.days ?? 30);
   const user = String(req.query.user ?? '').toLowerCase();
   const q = String(req.query.q ?? '').toLowerCase();
+  const server = String(req.query.server ?? '');
   const since = days ? Date.now() - days * DAY : 0;
-  const inRange = histRows.filter((r) => Date.parse(r.at) >= since);
+  const ranged = histRows.filter((r) => Date.parse(r.at) >= since);
+  const servers = Object.values(HIST_SERVERS).map((x) => ({ ...x, plays: ranged.filter((r) => r.serverId === x.id).length })).filter((x) => x.plays).sort((a, b) => b.plays - a.plays);
+  const inRange = ranged.filter((r) => !server || r.serverId === server);
   const rows = inRange.filter((r) => (!user || r.user.toLowerCase() === user) && (!q || `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q)));
   const top = new Map<string, { title: string; plays: number; type: string }>();
   for (const r of rows) top.set(r.title, { title: r.title, type: r.type, plays: (top.get(r.title)?.plays ?? 0) + 1 });
   res.json({
     days,
+    servers,
     users: HIST_USERS.map((u) => {
       const mine = inRange.filter((r) => r.user === u.name);
       return { name: u.name, id: u.id, plays: mine.length, watchedMs: mine.reduce((n, r) => n + r.watchedMs, 0), lastAt: mine[0]?.at };

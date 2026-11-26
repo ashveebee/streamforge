@@ -1,7 +1,7 @@
 import { cache } from '../lib/cache.js';
 import { db } from '../lib/db.js';
 import { jf, serverToken, type JfCtx } from './jellyfin.js';
-import { mainEmby, mainPlex } from './mainServer.js';
+import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryServer } from './mainServer.js';
 import * as plex from './plex.js';
 
 /*
@@ -31,7 +31,12 @@ export interface HistoryRow {
   type: 'movie' | 'episode' | 'other';
   client?: string;
   device?: string;
-  server?: string;
+  /** Which media server it was played on. */
+  serverId?: string;
+  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverName?: string;
+  /** The movie or series poster, served through StreamForge's image proxy. */
+  poster?: { itemId: string; server?: string };
   method?: string;
   watchedMs?: number;
   /** Where the row came from: StreamForge's recorder, or the server's own history. */
@@ -50,14 +55,16 @@ interface PlayRow {
   method: string;
   started_at: number;
   watched_ms: number;
+  server: string | null;
   server_name: string | null;
+  item_id: string | null;
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
 
 function recorded(since: number) {
   return db
-    .prepare(`SELECT id, user_id, user_name, title, series, type, client, device, method, started_at, watched_ms, server_name FROM plays WHERE started_at >= ? AND watched_ms >= ? AND user_name IS NOT NULL ORDER BY started_at DESC`)
+    .prepare(`SELECT id, user_id, user_name, item_id, title, series, type, client, device, method, started_at, watched_ms, server, server_name FROM plays WHERE started_at >= ? AND watched_ms >= ? AND user_name IS NOT NULL ORDER BY started_at DESC`)
     .all(since, MIN_WATCHED) as unknown as PlayRow[];
 }
 
@@ -79,6 +86,7 @@ interface JfPlayedItem {
   Name: string;
   Type: string;
   SeriesName?: string;
+  SeriesId?: string;
   ParentIndexNumber?: number;
   IndexNumber?: number;
   UserData?: { LastPlayedDate?: string };
@@ -112,6 +120,8 @@ async function jellyfinHistory(ctx: JfCtx) {
             title: i.Type === 'Episode' ? (i.SeriesName ?? i.Name) : i.Name,
             subtitle: i.Type === 'Episode' ? [code(i.ParentIndexNumber, i.IndexNumber), i.Name].filter(Boolean).join(' · ') : undefined,
             type: i.Type === 'Episode' ? 'episode' : 'movie',
+            serverId: 'jellyfin',
+            poster: { itemId: i.Type === 'Episode' ? (i.SeriesId ?? i.Id) : i.Id },
             source: 'server',
           }),
         );
@@ -128,29 +138,53 @@ async function plexHistory(since: number) {
   const plays = await plex.playsSince(p, since).catch(() => []);
   return plays.map((x, n): HistoryRow => {
     const ep = x.group !== x.title ? x.title.slice(x.group.length).replace(/^\s*-\s*/, '').replace(/\s-\s/, ' · ') : undefined;
-    return { id: `plex:${x.userId ?? x.user}:${x.at}:${n}`, user: x.user, at: new Date(x.at).toISOString(), title: x.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', source: 'server' };
+    return { id: `plex:${x.userId ?? x.user}:${x.at}:${n}`, user: x.user, at: new Date(x.at).toISOString(), title: x.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', serverId: p.id, source: 'server' };
   });
 }
 
 function fromPlay(r: PlayRow): HistoryRow {
   const t = (r.type ?? '').toLowerCase();
+  // Episodes are stored as "Series · Episode"; the series is shown as the title already.
+  const ep = r.series && r.title.startsWith(`${r.series} · `) ? r.title.slice(r.series.length + 3) : r.title;
   return {
     id: r.id,
     user: r.user_name!,
     at: new Date(r.started_at).toISOString(),
     title: r.series ?? r.title,
-    subtitle: r.series ? r.title : undefined,
+    subtitle: r.series ? ep : undefined,
     type: t === 'episode' ? 'episode' : t === 'movie' ? 'movie' : r.series ? 'episode' : 'other',
     client: r.client ?? undefined,
     device: r.device ?? undefined,
-    server: r.server_name ?? undefined,
+    // Plays on the main server carry no server id.
+    serverId: r.server ?? mainExtra()?.id ?? 'jellyfin',
+    serverName: r.server_name ?? undefined,
     method: r.method,
     watchedMs: r.watched_ms,
     source: 'recorded',
+    ...(r.item_id && t === 'movie' ? { poster: { itemId: r.item_id } } : {}),
   };
 }
 
-export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: string; q?: string }) {
+const key = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/** Every server's movies and series by name, to find posters and server names. */
+async function libraryIndex(ctx: JfCtx) {
+  return cache.get('history:library', 10 * 60_000, async () => {
+    const lib = await allLibraryItems(ctx);
+    const byServer = new Map<string, string>();
+    const anywhere = new Map<string, { server: string; id: string }>();
+    for (const i of lib.items) {
+      byServer.set(`${i.server.id}|${key(i.name)}`, i.id);
+      if (!anywhere.has(key(i.name)) || i.server.main) anywhere.set(key(i.name), { server: i.server.id, id: i.id });
+    }
+    return { byServer, anywhere, servers: lib.servers };
+  });
+}
+
+/** The image proxy wants no server id for the main Jellyfin server. */
+const imageServer = (s: LibraryServer | undefined, id: string) => (id === 'jellyfin' && (!s || s.main) ? undefined : id);
+
+export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: string; q?: string; server?: string }) {
   const since = opts.days ? Date.now() - opts.days * 86_400_000 : 0;
   const plays = recorded(since).map(fromPlay);
   const first = firstRecorded();
@@ -160,7 +194,33 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const serverRows = jfData ? jfData.rows : await plexHistory(since);
   // Only the server's history from before StreamForge recorded that user, so nothing is listed twice.
   const older = serverRows.filter((r) => Date.parse(r.at) >= since && Date.parse(r.at) < (first.get(norm(r.user)) ?? Infinity));
-  const all = [...plays, ...older].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const merged = [...plays, ...older].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+  // Name each row's server and find its poster on that server (series poster for episodes).
+  const idx = await libraryIndex(ctx).catch(() => undefined);
+  const servers = new Map((idx?.servers ?? []).map((x) => [x.id, x]));
+  const seen = new Map<string, { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }>();
+  for (const r of merged) {
+    const srv = r.serverId ? servers.get(r.serverId) : undefined;
+    if (srv) {
+      r.serverType = srv.type;
+      r.serverName = srv.name;
+    }
+    const k = key(r.title);
+    const onServer = r.serverId ? idx?.byServer.get(`${r.serverId}|${k}`) : undefined;
+    if (onServer) r.poster = { itemId: onServer, server: imageServer(srv, r.serverId!) };
+    else if (r.poster && r.serverId) r.poster = { itemId: r.poster.itemId, server: imageServer(srv, r.serverId) };
+    else {
+      const elsewhere = idx?.anywhere.get(k);
+      if (elsewhere) r.poster = { itemId: elsewhere.id, server: imageServer(servers.get(elsewhere.server), elsewhere.server) };
+    }
+    if (r.serverId && r.serverType) {
+      const v = seen.get(r.serverId) ?? { id: r.serverId, name: r.serverName ?? r.serverId, type: r.serverType, plays: 0 };
+      v.plays++;
+      seen.set(r.serverId, v);
+    }
+  }
+  const all = opts.server ? merged.filter((r) => r.serverId === opts.server) : merged;
 
   // People: everyone with history in the range, plus every Jellyfin user (even with none).
   const people = new Map<string, { name: string; plays: number; watchedMs: number; lastAt?: string; id?: string; imageTag?: string }>();
@@ -196,6 +256,8 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
 
   return {
     days: opts.days,
+    /** Servers with plays in this range, for the server filter. */
+    servers: [...seen.values()].sort((a, b) => b.plays - a.plays),
     users: [...people.values()].sort((a, b) => (b.lastAt ?? '').localeCompare(a.lastAt ?? '') || a.name.localeCompare(b.name)),
     summary: {
       plays: rows.length,
