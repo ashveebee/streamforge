@@ -186,6 +186,19 @@ function writeFiles() {
   writePref('kometaFiles', [...known]);
 }
 
+/**
+ * Makes sure every library has its (possibly empty) file, so the line Settings
+ * shows can be added to Kometa's config.yml before any collection exists.
+ */
+function ensureLibraryFiles(libs: Collection['library'][]) {
+  if (!folderState().ok) return;
+  const known = new Set<string>(readPref<string[]>('kometaFiles', []));
+  const missing = libs.map(fileFor).filter((f) => !known.has(f) || !existsSync(path.join(settings.configDir!, SUBDIR, f)));
+  if (!missing.length) return;
+  writePref('kometaFiles', [...known, ...missing.filter((f) => !known.has(f))]);
+  writeFiles();
+}
+
 /** The line to add under the library in Kometa's config.yml. */
 export const kometaFileLine = (lib: Collection['library']) => `config/${SUBDIR}/${fileFor(lib)}`;
 
@@ -324,6 +337,7 @@ function statusOf(c: Collection | undefined, onServer: ServerCollection | undefi
 /** StreamForge's collections, plus the other collections on each library's server (read-only). */
 export async function collectionList(ctx: jellyfin.JfCtx) {
   const libs = await libraries(ctx);
+  ensureLibraryFiles(libs);
   const out: Record<string, unknown>[] = [];
   const seen = new Set<string>();
   const run = lastRun();
