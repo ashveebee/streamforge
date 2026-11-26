@@ -1031,6 +1031,7 @@ app.get('/api/config', json(() => ({
         { ...PLEX, primary: false },
       ],
   mainServer: MAIN_KIND ?? 'jellyfin',
+  kometa: true,
   access: null,
   downloadClients: true,
   moonfin: moonfin.enabled ? { openIn: moonfin.openIn, web: 'https://jellyfin.example.com/Moonfin/Web/' } : undefined,
@@ -1124,7 +1125,88 @@ app.get('/api/kometa/status', json(() => ({
     { id: 95, at: iso(3 * HOUR), event: 'delete', message: 'Collection “Halloween 2025” deleted', library: 'Movies' },
   ],
 })));
-app.get('/api/settings/kometa', json(() => ({ enabled: true, path: '/api/hooks/kometa/k7Qe2mXv9TzLwR4nB8sYc1Pd' })));
+// Collections made in StreamForge and on the servers, for the Kometa page.
+const demoLibraries = [
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-movies', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-movies.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-shows', name: 'TV Shows', kind: 'show', kometaFile: 'config/streamforge/jellyfin-homelab-tv-shows.yml' },
+  { server: PLEX.id, serverType: 'plex', serverName: 'Cabin', id: '1', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/plex-cabin-movies.yml' },
+  { server: EMBY.id, serverType: 'emby', serverName: 'Office', id: '101', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/emby-office-movies.yml' },
+];
+const colArt = (t: string, server?: string) => ({ itemId: slug(t), type: 'Primary', tag: 'demo', ...(server ? { server } : {}) });
+const demoCollections = [
+  { id: 'sf-oscars', name: 'Oscar Winners', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '28' }, schedule: 'always', count: 8, poster: colArt('Lanterns Over Kessa', PLEX.id), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
+  { id: 'sf-trending', name: 'Trending This Week', managed: true, library: demoLibraries[0], source: { type: 'tmdb_trending_weekly', limit: 30 }, schedule: 'always', count: 22, poster: colArt('Neon Harbor'), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
+  { id: 'sf-staff', name: 'Staff Picks', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '8273' }, schedule: 'always', poster: colArt('Paper Kingdoms', PLEX.id), status: 'error', error: 'TMDb list 8273 not found', createdBy: 'Sam', updatedAt: iso(9 * DAY) },
+  { id: 'sf-xmas', name: 'Christmas Movies', managed: true, library: demoLibraries[2], source: { type: 'imdb_list', value: 'https://www.imdb.com/list/ls000096828/' }, schedule: { from: '12/01', to: '12/31' }, status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(20 * MIN) },
+  { id: 'sf-family', name: 'Family Night', managed: true, library: demoLibraries[3], source: { type: 'manual', ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] }, schedule: 'always', status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(15 * MIN) },
+  { id: 'srv~jellyfin~~bx1', name: 'New Episodes', managed: false, library: { ...demoLibraries[1], id: '', name: 'Collections' }, count: 41, poster: colArt('Atlas Station'), status: 'built' },
+];
+app.get('/api/kometa/collections', json(() => ({
+  settings: { configDir: '/kometa', runTimes: ['03:00'], tmdbKeySet: false, tmdbKeyFromKometa: true, folder: { ok: true, hasConfig: true } },
+  nextRun: (() => { const d = new Date(); d.setHours(27, 0, 0, 0); return d.toISOString(); })(),
+  libraries: demoLibraries,
+  collections: demoCollections,
+})));
+const OSCAR_TITLES = ['Velvet Static', 'Iron Bloom', 'The Last Lighthouse', 'Saltwind', 'Northbound', 'Quiet Orbit', 'Small Hours', 'Neon Harbor', 'The Glass Meridian', 'Paper Kingdoms', 'Lanterns Over Kessa', 'Atlas Station'];
+app.get('/api/kometa/collections/:id', (req, res) => {
+  const c = demoCollections.find((x) => x.id === req.params.id) ?? demoCollections[0]!;
+  const missing = new Set(['Northbound', 'Paper Kingdoms', 'Small Hours', 'Quiet Orbit']);
+  const titles = OSCAR_TITLES.map((t, i) => ({
+    tmdbId: 1000 + i,
+    title: t,
+    year: find(t).year,
+    poster: colArt(t, PLEX.id),
+    inLibrary: !missing.has(t),
+    inCollection: !missing.has(t),
+    new: i < 3,
+  }));
+  res.json({
+    id: c.id,
+    name: c.name,
+    managed: c.managed,
+    collection: c.managed ? { ...c, order: 'custom', addMissing: false, visibleHome: true, createdAt: iso(53 * DAY), updatedAt: iso(53 * DAY) } : undefined,
+    library: c.library,
+    kometaFile: c.library.kometaFile,
+    yaml: c.managed ? `collections:\n  "${c.name}":\n    tmdb_list: "28"\n    collection_order: custom\n    sync_mode: sync\n    visible_home: true` : undefined,
+    poster: c.poster,
+    openUrl: 'https://plex.example.com/web/index.html',
+    status: c.status,
+    nextRun: iso(-14 * HOUR),
+    sourceKnown: true,
+    counts: { onList: titles.length, inLibrary: titles.filter((x) => x.inLibrary).length, missing: titles.filter((x) => !x.inLibrary).length, inCollection: titles.filter((x) => x.inCollection).length },
+    titles,
+    history: [
+      { at: iso(3 * HOUR), event: 'changes', addedCount: 3, removedCount: 1, additions: ['Velvet Static', 'Iron Bloom', 'The Last Lighthouse'] },
+      { at: iso(2 * DAY + 3 * HOUR), event: 'changes', addedCount: 1, removedCount: 0, additions: ['Saltwind'] },
+      { at: iso(5 * DAY + 3 * HOUR), event: 'error', error: 'TMDb didn’t answer; kept the existing titles' },
+      { at: iso(52 * DAY), event: 'changes', created: true, addedCount: 95, removedCount: 0, additions: [] },
+    ],
+  });
+});
+app.get('/api/arr/add-options', (req, res) => {
+  const radarr = req.query.kind !== 'sonarr';
+  res.json({
+    kind: radarr ? 'radarr' : 'sonarr',
+    instance: radarr ? (req.query.instance === 'radarr-4k' ? 'radarr-4k' : 'radarr') : 'sonarr',
+    instances: radarr ? [{ id: 'radarr', name: 'Radarr', primary: true }, { id: 'radarr-4k', name: '4K', primary: false }] : [{ id: 'sonarr', name: 'Sonarr', primary: true }],
+    profiles: [{ id: 1, name: 'Any' }, { id: 4, name: 'HD-1080p' }, { id: 5, name: 'Ultra-HD' }],
+    roots: [{ path: radarr ? '/media/movies' : '/media/tv', freeSpace: 14.4e12, accessible: true }],
+    defaults: { qualityProfileId: 4, rootFolderPath: radarr ? '/media/movies' : '/media/tv', minimumAvailability: radarr ? 'released' : undefined, seriesMonitor: radarr ? undefined : 'all', monitored: true, search: true, tag: false },
+  });
+});
+app.post('/api/arr/add-check', (req, res) => {
+  const items = (req.body as { items: { tmdbId?: number; title?: string; year?: number }[] }).items;
+  res.json({ items: items.map((i, n) => ({ key: `tmdb:${i.tmdbId}`, title: i.title, year: i.year, status: n === items.length - 1 && items.length > 2 ? 'exists' : 'new', instance: n === items.length - 1 && items.length > 2 ? '4K' : undefined })) });
+});
+app.post('/api/arr/add', (req, res) => {
+  const items = (req.body as { items: { tmdbId?: number; title?: string }[] }).items;
+  res.json({ instance: 'Radarr', searching: true, results: items.map((i) => ({ key: `tmdb:${i.tmdbId}`, title: i.title, status: 'added' })) });
+});
+app.get('/api/settings/kometa', json(() => ({
+  enabled: true,
+  path: '/api/hooks/kometa/k7Qe2mXv9TzLwR4nB8sYc1Pd',
+  collections: { configDir: '/kometa', runTimes: ['03:00'], tmdbKeySet: false, tmdbKeyFromKometa: true, folder: { ok: true, hasConfig: true } },
+})));
 
 // Extra media servers: an Emby and a Plex server next to the main Jellyfin one.
 const demoMediaServers = [

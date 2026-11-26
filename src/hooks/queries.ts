@@ -66,6 +66,7 @@ export const useServiceConfig = () =>
         jellyfinServers?: JellyfinServerRef[];
         /** The server people sign in with. */
         mainServer?: 'jellyfin' | 'plex' | 'emby';
+        kometa?: boolean;
         access: Area[] | null;
         downloadClients?: boolean;
         moonfin?: { openIn: 'web' | 'app'; web?: string };

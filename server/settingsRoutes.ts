@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
 import { AREAS, memberAccess, setMemberAccess } from './access.js';
@@ -50,6 +51,7 @@ import { discoverMediaServers, type DiscoveredServer } from './services/mediaDis
 import * as plex from './services/plex.js';
 import { isMainServer } from './services/mainServer.js';
 import { kometaSettings, updateKometa } from './services/kometa.js';
+import { collectionSettings, updateCollectionSettings } from './services/kometaCollections.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
 import {
   describe,
@@ -356,7 +358,7 @@ settingsRouter.delete('/instances/:id', (req, res) => {
 
 const kometaView = () => {
   const s = kometaSettings();
-  return { enabled: s.enabled, path: `/api/hooks/kometa/${s.token}` };
+  return { enabled: s.enabled, path: `/api/hooks/kometa/${s.token}`, collections: collectionSettings() };
 };
 
 settingsRouter.get('/kometa', (_req, res) => {
@@ -364,9 +366,24 @@ settingsRouter.get('/kometa', (_req, res) => {
 });
 
 settingsRouter.put('/kometa', (req, res) => {
-  const parsed = z.object({ enabled: z.boolean().optional(), regenerate: z.boolean().optional() }).strict().safeParse(req.body ?? {});
+  const parsed = z
+    .object({
+      enabled: z.boolean().optional(),
+      regenerate: z.boolean().optional(),
+      configDir: z.string().trim().max(500).optional(),
+      runTimes: z.array(z.string().max(5)).max(12).optional(),
+      tmdbKey: z.string().trim().max(200).optional(),
+    })
+    .strict()
+    .safeParse(req.body ?? {});
   if (!parsed.success) return badRequest(res, 'Invalid request');
-  updateKometa(parsed.data);
+  const { configDir, runTimes, tmdbKey, ...hooks } = parsed.data;
+  if (configDir !== undefined && configDir && !path.isAbsolute(configDir)) return badRequest(res, 'Use the full path, like /kometa', 'configDir');
+  updateKometa(hooks);
+  if (configDir !== undefined || runTimes || tmdbKey !== undefined) {
+    updateCollectionSettings({ configDir, runTimes, tmdbKey });
+    audit(req, '[settings] Kometa collection settings changed');
+  }
   if (parsed.data.enabled !== undefined) audit(req, `[settings] Kometa webhooks ${parsed.data.enabled ? 'switched on' : 'switched off'}`);
   if (parsed.data.regenerate) audit(req, '[settings] Kometa webhook address changed');
   res.json(kometaView());

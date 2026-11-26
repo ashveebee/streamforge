@@ -15,6 +15,8 @@ import Dashboard from '@/pages/Dashboard';
 
 const NowPlaying = lazyPage(() => import('@/pages/NowPlaying'));
 const MediaServer = lazyPage(() => import('@/pages/MediaServer'));
+const Kometa = lazyPage(() => import('@/pages/Kometa'));
+const KometaCollection = lazyPage(() => import('@/pages/KometaCollection'));
 const Sonarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.SonarrPage })));
 const Radarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
 const Prowlarr = lazyPage(() => import('@/pages/Prowlarr'));
@@ -119,6 +121,8 @@ const router = createBrowserRouter([
       { path: '/jellyfin', element: page(<MediaServer type="jellyfin" />, 'jellyfin') },
       { path: '/emby', element: page(<MediaServer type="emby" />, 'jellyfin') },
       { path: '/plex', element: page(<MediaServer type="plex" />, 'jellyfin') },
+      { path: '/kometa', element: page(<Kometa />, 'system') },
+      { path: '/kometa/:id', element: page(<KometaCollection />, 'system') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },
       { path: '/radarr', element: page(<Radarr />, 'radarr') },
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },

@@ -743,3 +743,47 @@ export async function addedSince(srv: JfServerTarget, since: number) {
   }
   return { movies, shows: [...shows.values()].sort((a, b) => b.episodes - a.episodes), other, runtimeMs };
 }
+
+/* ------------------------------ collections ------------------------------ */
+
+/** Movie and TV libraries, for picking where a collection goes. */
+export async function movieAndShowLibraries(srv: JfServerTarget) {
+  const res = await plex<Container<{ Directory?: PlexSection[] }>>(srv, '/library/sections');
+  return (res.MediaContainer.Directory ?? [])
+    .filter((d) => d.type === 'movie' || d.type === 'show')
+    .map((d) => ({ id: d.key, name: d.title, kind: (d.type === 'movie' ? 'movie' : 'show') as 'movie' | 'show' }));
+}
+
+interface PlexCollection {
+  ratingKey: string;
+  title: string;
+  childCount?: number;
+  thumb?: string;
+  updatedAt?: number;
+}
+
+/** Collections in one library. */
+export async function collections(srv: JfServerTarget, section: string) {
+  const res = await plex<Container<{ Metadata?: PlexCollection[] }>>(srv, `/library/sections/${section}/collections`);
+  return (res.MediaContainer.Metadata ?? []).map((c) => ({
+    id: c.ratingKey,
+    name: c.title,
+    count: c.childCount ?? 0,
+    poster: art(c.thumb?.replace(/\/composite\/.*/, ''), srv.id) ?? collectionArt(c, srv.id),
+  }));
+}
+
+/** Collection posters live at /library/collections/<id>/thumb/<ts>; the proxy reads them as Primary. */
+function collectionArt(c: PlexCollection, server: string): ArtworkRef | undefined {
+  const m = c.thumb?.match(/^\/library\/(?:collections|metadata)\/(\d{1,12})\/thumb\/(\d{1,12})$/);
+  return m ? { itemId: m[1]!, type: 'Primary', tag: m[2], server } : undefined;
+}
+
+/** The titles in a collection, with their TMDB/TVDB/IMDb ids. */
+export async function collectionItems(srv: JfServerTarget, collectionId: string) {
+  const res = await plex<Container<{ Metadata?: (PlexMetadata & { Guid?: { id: string }[] })[] }>>(srv, `/library/collections/${collectionId}/children`, { includeGuids: 1 });
+  return (res.MediaContainer.Metadata ?? []).map((m) => {
+    const id = (scheme: string) => m.Guid?.find((g) => g.id.startsWith(`${scheme}://`))?.id.slice(scheme.length + 3);
+    return { id: m.ratingKey, title: m.title, year: m.year, tmdb: id('tmdb'), tvdb: id('tvdb'), poster: art(m.thumb, srv.id) };
+  });
+}

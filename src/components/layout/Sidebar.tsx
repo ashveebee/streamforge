@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, Images, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
 import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useServiceConfig } from '@/hooks/queries';
@@ -221,6 +221,9 @@ export function Sidebar({
             }),
           ];
         })}
+        {config.data?.kometa && (
+          <NavItem to="/kometa" icon={Images} label="Kometa" color="#f59e0b" collapsed={collapsed} onNavigate={onNavigate} />
+        )}
       </nav>
 
       <div className="mt-3 border-t border-line pt-3">

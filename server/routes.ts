@@ -18,7 +18,8 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
-import { kometaStatus } from './services/kometa.js';
+import { kometaSettings, kometaStatus } from './services/kometa.js';
+import { collectionDetail, collectionList, collectionSettings, createCollection, deleteCollection, updateCollection } from './services/kometaCollections.js';
 import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
 import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
@@ -64,6 +65,8 @@ api.get('/config', (req, res) => {
     jellyfinServers: canSee(req, 'jellyfin') ? mediaServerList() : [],
     /** Which kind of server people sign in with; its data backs the dashboard, stats and your page. */
     mainServer: mainType(),
+    /** Kometa is set up (webhooks or collections): show its page. */
+    kometa: canSee(req, 'system') && (kometaSettings().enabled || !!collectionSettings().configDir),
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
     downloadClients: hasClients() && canSee(req, 'downloads'),
@@ -151,6 +154,68 @@ api.post(
 /* --------------------------------- kometa -------------------------------- */
 
 api.get('/kometa/status', (_req, res) => res.set('Cache-Control', 'no-store').json(kometaStatus()));
+
+const collectionBody = z
+  .object({
+    name: z.string().trim().min(1, 'Give the collection a name').max(120),
+    library: z.object({ server: z.string().max(64), id: z.string().max(64) }).strict(),
+    source: z
+      .object({
+        type: z.enum(['tmdb_list', 'imdb_list', 'trakt_list', 'tmdb_trending_weekly', 'tmdb_popular', 'tmdb_keyword', 'manual']),
+        value: z.string().trim().max(500).optional(),
+        ids: z.array(z.number().int().positive()).max(500).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .strict(),
+    schedule: z.union([z.literal('always'), z.object({ from: z.string().max(5), to: z.string().max(5) }).strict()]),
+    order: z.enum(['custom', 'release', 'alpha']),
+    addMissing: z.boolean(),
+    visibleHome: z.boolean(),
+  })
+  .strict();
+
+const parseCollection = (req: Request) => {
+  const b = collectionBody.safeParse(req.body ?? {});
+  if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid collection', b.error.issues[0]?.path[0]?.toString());
+  return b.data;
+};
+
+api.get('/kometa/collections', handle(null, (req) => collectionList(ctxOf(req.session!))));
+api.get(
+  '/kometa/collections/:id',
+  handle(null, (req) => {
+    const id = String(req.params.id);
+    if (!/^[\w~-]{1,200}$/.test(id)) throw new HttpError(400, 'Invalid id');
+    return collectionDetail(id, ctxOf(req.session!));
+  }),
+);
+api.post(
+  '/kometa/collections',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = await createCollection(parseCollection(req), ctxOf(req.session!), req.session!.userName);
+    audit(req, `[kometa] collection “${c.name}” added to ${c.library.serverName} · ${c.library.name}`);
+    return c;
+  }),
+);
+api.put(
+  '/kometa/collections/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = await updateCollection(String(req.params.id), parseCollection(req), ctxOf(req.session!));
+    audit(req, `[kometa] collection “${c.name}” changed`);
+    return c;
+  }),
+);
+api.delete(
+  '/kometa/collections/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = deleteCollection(String(req.params.id));
+    audit(req, `[kometa] collection “${c.name}” removed`);
+    return { ok: true };
+  }),
+);
 
 /* -------------------------------- jellyfin ------------------------------ */
 

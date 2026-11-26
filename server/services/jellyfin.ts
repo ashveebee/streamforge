@@ -1080,3 +1080,39 @@ export async function embyCreateApiKey(url: string, adminToken: string) {
   if (!ours[0]?.AccessToken) throw new UpstreamError('Emby didn’t return the new API key', undefined, 'jellyfin');
   return ours[0].AccessToken;
 }
+
+/* ------------------------------------------------------------------ */
+/* Collections (BoxSets) on a Jellyfin or Emby server                  */
+/* ------------------------------------------------------------------ */
+
+/** Movie and TV libraries, for picking where a collection goes. */
+export async function remoteMovieAndShowLibraries(srv: JfServerTarget) {
+  const list = await remote<JfVirtualFolder[]>(srv, '/Library/VirtualFolders');
+  return list
+    .filter((f) => f.CollectionType === 'movies' || f.CollectionType === 'tvshows')
+    .map((f) => ({ id: f.ItemId, name: f.Name, kind: (f.CollectionType === 'movies' ? 'movie' : 'show') as 'movie' | 'show' }));
+}
+
+/** Every collection (BoxSet) on the server; Jellyfin and Emby keep them outside any one library. */
+export async function remoteCollections(srv: JfServerTarget) {
+  const res = await remote<{ Items: (JfItem & { ChildCount?: number })[] }>(srv, '/Items', { IncludeItemTypes: 'BoxSet', Recursive: true, Fields: 'ChildCount', Limit: 500 });
+  return res.Items.map((c) => ({
+    id: c.Id,
+    name: c.Name,
+    count: c.ChildCount ?? 0,
+    poster: c.ImageTags?.Primary ? { itemId: c.Id, type: 'Primary' as const, tag: c.ImageTags.Primary, server: srv.id } : undefined,
+  }));
+}
+
+/** The titles in a collection, with their TMDB/TVDB/IMDb ids. */
+export async function remoteCollectionItems(srv: JfServerTarget, collectionId: string) {
+  const res = await remote<{ Items: (JfItem & { ProviderIds?: Record<string, string> })[] }>(srv, '/Items', { ParentId: collectionId, Fields: 'ProviderIds,ProductionYear', Limit: 1000 });
+  return res.Items.map((i) => ({
+    id: i.Id,
+    title: i.Name,
+    year: i.ProductionYear,
+    tmdb: i.ProviderIds?.Tmdb,
+    tvdb: i.ProviderIds?.Tvdb,
+    poster: i.ImageTags?.Primary ? { itemId: i.Id, type: 'Primary' as const, tag: i.ImageTags.Primary, server: srv.id } : undefined,
+  }));
+}

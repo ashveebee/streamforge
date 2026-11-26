@@ -122,6 +122,12 @@ server.
   - *Multiple instances:* add extra Sonarr/Radarr instances (a 4K Radarr, an
     anime Sonarr) under the main service in Settings. Each gets its own tab,
     health check and place in the queues, calendar and download charts.
+  - *Adding titles:* admins add a movie or show from its title page, or many
+    at once from a Kometa collection's missing titles. Pick the instance,
+    quality profile, root folder (with free space), minimum availability or
+    which seasons to monitor, and whether to search now and tag it
+    `streamforge`. Titles already in any instance are skipped, searches go out
+    one after another, and your choices are remembered for next time.
   - *Prowlarr:* health, query/grab/failure stats and response time for each
     indexer, plus connected apps.
   - *Seerr:* request counts by status, pending approvals and recent requests,
@@ -453,6 +459,50 @@ The long code at the end of the address is what lets Kometa in, because Kometa
 can't send a password. Keep it private; **New address** replaces it if it
 leaks. StreamForge keeps the last 1,000 Kometa events and drops the poster
 images Kometa sometimes includes.
+
+#### Making collections from StreamForge
+
+The **Kometa** page (in the sidebar once Kometa is set up) lists the
+collections on every Plex, Jellyfin and Emby server, and admins can add their
+own: from a TMDb, IMDb or Trakt list, TMDb trending or popular, a TMDb
+keyword, or titles picked by hand. Each can be shown all year or only between
+two dates (a Christmas collection in December), ordered like the list, by
+release date or A–Z, and can send missing titles to Radarr or Sonarr. Opening
+a collection shows what's on the list, what you have, what's missing (tick
+them and add them to Sonarr or Radarr in one go), its run history and the
+Kometa config StreamForge wrote.
+
+StreamForge doesn't run Kometa. It writes its collections to its own files, and
+Kometa builds them on its next run:
+
+1. Mount Kometa's config folder into StreamForge **read-write**:
+
+   ```yaml
+   volumes:
+     - /opt/kometa/config:/kometa
+   ```
+
+2. Under **Settings → Services → Kometa → Collections from StreamForge**, enter
+   the folder (`/kometa`) and the times Kometa runs, so StreamForge can say
+   when a change will show up. The TMDb key is read from Kometa's
+   `config.yml`; enter one only if it isn't there.
+3. Add the `- file:` line Settings shows to each library's `collection_files`
+   in Kometa's `config.yml`, for example:
+
+   ```yaml
+   libraries:
+     Movies:
+       collection_files:
+         - file: config/streamforge/plex-cabin-movies.yml
+   ```
+
+StreamForge only writes files in a `streamforge` folder inside the config
+folder, and never touches your own Kometa files. Jellyfin and Emby libraries
+need Kometa's develop (nightly) build for now; the stable release is Plex-only.
+StreamForge can show what's on TMDb lists before Kometa builds them, but not
+IMDb or Trakt lists, so those show what's in the collection on the server.
+To make collections on your main Jellyfin server, give it an API key under
+**Settings → Jellyfin**.
 
 ### Moonfin
 

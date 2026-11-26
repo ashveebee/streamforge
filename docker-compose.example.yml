@@ -16,6 +16,9 @@ services:
       # Optional: mount storage read-only to measure it under Settings →
       # Infinidisk → Advanced → Local mount paths.
       # - /mnt/media:/mnt/media:ro
+      # Optional: Kometa's config folder, read-write, to make collections from
+      # the Kometa page (Settings → Kometa → Collections from StreamForge).
+      # - /opt/kometa/config:/kometa
     # For host-level network stats, or to find Jellyfin, Emby and Plex servers on
     # your network (Settings → Jellyfin → Find on network), use host networking
     # instead of ports:
