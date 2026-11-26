@@ -2,20 +2,18 @@ import { readPref, writePref } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
 import { isConfigured, resolve } from '../settings.js';
 import * as jellyfin from './jellyfin.js';
-import { getStoredServer, mediaServers, type MediaServer } from './mediaServers.js';
+import { getStoredServer, setActiveServer, type MediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
 
 /*
- * The main media server: the one people sign in with.
+ * The media server: the one StreamForge watches and people sign in with.
  *
- * It's Jellyfin by default. A household that only runs Plex or Emby can make
- * that server the main one instead: people then sign in with their Plex or
- * Emby account, and everything that used to read the main Jellyfin server
- * (the dashboard, stats, your page, search, library health, alerts) reads
- * that server.
- *
- * A main Plex or Emby server is stored with the other media servers (so it
- * gets health checks, Now Playing and its page like any other) and named here.
+ * Each install has exactly one, chosen at first-run setup and kept after
+ * that: Jellyfin (the default), Plex or Emby. With Plex or Emby, people sign
+ * in with their Plex or Emby account, and everything that reads the media
+ * server (the dashboard, stats, your page, search, library health, alerts)
+ * reads that server. A Plex or Emby server is stored in mediaServers.ts and
+ * named here.
  */
 
 export type MainType = 'jellyfin' | 'plex' | 'emby';
@@ -28,6 +26,7 @@ interface MainPref {
 
 const PREF = 'mainServer';
 let pref: MainPref = readPref<MainPref>(PREF, { type: 'jellyfin' });
+setActiveServer(pref.type === 'jellyfin' ? undefined : pref.id);
 
 /** The main Plex or Emby server, when one of them is the sign-in server. */
 export function mainExtra(): MediaServer | undefined {
@@ -53,14 +52,11 @@ export const mainName = () => ({ jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby
 /** True once a main server is set up (any kind). */
 export const mediaReady = () => notJellyfinMain() || isConfigured('jellyfin');
 
+/** Chooses Plex or Emby as the media server (first-run setup only). */
 export function setMainServer(type: 'plex' | 'emby', id: string) {
   pref = { type, id };
   writePref(PREF, pref);
-}
-
-export function clearMainServer() {
-  pref = { type: 'jellyfin' };
-  writePref(PREF, pref);
+  setActiveServer(id);
 }
 
 export const isMainServer = (id: string) => pref.type !== 'jellyfin' && pref.id === id;
@@ -91,13 +87,13 @@ export function mainLibraryItems(ctx: jellyfin.JfCtx) {
   return m.type === 'plex' ? plex.libraryItems(m) : jellyfin.remoteLibraryItems(m);
 }
 
-/* --------------------------- every server's library --------------------------- */
+/* ------------------------------ the library ------------------------------ */
 
 export interface LibraryServer {
   id: string;
   type: MainType;
   name: string;
-  /** The sign-in server. */
+  /** Always true now that an install has one media server; kept for callers. */
   main: boolean;
   /** Address people open, for "Open in …" links. */
   openUrl?: string;
@@ -118,54 +114,36 @@ export interface LibraryEntry {
   server: LibraryServer;
 }
 
-/**
- * Movies and series on every media server: the main one and each extra
- * Jellyfin, Emby and Plex server. A server that can't be read is left out and
- * named in `failed`, so one being down never hides the others.
- */
-export async function allLibraryItems(ctx: jellyfin.JfCtx) {
-  const main = mainExtra();
-  const servers: { server: LibraryServer; load: () => Promise<Omit<LibraryEntry, 'server'>[]> }[] = [];
-  // Plex links need the server's machine id; servers added by address may not have it stored yet.
-  const plexIds = new Map<string, string | undefined>();
-  await Promise.all(
-    mediaServers()
-      .filter((s) => s.type === 'plex' && !s.serverId)
-      .map(async (s) => plexIds.set(s.id, await cache.get(`plex:${s.id}:ident`, 60 * 60_000, () => plex.identity(s.url)))),
-  );
-  const describe = (s: MediaServer, isMain: boolean): LibraryServer => ({
-    id: s.id,
-    type: s.type,
-    name: s.name,
-    main: isMain,
-    openUrl: s.publicUrl || s.url,
-    serverId: s.serverId ?? plexIds.get(s.id),
-  });
-  if (main) servers.push({ server: describe(main, true), load: () => (main.type === 'plex' ? plex.libraryItems(main) : jellyfin.remoteLibraryItems(main)) });
-  else if (isConfigured('jellyfin')) {
-    const info = await jellyfin.publicInfo().catch(() => undefined);
-    const settings = resolve('jellyfin').settings;
-    servers.push({
-      server: { id: 'jellyfin', type: 'jellyfin', name: info?.ServerName ?? 'Jellyfin', main: true, openUrl: settings.publicUrl || settings.url, serverId: info?.Id },
-      load: () => jellyfin.libraryItems(ctx),
-    });
+/** The media server, described for links and labels. */
+export async function libraryServer(): Promise<LibraryServer | undefined> {
+  const m = mainExtra();
+  if (m) {
+    // Plex links need the server's machine id; servers added by address may not have it stored yet.
+    const serverId = m.serverId ?? (m.type === 'plex' ? await cache.get(`plex:${m.id}:ident`, 60 * 60_000, () => plex.identity(m.url)).catch(() => undefined) : undefined);
+    return { id: m.id, type: m.type, name: m.name, main: true, openUrl: m.publicUrl || m.url, serverId };
   }
-  for (const s of mediaServers()) {
-    if (s.id === main?.id) continue;
-    servers.push({ server: describe(s, false), load: () => (s.type === 'plex' ? plex.libraryItems(s) : jellyfin.remoteLibraryItems(s)) });
-  }
-  const results = await Promise.allSettled(servers.map((s) => s.load()));
-  const items: LibraryEntry[] = [];
-  const failed: string[] = [];
-  results.forEach((r, i) => {
-    const server = servers[i]!.server;
-    if (r.status === 'fulfilled') for (const it of r.value) items.push({ ...it, server });
-    else failed.push(server.name);
-  });
-  return { items, servers: servers.map((s) => s.server), failed };
+  if (!isConfigured('jellyfin')) return undefined;
+  const info = await jellyfin.publicInfo().catch(() => undefined);
+  const settings = resolve('jellyfin').settings;
+  return { id: 'jellyfin', type: 'jellyfin', name: info?.ServerName ?? 'Jellyfin', main: true, openUrl: settings.publicUrl || settings.url, serverId: info?.Id };
 }
 
-/** Keys an item can be matched by across servers and the *arr apps. */
+/**
+ * Movies and series in the media server's library, each tagged with the
+ * server. `failed` names the server when it couldn't be read.
+ */
+export async function allLibraryItems(ctx: jellyfin.JfCtx) {
+  const server = await libraryServer();
+  if (!server) return { items: [] as LibraryEntry[], servers: [] as LibraryServer[], failed: [] as string[] };
+  try {
+    const list = await mainLibraryItems(ctx);
+    return { items: list.map((it): LibraryEntry => ({ ...it, server })), servers: [server], failed: [] as string[] };
+  } catch {
+    return { items: [] as LibraryEntry[], servers: [server], failed: [server.name] };
+  }
+}
+
+/** Keys an item can be matched by against the *arr apps and Seerr. */
 export function idKeys(i: { tmdb?: string | number; tvdb?: string | number; imdb?: string }) {
   return [i.tmdb && `tmdb:${i.tmdb}`, i.tvdb && `tvdb:${i.tvdb}`, i.imdb && `imdb:${i.imdb}`].filter(Boolean) as string[];
 }

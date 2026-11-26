@@ -163,31 +163,19 @@ function fromRecorder(since: number): Play[] {
     .map((r) => ({ server: r.server ?? main, user: r.user_name, title: r.title, group: r.series ?? r.title, client: r.client ?? undefined, method: r.method, at: r.started_at, watchedMs: r.watched_ms }));
 }
 
-/** Plays from each server's own history: Plex's watch history, Jellyfin's or Emby's activity log. */
+/** Plays from the media server's own history: Plex's watch history, Jellyfin's or Emby's activity log. */
 async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
   const fromLog = (server: string, entries: { name: string; date: string }[]) =>
     entries.flatMap((e) => {
       const p = parsePlaybackName(e.name);
       return p ? [{ ...p, server, at: Date.parse(e.date) }] : [];
     });
-  const main = mainExtra();
   const sources: Promise<Play[]>[] = [];
-  // The main server: a Jellyfin signed in with (user token), or a main Plex/Emby.
   const p = mainPlex();
   const emby = mainEmby();
   if (p) sources.push(plex.playsSince(p, since).then((xs) => xs.map((x) => ({ server: p.id, user: x.user, title: x.title, group: x.group, at: x.at }))));
   else if (emby) sources.push(jellyfin.remotePlaybackEntries(emby, new Date(since)).then((es) => fromLog(emby.id, es)));
   else if (isConfigured('jellyfin')) sources.push(jellyfin.playbackEntries(ctx, new Date(since)).then((es) => fromLog(mainId(), es)));
-  // Every extra server, so history isn't limited to whichever server was added first.
-  for (const srv of mediaServers()) {
-    if (srv.id === main?.id) continue;
-    sources.push(
-      srv.type === 'plex'
-        ? plex.playsSince(srv, since).then((xs) => xs.map((x) => ({ server: srv.id, user: x.user, title: x.title, group: x.group, at: x.at })))
-        : jellyfin.remotePlaybackEntries(srv, new Date(since)).then((es) => fromLog(srv.id, es)),
-    );
-  }
-  // A server that's down just drops out; the rest still count.
   const results = await Promise.allSettled(sources);
   const plays = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   // Group "Show - Episode" plays under their show when the log didn't say S01E02.
@@ -200,13 +188,12 @@ async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
 }
 
 function top<K extends string>(plays: Play[], key: (p: Play) => K | undefined, n = 10) {
-  const m = new Map<K, { name: K; plays: number; hours: number; byServer: Record<string, number> }>();
+  const m = new Map<K, { name: K; plays: number; hours: number }>();
   for (const p of plays) {
     const k = key(p);
     if (!k) continue;
-    const e = m.get(k) ?? { name: k, plays: 0, hours: 0, byServer: {} };
+    const e = m.get(k) ?? { name: k, plays: 0, hours: 0 };
     e.plays++;
-    e.byServer[p.server] = (e.byServer[p.server] ?? 0) + 1;
     e.hours += (p.watchedMs ?? 0) / 3_600_000;
     m.set(k, e);
   }
@@ -240,17 +227,16 @@ export async function playbackStats(ctx: JfCtx, days: number, server?: string) {
   const selected = server && known.some((x) => x.id === server) ? server : undefined;
   if (selected) plays = plays.filter((p) => p.server === selected);
 
-  const byDay = new Map<string, { date: string; plays: number; direct: number; transcode: number; hours: number; byServer: Record<string, number> }>();
+  const byDay = new Map<string, { date: string; plays: number; direct: number; transcode: number; hours: number }>();
   for (let i = 0; i < days; i++) {
     const k = dayKey(since + i * 86_400_000 + 3_600_000);
-    byDay.set(k, { date: k, plays: 0, direct: 0, transcode: 0, hours: 0, byServer: {} });
+    byDay.set(k, { date: k, plays: 0, direct: 0, transcode: 0, hours: 0 });
   }
   const heat = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const p of plays) {
     const b = byDay.get(dayKey(p.at));
     if (b) {
       b.plays++;
-      b.byServer[p.server] = (b.byServer[p.server] ?? 0) + 1;
       if (p.method === 'Transcode') b.transcode++;
       else if (p.method) b.direct++;
       b.hours += (p.watchedMs ?? 0) / 3_600_000;

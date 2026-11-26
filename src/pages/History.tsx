@@ -5,7 +5,6 @@ import { Clapperboard, History as HistoryIcon, LoaderCircle, MonitorPlay, Search
 import { api, jfImage, jfUserImage } from '@/lib/api';
 import { dayLabel, duration, num, relative, timeOfDay } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { ServerTag, SERVER_COLOR } from '@/components/ui/ServerTag';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
@@ -109,8 +108,8 @@ export default function HistoryPage() {
         title="Watch history"
         description={
           d?.recordingSince
-            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${(d.servers?.length ?? 0) > 1 ? 'each server' : SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
-            : 'What each person on your servers has watched.'
+            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
+            : 'What each person on your server has watched.'
         }
       />
       <QueryState query={query} skeleton={<PageLoader label="Loading watch history" />}>
@@ -173,29 +172,6 @@ export default function HistoryPage() {
                 </label>
               </div>
 
-              {(data.servers.length > 1 || server) && (
-                <div role="tablist" aria-label="Media server" className="-mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="mr-1 text-xs text-ink-4">Played on</span>
-                  {[{ id: '', name: 'All servers', type: undefined, plays: 0 }, ...data.servers].map((s) => (
-                    <button
-                      key={s.id || '*'}
-                      role="tab"
-                      aria-selected={server === s.id}
-                      onClick={() => set('server', s.id)}
-                      className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition', server === s.id ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2')}
-                      style={
-                        server === s.id && s.type
-                          ? { borderColor: `color-mix(in oklab, ${SERVER_COLOR[s.type]} 55%, transparent)`, background: `color-mix(in oklab, ${SERVER_COLOR[s.type]} 14%, transparent)` }
-                          : undefined
-                      }
-                    >
-                      {s.type ? <ServerTag type={s.type} name={s.name} /> : s.name}
-                      {s.type && <span className="text-ink-4 tabular">{num(s.plays)}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat value={num(data.summary.plays)} label={`Plays · ${data.summary.movies} movies, ${data.summary.episodes} episodes`} />
                 <Stat value={data.summary.watchedMs ? duration(data.summary.watchedMs) : '—'} label="Time watched (recorded plays)" />
@@ -237,7 +213,6 @@ export default function HistoryPage() {
                                 <span className="w-14 shrink-0 text-[11px] tabular text-ink-4">{timeOfDay(r.at)}</span>
                                 <div
                                   className="relative h-[54px] w-9 shrink-0 overflow-hidden rounded-md bg-white/[0.04] ring-1 ring-white/10"
-                                  style={r.serverType ? { boxShadow: `inset 0 -2px 0 ${SERVER_COLOR[r.serverType]}` } : undefined}
                                 >
                                   {r.poster ? (
                                     <FadeImage src={jfImage({ itemId: r.poster.itemId, type: 'Primary', server: r.poster.server }, 90)} alt="" className="absolute inset-0" />
@@ -251,7 +226,6 @@ export default function HistoryPage() {
                                   {r.subtitle && <div className="truncate text-[11px] text-ink-3">{r.subtitle}</div>}
                                   <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] text-ink-4">
                                     {!selected && <span className="truncate text-ink-3 sm:hidden">{r.user}</span>}
-                                    {data.servers.length > 1 && r.serverType && <ServerTag type={r.serverType} name={r.serverName} className="shrink-0 text-ink-3" />}
                                     {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">Transcode</Pill>}
                                     <span className="hidden truncate md:inline">
                                       {r.source === 'recorded'

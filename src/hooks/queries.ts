@@ -6,7 +6,6 @@ import type {
   Area,
   MemberAccess,
   ArrInstanceView,
-  DiscoveredServer,
   JellyfinServerRef,
   MediaServerType,
   MediaServerView,
@@ -203,6 +202,52 @@ function useSettingsChanged() {
   };
 }
 
+/* ----------------------- first-run setup: your apps ----------------------- */
+
+export type SetupAppId = 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'bazarr' | 'lidarr' | 'readarr';
+
+/** An app found on the network (no key: those are entered, or imported server-side). */
+export interface FoundApp {
+  service: SetupAppId;
+  name: string;
+  url: string;
+  via: 'docker' | 'host' | 'domain';
+  configured: boolean;
+}
+
+/** An app another connected app (Seerr, Prowlarr) can fill in. */
+export interface ImportableApp {
+  service: SetupAppId;
+  from: 'seerr' | 'prowlarr';
+  url: string;
+}
+
+/** Whether the admin has finished (or skipped) setting up apps. */
+export const useSetupState = (enabled: boolean) =>
+  useQuery({ queryKey: ['settings', 'setup'], queryFn: ({ signal }) => api<{ appsDone: boolean }>('/settings/setup', { signal }), enabled, staleTime: 5 * 60_000 });
+
+export function useFinishSetup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ appsDone: boolean }>('/settings/setup', { method: 'PUT', body: { appsDone: true } }),
+    onSuccess: (d) => qc.setQueryData(['settings', 'setup'], d),
+  });
+}
+
+/** Looks for Sonarr, Radarr, Seerr and the rest around the media server (a few seconds). */
+export const useDiscoverApps = () =>
+  useMutation({ mutationFn: () => api<{ found: FoundApp[]; importable: ImportableApp[] }>('/settings/apps/discover', { method: 'POST' }) });
+
+/** Connects apps with the details Seerr or Prowlarr already have. */
+export function useImportApps() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (services?: SetupAppId[]) =>
+      api<{ results: { service: SetupAppId; from: 'seerr' | 'prowlarr'; url: string; ok: boolean; message?: string }[] }>('/settings/apps/import', { method: 'POST', body: services ? { services } : {} }),
+    onSuccess: changed,
+  });
+}
+
 type SaveResult = { service: ServiceSettingsView; signedOut: boolean };
 
 export function useSaveService(id: ServiceId) {
@@ -299,7 +344,7 @@ export function useRemoveInstance() {
 export const useMediaServerSettings = () =>
   useQuery({
     queryKey: ['settings', 'media-servers'],
-    queryFn: ({ signal }) => api<{ servers: MediaServerView[] }>('/settings/media-servers', { signal }),
+    queryFn: ({ signal }) => api<{ servers: MediaServerView[]; ignored: { id: string; type: MediaServerType; name: string }[] }>('/settings/media-servers', { signal }),
   });
 
 export type MediaServerInput = { type?: MediaServerType; name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
@@ -313,27 +358,11 @@ export const useTestMediaServer = () =>
 export function useSaveMediaServer() {
   const changed = useSettingsChanged();
   return useMutation({
-    mutationFn: ({ id, ...input }: MediaServerInput & { id?: string }) =>
-      id
-        ? api<{ server: MediaServerView }>(`/settings/media-servers/${id}`, { method: 'PUT', body: input })
-        : api<{ server: MediaServerView }>('/settings/media-servers', { method: 'POST', body: input }),
+    mutationFn: ({ id, ...input }: MediaServerInput & { id: string }) => api<{ server: MediaServerView }>(`/settings/media-servers/${id}`, { method: 'PUT', body: input }),
     onSuccess: changed,
   });
 }
 
-export function useRemoveMediaServer() {
-  const changed = useSettingsChanged();
-  return useMutation({
-    mutationFn: (id: string) => api<{ ok: true }>(`/settings/media-servers/${id}`, { method: 'DELETE' }),
-    onSuccess: changed,
-  });
-}
-
-/** Searches the local network for Jellyfin, Emby and Plex servers (takes a few seconds). */
-export const useDiscoverMediaServers = () =>
-  useMutation({
-    mutationFn: () => api<{ servers: DiscoveredServer[] }>('/settings/media-servers/discover', { method: 'POST' }),
-  });
 
 /* ------------------------------ queue actions ----------------------------- */
 

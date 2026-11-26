@@ -17,7 +17,8 @@ import { mainEmby, mainPlex, mediaReady, notJellyfinMain, plexMode, setMainServe
 import { addServer, describeServers, getStoredServer, updateServer } from './services/mediaServers.js';
 import * as plexAuth from './services/plexAuth.js';
 import * as plex from './services/plex.js';
-import { discoverWithStatus, urlField } from './settingsRoutes.js';
+import { urlField } from './settingsRoutes.js';
+import { discoverServers } from './services/mediaDiscovery.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -298,7 +299,7 @@ authRouter.post('/setup/discover', setupLimiter, async (req, res) => {
     res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
     return;
   }
-  const servers = await discoverWithStatus(req.query.type === 'emby' ? ['emby'] : ['jellyfin']);
+  const servers = await discoverServers(req.query.type === 'emby' ? ['emby'] : ['jellyfin']);
   res.json({ servers: servers.map(({ id, name, url, version, reachable }) => ({ id, name, url, version, reachable })) });
 });
 

@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { requireAdmin } from './auth.js';
 import { AREAS, memberAccess, setMemberAccess } from './access.js';
 import { Router } from 'express';
-import { readPref } from './lib/db.js';
+import { readPref, writePref } from './lib/db.js';
 import { audit } from './lib/audit.js';
 import { z } from 'zod';
 import { createClient, UpstreamError } from './lib/http.js';
@@ -35,21 +35,10 @@ import { hasServerKey } from './services/jellyfin.js';
 import { BackupError, canSelfRestart, createBackup, restartSoon, restoreBackup } from './services/backup.js';
 import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, describeClients, getClient, removeClient, updateClient } from './services/clients/index.js';
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
-import {
-  addServer,
-  describeServers,
-  getStoredServer,
-  knownOrigins,
-  MEDIA_SERVER_NAMES,
-  MEDIA_SERVER_TYPES,
-  originOf,
-  removeServer,
-  updateServer,
-  type MediaServerType,
-} from './services/mediaServers.js';
-import { discoverMediaServers, type DiscoveredServer } from './services/mediaDiscovery.js';
+import { describeServers, getStoredServer, ignoredServers, MEDIA_SERVER_NAMES, updateServer, type MediaServerType } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
-import { isMainServer } from './services/mainServer.js';
+import { isMainServer, notJellyfinMain } from './services/mainServer.js';
+import { APPS, discoverApps, fromConnectedApps, type AppId } from './services/appDiscovery.js';
 import { kometaSettings, updateKometa } from './services/kometa.js';
 import { collectionSettings, updateCollectionSettings } from './services/kometaCollections.js';
 import type { HealthProbe, ServiceId } from './services/types.js';
@@ -57,6 +46,7 @@ import {
   describe,
   infinidiskSettings,
   isComplete,
+  isConfigured,
   resetSettings,
   resolve,
   saveSettings,
@@ -235,6 +225,10 @@ settingsRouter.put('/services/:id', (req, res) => {
   if (!id) return;
   const s = parseBody(id, req, res);
   if (!s) return;
+  if (id === 'jellyfin' && notJellyfinMain()) {
+    res.status(400).json({ error: 'bad_request', message: 'This install uses Plex or Emby. Each install watches the one media server chosen at setup.' });
+    return;
+  }
   if (id === 'jellyfin' && !s.url) {
     res.status(400).json({ error: 'bad_request', field: 'url', message: 'Jellyfin is required for signing in.' });
     return;
@@ -421,26 +415,11 @@ async function testMediaServer(type: MediaServerType, target: { url: string; api
   }
 }
 
-/** Looks for Jellyfin servers on the local network and says which are already set up. */
-let discovering: Promise<DiscoveredServer[]> | undefined;
-export async function discoverWithStatus(types: MediaServerType[] = ['jellyfin']) {
-  // One scan at a time; concurrent callers share it.
-  discovering ??= discoverMediaServers().finally(() => (discovering = undefined));
-  const found = (await discovering).filter((s) => types.includes(s.type));
-  const known = knownOrigins();
-  return found.map((s) => ({ ...s, added: known.has(originOf(s.url)) }));
-}
-
-settingsRouter.post('/media-servers/discover', async (req, res) => {
-  const servers = await discoverWithStatus(MEDIA_SERVER_TYPES);
-  audit(req, `[settings] searched the network for media servers (${servers.length} found)`);
-  res.json({ servers });
-});
-
-const describeWithMain = () => describeServers().map((s) => ({ ...s, main: isMainServer(s.id) }));
+/** The Plex or Emby server in use (empty with Jellyfin), and any an earlier version saved that are no longer watched. */
+const describeWithMain = () => describeServers().filter((s) => isMainServer(s.id)).map((s) => ({ ...s, main: true }));
 
 settingsRouter.get('/media-servers', (_req, res) => {
-  res.set('Cache-Control', 'no-store').json({ servers: describeWithMain() });
+  res.set('Cache-Control', 'no-store').json({ servers: describeWithMain(), ignored: ignoredServers() });
 });
 
 /** Tests candidate details; reuses the saved key when `id` is given and no key is. */
@@ -459,20 +438,6 @@ settingsRouter.post('/media-servers/test', async (req, res) => {
   res.json(await testMediaServer(type, { url, apiKey }));
 });
 
-settingsRouter.post('/media-servers', (req, res) => {
-  const parsed = mediaServerBody.safeParse(req.body ?? {});
-  if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
-  const { name, url, publicUrl, apiKey } = parsed.data;
-  const type = parsed.data.type ?? 'jellyfin';
-  if (!name) return badRequest(res, 'Give the server a name', 'name');
-  if (!url) return badRequest(res, 'Enter the server address', 'url');
-  if (!apiKey) return badRequest(res, `Enter ${KEY_HELP[type]}`, 'apiKey');
-  if (knownOrigins().has(originOf(url))) return badRequest(res, 'That server is already set up.', 'url');
-  const srv = addServer({ type, name, url, publicUrl, apiKey });
-  audit(req, `[settings] ${MEDIA_SERVER_NAMES[type]} server "${name}" added`);
-  res.json({ server: describeWithMain().find((s) => s.id === srv.id) });
-});
-
 settingsRouter.put('/media-servers/:id', (req, res) => {
   const id = String(req.params.id);
   const cur = getStoredServer(id);
@@ -481,7 +446,8 @@ settingsRouter.put('/media-servers/:id', (req, res) => {
   if (!parsed.success) return badRequest(res, parsed.error.issues[0]?.message ?? 'Invalid', parsed.error.issues[0]?.path.join('.'));
   const b = parsed.data;
   if (b.type && b.type !== cur.type) return badRequest(res, 'A server’s type can’t be changed. Remove it and add it again.', 'type');
-  if (b.enabled === false && isMainServer(id)) return badRequest(res, 'This is the server people sign in with, so it can’t be switched off.', 'enabled');
+  if (!isMainServer(id)) return res.status(404).json({ error: 'not_found', message: 'StreamForge only uses the media server chosen at setup.' });
+  if (b.enabled === false) return badRequest(res, 'This is your media server, so it can’t be switched off.', 'enabled');
   // Never send a saved key to a different server unless it was re-entered.
   if (b.url && !b.apiKey && origin(b.url) !== origin(cur.url)) {
     return badRequest(res, `Re-enter the ${cur.type === 'plex' ? 'token' : 'API key'} when changing the server address.`, 'apiKey');
@@ -491,13 +457,56 @@ settingsRouter.put('/media-servers/:id', (req, res) => {
   res.json({ server: describeWithMain().find((s) => s.id === id) });
 });
 
-settingsRouter.delete('/media-servers/:id', (req, res) => {
-  const id = String(req.params.id);
-  const cur = getStoredServer(id);
-  if (cur && isMainServer(id)) return res.status(400).json({ error: 'bad_request', message: 'This is the server people sign in with, so it can’t be removed.' });
-  if (!cur || !removeServer(id)) return res.status(404).json({ error: 'not_found', message: 'Unknown media server' });
-  audit(req, `[settings] ${MEDIA_SERVER_NAMES[cur.type]} server "${cur.name}" removed`);
-  res.json({ ok: true });
+/* ------------------------- first-run setup: your apps ------------------------ */
+
+/*
+ * Step 2 of setup, after the media server: connecting Sonarr, Radarr and the
+ * rest. Shown to the first admin until it's finished or skipped; installs
+ * that already have an app connected count as done.
+ */
+const SETUP_PREF = 'setup';
+const appsDone = () => readPref<{ appsDone?: boolean }>(SETUP_PREF, {}).appsDone === true || APPS.some((a) => isConfigured(a.id));
+
+settingsRouter.get('/setup', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ appsDone: appsDone() });
+});
+
+settingsRouter.put('/setup', (req, res) => {
+  const parsed = z.object({ appsDone: z.boolean() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, 'Expected { appsDone: boolean }');
+  writePref(SETUP_PREF, { appsDone: parsed.data.appsDone });
+  if (parsed.data.appsDone) audit(req, '[settings] finished setting up apps');
+  res.json({ appsDone: appsDone() });
+});
+
+/** Looks for the apps around the media server (a few seconds). */
+settingsRouter.post('/apps/discover', async (req, res) => {
+  const [found, borrowed] = await Promise.all([discoverApps(), fromConnectedApps().catch(() => [])]);
+  audit(req, `[settings] searched for apps (${found.length} found)`);
+  res.json({
+    found: found.map((f) => ({ ...f, configured: isConfigured(f.service) })),
+    // What connected apps could fill in; keys stay here.
+    importable: borrowed.map((b) => ({ service: b.service, from: b.from, url: b.url })),
+  });
+});
+
+/** Connects apps using the details Seerr and Prowlarr already have, testing each first. */
+settingsRouter.post('/apps/import', async (req, res) => {
+  const parsed = z.object({ services: z.array(z.enum(APPS.map((a) => a.id) as [AppId, ...AppId[]])).max(10).optional() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return badRequest(res, 'Invalid request');
+  const only = parsed.data.services ? new Set(parsed.data.services) : undefined;
+  const borrowed = (await fromConnectedApps()).filter((b) => !only || only.has(b.service));
+  const results = [];
+  for (const b of borrowed) {
+    const candidate = merge(b.service, { url: b.url, apiKey: b.apiKey });
+    const test = await runTest(b.service, candidate);
+    if (test.ok) {
+      saveSettings(b.service, candidate, req.session!.userName);
+      audit(req, `[settings] ${SERVICE_NAMES[b.service]} connected using details from ${SERVICE_NAMES[b.from]}`);
+    }
+    results.push({ service: b.service, from: b.from, url: b.url, ok: test.ok, message: test.ok ? undefined : test.message });
+  }
+  res.json({ results });
 });
 
 /* ---------------------------- download clients ---------------------------- */

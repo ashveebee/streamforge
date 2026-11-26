@@ -4,7 +4,7 @@ import { createBrowserRouter, Navigate, Outlet, RouterProvider, useRouteError } 
 import { AnimatePresence } from 'motion/react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useCanSee } from '@/hooks/queries';
+import { useCanSee, useSetupState } from '@/hooks/queries';
 import type { Area } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/States';
@@ -38,6 +38,7 @@ const Downloads = lazyPage(() => import('@/pages/Downloads'));
 const Audit = lazyPage(() => import('@/pages/Audit'));
 const Diagnose = lazyPage(() => import('@/pages/Diagnose'));
 const Settings = lazyPage(() => import('@/pages/Settings'));
+const SetupApps = lazyPage(() => import('@/pages/SetupApps'));
 const NotFound = lazyPage(() => import('@/pages/NotFound'));
 
 function Splash() {
@@ -49,10 +50,26 @@ function Splash() {
 }
 
 function Protected() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
+  const setup = useSetupState(status === 'authenticated' && !!user?.isAdmin);
   if (status === 'loading') return <Splash />;
   if (status === 'anonymous') return <Navigate to="/login" replace />;
+  // First run, step 2: the first admin connects their apps before the dashboard.
+  if (user?.isAdmin && setup.data?.appsDone === false) return <Navigate to="/setup" replace />;
   return <AppShell />;
+}
+
+/** Setup step 2, full screen (no sidebar). Admins only. */
+function SetupRoute() {
+  const { status, user } = useAuth();
+  if (status === 'loading') return <Splash />;
+  if (status === 'anonymous') return <Navigate to="/login" replace />;
+  if (!user?.isAdmin) return <Navigate to="/" replace />;
+  return (
+    <Suspense fallback={<Splash />}>
+      <SetupApps />
+    </Suspense>
+  );
 }
 
 function PublicOnly() {
@@ -100,6 +117,7 @@ function RouteError() {
 
 const router = createBrowserRouter([
   { element: <PublicOnly />, children: [{ path: '/login', element: <Login /> }] },
+  { path: '/setup', element: <SetupRoute />, errorElement: <RouteError /> },
   {
     element: <Protected />,
     errorElement: <RouteError />,

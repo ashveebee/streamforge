@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Navigate, NavLink, useParams } from 'react-router';
+import { Link, Navigate, NavLink, useParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArchiveRestore,
@@ -35,7 +35,7 @@ import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { Pill, StatusBadge } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
 import { InstancesSection } from '@/components/settings/InstancesSection';
-import { MediaServersSection } from '@/components/settings/MediaServersSection';
+import { MainServerSection, MediaServerNote } from '@/components/settings/MainServerSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
@@ -512,32 +512,29 @@ function ServicesTab() {
           if (!s) return null;
           return (
             <Fragment key={id}>
-              {/* With Plex or Emby as the sign-in server, it comes first and Jellyfin servers are added like the others. */}
+              {/* The media server chosen at setup comes first; it can be edited but not swapped. */}
               {id === 'jellyfin' && main.other ? (
+                <MainServerSection type={main.plex ? 'plex' : 'emby'} />
+              ) : id === 'jellyfin' ? (
                 <>
-                  <MediaServersSection type={main.type} />
-                  <MediaServersSection type="jellyfin" standalone />
-                  <MediaServersSection type={main.plex ? 'emby' : 'plex'} />
+                  <ServiceCard s={s} index={i} />
+                  <li className="-mt-2">
+                    <MediaServerNote type="jellyfin" />
+                  </li>
                 </>
               ) : (
                 <ServiceCard s={s} index={i} />
               )}
               {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              {id === 'jellyfin' && !main.other && s.configured && (
-                <>
-                  <MediaServersSection type="jellyfin" />
-                  <MediaServersSection type="emby" />
-                  <MediaServersSection type="plex" />
-                </>
-              )}
             </Fragment>
           );
         })}
       </ul>
       <KometaSection />
       {!main.other && <MoonfinSection />}
-      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
+      <p className="mt-6 flex flex-wrap items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
+        <Link to="/setup" className="text-brand hover:underline">Find apps on your network</Link>
       </p>
     </>
   );

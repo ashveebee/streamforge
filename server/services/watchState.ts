@@ -1,17 +1,13 @@
 import { cache } from '../lib/cache.js';
-import { readPref, writePref } from '../lib/db.js';
-import { HttpError } from '../lib/handle.js';
 import { isConfigured } from '../settings.js';
 import { jf, remote, serverToken, type JfCtx } from './jellyfin.js';
-import { allLibraryItems, idKeys, mainExtra, type LibraryServer } from './mainServer.js';
-import { mediaServer, mediaServers } from './mediaServers.js';
+import { allLibraryItems, idKeys, type LibraryServer } from './mainServer.js';
+import { mediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
 
 /*
- * Who's watched what, per media server, and which account on each server is
- * "you". People often have a different name on each server (Plex "ashveebee",
- * Jellyfin "admin"), so accounts can be linked; without a link, a server
- * account with the same name as you counts.
+ * Who's watched each episode on the media server: you (the account you
+ * signed in with) and, for admins, everyone else.
  */
 
 export interface Viewer {
@@ -26,27 +22,12 @@ export interface Me {
   isAdmin: boolean;
 }
 
-type Links = Record<string, Record<string, Viewer>>;
-const LINKS = 'accountLinks';
-
-const linksOf = (userId: string) => readPref<Links>(LINKS, {})[userId] ?? {};
-
-/** Links (or, with no account, unlinks) your account on one server. */
-export async function setLink(ctx: JfCtx, me: Me, serverId: string, accountId: string | null) {
-  const srv = mediaServer(serverId);
-  if (!srv || srv.id === mainExtra()?.id) throw new HttpError(404, 'Unknown media server', 'not_found');
-  const all = readPref<Links>(LINKS, {});
-  const mine = { ...(all[me.userId] ?? {}) };
-  if (accountId === null) delete mine[serverId];
-  else {
-    const account = (await serverUsers(ctx, serverId)).find((u) => u.id === accountId);
-    if (!account) throw new HttpError(400, 'That account isn’t on this server', 'invalid');
-    mine[serverId] = account;
-  }
-  writePref(LINKS, { ...all, [me.userId]: mine });
+/** Your account ids on the media server. A Plex server's owner is account 1 in its own history. */
+function myIds(me: Me, server: Pick<LibraryServer, 'type'>) {
+  return new Set(server.type === 'plex' && me.isAdmin ? [me.userId, '1'] : [me.userId]);
 }
 
-/** Accounts on a server ("jellyfin" is the main Jellyfin server). */
+/** Accounts on the media server ("jellyfin" when it's Jellyfin). */
 export async function serverUsers(ctx: JfCtx, serverId: string): Promise<Viewer[]> {
   return cache.get(`watch:users:${serverId}`, 5 * 60_000, async () => {
     type U = { Id: string; Name: string; Policy?: { IsDisabled?: boolean } };
@@ -56,43 +37,6 @@ export async function serverUsers(ctx: JfCtx, serverId: string): Promise<Viewer[
     if (!srv) return [];
     return srv.type === 'plex' ? plex.accountList(srv) : live(await remote<U[]>(srv, '/Users'));
   });
-}
-
-/** Your account ids on a server: who you signed in as on the main one, else a link or a name match. */
-export async function myIdsOn(ctx: JfCtx, me: Me, server: Pick<LibraryServer, 'id' | 'type' | 'main'>) {
-  if (server.main) {
-    // A Plex server's owner is account 1 in its own history.
-    return new Set(server.type === 'plex' && me.isAdmin ? [me.userId, '1'] : [me.userId]);
-  }
-  const link = linksOf(me.userId)[server.id];
-  if (link) return new Set([link.id]);
-  const same = (await serverUsers(ctx, server.id).catch(() => [])).find((u) => u.name.trim().toLowerCase() === me.userName.trim().toLowerCase());
-  return new Set(same ? [same.id] : []);
-}
-
-/** Every server other than the main one, with your linked (or name-matched) account there. */
-export async function myAccounts(ctx: JfCtx, me: Me) {
-  const main = mainExtra();
-  const links = linksOf(me.userId);
-  return Promise.all(
-    mediaServers()
-      .filter((s) => s.id !== main?.id)
-      .map(async (s) => {
-        const users = await serverUsers(ctx, s.id).catch(() => undefined);
-        const linked = links[s.id];
-        const matched = linked ? undefined : users?.find((u) => u.name.trim().toLowerCase() === me.userName.trim().toLowerCase());
-        return {
-          server: s.id,
-          name: s.name,
-          type: s.type,
-          linked,
-          matched,
-          // Only admins pick from a server's accounts.
-          users: me.isAdmin ? users : undefined,
-          reachable: !!users,
-        };
-      }),
-  );
 }
 
 /** One server's watch state for one episode. */
@@ -111,8 +55,8 @@ export interface EpisodeWatch {
 }
 
 /**
- * Per-episode watch state on every server that has the show, for one season.
- * Admins see everyone; members only see their own.
+ * Per-episode watch state for one season. Admins see everyone; members only
+ * see their own.
  */
 export async function seasonWatch(ctx: JfCtx, me: Me, ids: { tmdb: number; tvdb?: number }, season: number) {
   const lib = await allLibraryItems(ctx);
@@ -124,7 +68,8 @@ export async function seasonWatch(ctx: JfCtx, me: Me, ids: { tmdb: number; tvdb?
   await Promise.all(
     copies.map(async (copy) => {
       const server = copy.server;
-      const [mine, users] = await Promise.all([myIdsOn(ctx, me, server), serverUsers(ctx, server.id).catch(() => [] as Viewer[])]);
+      const mine = myIds(me, server);
+      const users = await serverUsers(ctx, server.id).catch(() => [] as Viewer[]);
       const names = new Map(users.map((u) => [u.id, u.name]));
       if (server.type === 'plex') names.set('1', names.get('1') ?? 'Owner');
       // episode → who watched it, and your progress
@@ -178,8 +123,5 @@ export async function seasonWatch(ctx: JfCtx, me: Me, ids: { tmdb: number; tvdb?
       }
     }),
   );
-  // Main server first, then by name, so the ticks are always in the same order.
-  const order = new Map(lib.servers.map((s, i) => [s.id, i]));
-  for (const list of out.values()) list.sort((a, b) => (order.get(a.server) ?? 99) - (order.get(b.server) ?? 99));
   return out;
 }

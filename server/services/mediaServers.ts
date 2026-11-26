@@ -4,14 +4,15 @@ import { cache } from '../lib/cache.js';
 import { keyHint, resolve } from '../settings.js';
 
 /*
- * Extra media servers to monitor: more Jellyfin servers, Emby and Plex.
+ * The stored Plex or Emby server.
  *
- * The main Jellyfin server (Settings card or environment) handles sign-in
- * and everything user-specific. Extra servers are watched with their own API
- * key (a Plex token for Plex): health and outage alerts, active streams on
- * Now Playing, and an overview tab on the media server page.
+ * StreamForge watches exactly one media server, chosen at first-run setup:
+ * Jellyfin (kept in the service settings) or a Plex/Emby server kept here
+ * with its token or API key. Earlier versions could monitor several servers
+ * at once; any extra ones they saved are kept (so nothing is lost) but
+ * ignored: only the server named by `setActiveServer` is used.
  *
- * Ids carry the type: `jellyfin-cabin`, `emby-office`, `plex-loft`.
+ * Ids carry the type: `emby-office`, `plex-loft`.
  */
 
 export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
@@ -41,9 +42,20 @@ const listeners = new Set<() => void>();
 
 export const SERVER_ID_RE = /^(jellyfin|emby|plex)-[a-z0-9-]{1,40}$/;
 
-/** Extra servers StreamForge should talk to (switched on). */
+/** The Plex or Emby server StreamForge uses, set by mainServer.ts. */
+let activeId: string | undefined;
+export function setActiveServer(id: string | undefined) {
+  activeId = id;
+}
+
+/** The Plex or Emby server in use, as a list (empty when the media server is Jellyfin). */
 export function mediaServers(type?: MediaServerType) {
-  return stored.filter((s) => s.enabled && (!type || s.type === type));
+  return stored.filter((s) => s.id === activeId && (!type || s.type === type));
+}
+
+/** Servers saved by an earlier version that StreamForge no longer watches. */
+export function ignoredServers() {
+  return stored.filter((s) => s.id !== activeId).map((s) => ({ id: s.id, type: s.type, name: s.name }));
 }
 
 export function mediaServer(id: string) {

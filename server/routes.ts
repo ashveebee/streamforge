@@ -7,7 +7,6 @@ import { CLEANUP_ACTIONS, cleanupStatus, runCleanup, STALL_HOURS, updateCleanup,
 import { arrRouter } from './arrRoutes.js';
 import { clientRouter } from './clientRoutes.js';
 import { ctxOf, requireAdmin, requireAuth } from './auth.js';
-import { myAccounts, setLink } from './services/watchState.js';
 import { allowedAreas, canSee, requireArea } from './access.js';
 import { downloadSnapshot, healthSnapshot, recheck } from './health.js';
 import { isConfigured, isEnabled, SERVICE_IDS } from './settings.js';
@@ -631,18 +630,7 @@ api.post(
 
 api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken, req.session!.userName)));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
-/** Your account on each other media server, so "watched by you" works across servers. */
-const meOf = (req: Request) => ({ userId: req.session!.userId, userName: req.session!.userName, isAdmin: !!req.session!.isAdmin });
-api.get('/me/accounts', handle(null, (req) => myAccounts(ctxOf(req.session!), meOf(req))));
-api.put(
-  '/me/accounts/:server',
-  requireAdmin,
-  handle(null, async (req) => {
-    const b = z.object({ accountId: z.string().min(1).max(100).nullable() }).strict().parse(req.body);
-    await setLink(ctxOf(req.session!), meOf(req), String(req.params.server), b.accountId);
-    return myAccounts(ctxOf(req.session!), meOf(req));
-  }),
-);
+
 
 /* --------------------------------- digest -------------------------------- */
 

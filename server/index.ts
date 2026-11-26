@@ -23,7 +23,9 @@ import { startUpdateCheck } from './services/updates.js';
 import { resetByName } from './services/mfa.js';
 import { VERSION } from './version.js';
 import { dbPath } from './lib/db.js';
-import { isConfigured, resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
+import { resolve, SERVICE_IDS, SERVICE_NAMES } from './settings.js';
+import { mainExtra, mediaReady } from './services/mainServer.js';
+import { MEDIA_SERVER_NAMES } from './services/mediaServers.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -93,7 +95,11 @@ if (existsSync(webDist)) {
 
 app.listen(config.port, config.host, () => {
   console.log(`\n  ▲ StreamForge v${VERSION} listening on http://${config.host}:${config.port}`);
+  // The media server first: Jellyfin from its settings, or the Plex/Emby server chosen at setup.
+  const extra = mainExtra();
+  if (extra) console.log(`    ${MEDIA_SERVER_NAMES[extra.type].padEnd(11)}→ ${extra.url}  [media server]`);
   for (const id of SERVICE_IDS) {
+    if (id === 'jellyfin' && extra) continue;
     const r = resolve(id);
     const s = r.settings;
     const target = [s.url, ...(s.mounts ?? [])].filter(Boolean).join(' + ');
@@ -105,7 +111,7 @@ app.listen(config.port, config.host, () => {
     const n = resetByName(process.env.STREAMFORGE_RESET_2FA);
     console.log(`  ! Two-factor sign-in reset for ${n} account(s) named "${process.env.STREAMFORGE_RESET_2FA}". Remove STREAMFORGE_RESET_2FA now.\n`);
   }
-  if (!isConfigured('jellyfin')) console.log('  ! Jellyfin is not configured — open the app to set it up.\n');
+  if (!mediaReady()) console.log('  ! No media server yet — open the app to choose Jellyfin, Plex or Emby.\n');
   startMonitors();
   void startHostMetrics();
   startAutoImport();

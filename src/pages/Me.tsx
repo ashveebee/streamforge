@@ -1,9 +1,7 @@
-import { Clock, History, Inbox, LaptopMinimal, Link2, ListVideo, LoaderCircle, LogOut, PlayCircle, Repeat, SkipForward } from 'lucide-react';
+import { Clock, History, Inbox, LaptopMinimal, ListVideo, LoaderCircle, LogOut, PlayCircle, Repeat, SkipForward } from 'lucide-react';
 import { useMainServer } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
-import { useEndSession, useLinkAccount, useMe, useMyAccounts, useMyRequests, useMySessions, type MeCard } from '@/hooks/useMe';
-import { ServerTag, SERVER_NAME } from '@/components/ui/ServerTag';
-import { Select } from '@/components/ui/Input';
+import { useEndSession, useMe, useMyRequests, useMySessions, type MeCard } from '@/hooks/useMe';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { duration, relative } from '@/lib/format';
@@ -73,62 +71,6 @@ function Devices() {
             ))}
           </ul>
         )}
-      </CardBody>
-    </Card>
-  );
-}
-
-/**
- * Which account is yours on each other media server, so "watched by you"
- * works everywhere even when your name differs between servers.
- */
-function MyAccounts() {
-  const { user } = useAuth();
-  const main = useMainServer();
-  const q = useMyAccounts();
-  const link = useLinkAccount();
-  const list = q.data ?? [];
-  if (!list.length) return null;
-  return (
-    <Card>
-      <CardHeader icon={Link2} accent="var(--color-brand)" title="Your accounts on other servers" subtitle={`So StreamForge knows it’s you — you signed in with ${main.name}`} />
-      <CardBody>
-        <ul className="divide-y divide-line">
-          {list.map((a) => {
-            const current = a.linked ?? a.matched;
-            return (
-              <li key={a.server} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1">
-                  <ServerTag type={a.type} name={a.name} className="text-[13px] font-medium" />
-                  <div className="mt-0.5 text-[11px] text-ink-4">
-                    {SERVER_NAME[a.type]} ·{' '}
-                    {!a.reachable ? 'couldn’t reach it' : a.linked ? 'linked' : a.matched ? 'matched by your name' : 'no account found with your name'}
-                  </div>
-                </div>
-                {user?.isAdmin && a.users ? (
-                  <Select
-                    aria-label={`Your account on ${a.name}`}
-                    className="h-9 w-48 text-[13px]"
-                    disabled={link.isPending}
-                    value={a.linked?.id ?? ''}
-                    onChange={(e) => link.mutate({ server: a.server, accountId: e.target.value || null })}
-                  >
-                    <option value="">{a.matched ? `Match by name (${a.matched.name})` : 'Not linked'}</option>
-                    {a.users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <span className="text-[13px] text-ink-2">{current?.name ?? '—'}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {link.error && <p role="alert" className="mt-2 text-xs text-bad">{(link.error as Error).message}</p>}
-        <p className="mt-3 text-[11px] text-ink-4">Used for the “watched by you” ticks on episodes.{user?.isAdmin ? '' : ' Ask an admin if one is wrong.'}</p>
       </CardBody>
     </Card>
   );
@@ -219,7 +161,6 @@ export default function MePage() {
         )}
       </QueryState>
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-2">
-        <MyAccounts />
         <Devices />
         <SecuritySection />
       </div>

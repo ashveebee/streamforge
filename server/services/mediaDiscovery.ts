@@ -211,3 +211,10 @@ export async function discoverMediaServers(timeoutMs = 2500): Promise<Discovered
     .slice(0, MAX_SERVERS)
     .sort((a, b) => Number(b.reachable) - Number(a.reachable) || a.name.localeCompare(b.name));
 }
+
+/** One network search at a time; concurrent callers share it. */
+let discovering: Promise<DiscoveredServer[]> | undefined;
+export async function discoverServers(types: MediaServerType[]) {
+  discovering ??= discoverMediaServers().finally(() => (discovering = undefined));
+  return (await discovering).filter((s) => types.includes(s.type));
+}

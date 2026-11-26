@@ -3,7 +3,6 @@ import { db } from '../lib/db.js';
 import { jf, remotePlaybackEntries, serverToken, type JfCtx, type JfServerTarget } from './jellyfin.js';
 import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import * as plex from './plex.js';
-import { mediaServers } from './mediaServers.js';
 import { parsePlaybackName, splitSeries } from './playStats.js';
 
 /*
@@ -155,13 +154,6 @@ async function activityHistory(srv: JfServerTarget, since: number) {
   });
 }
 
-/** Every extra server's own history, so it isn't limited to whichever server was added first. */
-async function extraHistory(since: number) {
-  const main = mainExtra();
-  const rows = await Promise.all(mediaServers().filter((x) => x.id !== main?.id).map((x) => (x.type === 'plex' ? plexHistory(x, since) : activityHistory(x, since))));
-  return rows.flat();
-}
-
 function fromPlay(r: PlayRow): HistoryRow {
   const t = (r.type ?? '').toLowerCase();
   // Episodes are stored as "Series · Episode"; the series is shown as the title already.
@@ -225,12 +217,11 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const p = mainPlex();
   const e = mainEmby();
   const jfMain = !p && !e;
-  const [jfData, mainRows, extraRows] = await Promise.all([
+  const [jfData, mainRows] = await Promise.all([
     jfMain ? jellyfinHistory(ctx).catch(() => undefined) : undefined,
     p ? plexHistory(p, since) : e ? activityHistory(e, since) : [],
-    extraHistory(since),
   ]);
-  const serverRows = [...(jfData?.rows ?? mainRows), ...extraRows];
+  const serverRows = jfData?.rows ?? mainRows;
   // Only the server's history from before StreamForge recorded that user, so nothing is listed twice.
   const older = serverRows.filter((r) => Date.parse(r.at) >= since && Date.parse(r.at) < (first.get(norm(r.user)) ?? Infinity));
   const merged = [...plays, ...older].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));

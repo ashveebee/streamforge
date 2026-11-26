@@ -183,8 +183,7 @@ if you no longer want it there.
 **Name:** what the collection is called on your server. It must be unique
 within the library.
 
-**Library:** which library on which server it goes in. Libraries are grouped
-by server.
+**Library:** which library on your media server it goes in.
 
 **Build it from:** where the titles come from.
 

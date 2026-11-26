@@ -8,8 +8,8 @@ home. It takes about 15 minutes.
 the machine running StreamForge can reach.
 
 - [1. Start the container](#1-start-the-container)
-- [2. First run: connect your media server](#2-first-run-connect-your-media-server)
-- [3. Connect your other services](#3-connect-your-other-services)
+- [2. First run, step 1: choose your media server](#2-first-run-step-1-choose-your-media-server)
+- [3. First run, step 2: set up your apps](#3-first-run-step-2-set-up-your-apps)
 - [4. Docker networking: which address to use](#4-docker-networking-which-address-to-use)
 - [5. Reach it from outside: reverse proxy or Tailscale](#5-reach-it-from-outside-reverse-proxy-or-tailscale)
 - [6. Who can sign in](#6-who-can-sign-in)
@@ -60,12 +60,16 @@ where its settings come from.
 > add StreamForge to the same file (or the same Docker network). Then it can
 > reach them by container name, such as `http://sonarr:8989`.
 
-## 2. First run: connect your media server
+## 2. First run, step 1: choose your media server
 
-On first launch StreamForge asks which media server you use. That server
-becomes the **main server**: people sign in to StreamForge with their account
-on it, and admins on it are admins in StreamForge. You can add more servers of
-any kind later (see the [media servers guide](media-servers.md)).
+On first launch StreamForge asks which media server you use: Jellyfin, Plex
+or Emby. People sign in to StreamForge with their account on it, and admins on
+it are admins in StreamForge.
+
+Each install watches **one** media server and sticks with it; you can change
+its address later, but not swap it for another. Running two media servers?
+Run a StreamForge for each (see the
+[media servers guide](media-servers.md#running-more-than-one-media-server)).
 
 ### Jellyfin
 
@@ -97,12 +101,34 @@ needs to reach `plex.tv` (for sign-in) and your Plex server.
 3. Sign in with an **Emby administrator** account. StreamForge creates its own
    API key on the server for background features.
 
-## 3. Connect your other services
+## 3. First run, step 2: set up your apps
 
-Go to **Settings → Services**. For each service you run: enter its address and
-API key, click **Test connection**, then **Save**. Changes apply straight away,
-with no restart. Switch off the ones you don't use and they disappear from
-the sidebar.
+<a id="step-2-set-up-your-apps"></a>
+
+After you sign in for the first time, StreamForge opens **Set up your apps**
+and starts looking for Sonarr, Radarr, Seerr, Prowlarr, Bazarr, Lidarr and
+Readarr. It checks:
+
+- **Docker service names** on their usual ports, such as `http://sonarr:8989`,
+  when StreamForge runs in the same Compose project;
+- **this machine, the Docker host and your media server's machine** on those
+  ports;
+- **subdomains next to your media server's**, such as
+  `https://sonarr.example.com` when Jellyfin is at `jellyfin.example.com`.
+
+Each app it finds has its address filled in: paste the API key and click
+**Test and connect**. Apps it doesn't find can be added by address.
+
+**Already use Seerr or Prowlarr?** Connect it first. Seerr knows your Sonarr
+and Radarr, and Prowlarr knows all its apps, so StreamForge offers to connect
+those with the same address and key, testing each one. The keys are copied on
+the server and never shown in your browser.
+
+Skip any app you don't use, then click **Finish setup**. You can come back
+later from the link at the bottom of **Settings → Services**, or connect apps
+there directly: enter the address and API key, click **Test connection**, then
+**Save**. Changes apply straight away, with no restart. Switch off the ones
+you don't use and they disappear from the sidebar.
 
 | Service | Where to find the API key |
 | --- | --- |
@@ -112,8 +138,6 @@ the sidebar.
 | qBittorrent, Transmission, NZBGet | Your web UI username and password (**Settings → Download clients**) |
 | SABnzbd | Config → General → API Key (**Settings → Download clients**) |
 | Infinidisk | Your Infinidisk settings (optional if its status endpoint is public) |
-| Extra Jellyfin / Emby servers | Dashboard → API Keys (Jellyfin) or Settings → Advanced → API Keys (Emby) |
-| Extra Plex servers | The owner's Plex token (see the [media servers guide](media-servers.md#finding-a-plex-token)) |
 
 **More than one Sonarr or Radarr?** (a 4K Radarr, an anime Sonarr) Add the
 extra ones under the main Sonarr or Radarr card. See the
@@ -211,7 +235,7 @@ choose which pages members can see.
 From the same page you can set up:
 
 - **Single sign-on** through any OpenID Connect provider (Authentik, Authelia,
-  Keycloak, Pocket ID). This is for Jellyfin as the main server only.
+  Keycloak, Pocket ID). This is for Jellyfin installs only.
 - **Two-factor sign-in** with an authenticator app.
 
 ## 7. Updating, backups and environment variables
@@ -255,8 +279,9 @@ options are environment only:
   Paste it again.
 - **Sign-in works at home but not through the proxy:** set `TRUST_PROXY`, and
   make sure the proxy passes `X-Forwarded-Proto`.
-- **Locked out after changing the main server:** expected, because changing
-  it signs everyone out. Sign in again with an admin account on the new server.
+- **Locked out after changing the media server's address:** expected when it
+  points at a different server, because that signs everyone out. Sign in again
+  with an admin account on it.
 - **Lost your two-factor device:** another admin can reset it under Settings →
   Access. If you're the only admin, start the container once with
   `STREAMFORGE_RESET_2FA=<your user name>`, sign in, then remove the variable.

@@ -20,7 +20,6 @@ import {
   Plus,
   Search,
   Send,
-  Server,
   Star,
   Users,
   X,
@@ -58,7 +57,7 @@ import { WillItPlay } from '@/components/media/WillItPlay';
 import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts';
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
-import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '@/components/ui/ServiceIcon';
 import { ServerTag } from '@/components/ui/ServerTag';
 import { Avatar } from '@/components/ui/Image';
 
@@ -134,100 +133,6 @@ function Cast({ cast }: { cast: CastMember[] }) {
   );
 }
 
-/** "4K DV · 1080p": the distinct copies of a movie on one server, best first. */
-function copiesLabel(files: MediaFile[] | undefined) {
-  const labels = [...(files ?? [])]
-    .sort((a, b) => (b.video?.height ?? 0) - (a.video?.height ?? 0))
-    .map((f) => [f.video?.resolution, f.video?.range === 'DOVI' ? 'DV' : f.video?.range].filter(Boolean).join(' '))
-    .filter(Boolean);
-  return [...new Set(labels)].join(' · ') || undefined;
-}
-
-/** Every server StreamForge knows, with whether this title is on it. */
-function serverRows(d: Details) {
-  const on = d.availableOn ?? [];
-  const known = d.servers?.length ? d.servers : on.map((a) => ({ id: a.server, name: a.name, type: a.type, main: a.main }));
-  return known.map((x) => ({ ...x, entry: on.find((a) => a.server === x.id) }));
-}
-
-/** Under the title: which servers have it, and the best copy on each. */
-function ServerChips({ d }: { d: Details }) {
-  const rows = serverRows(d);
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 text-xs text-white/60">On your servers</span>
-      {rows.map((r) => (
-        <span
-          key={r.id}
-          className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs backdrop-blur',
-            r.entry ? 'border-white/15 bg-white/[0.06] text-white' : 'border-dashed border-white/15 text-white/45',
-          )}
-        >
-          {r.entry ? <ServerTag type={r.type} name={r.name} /> : <span className="inline-flex items-center gap-1.5"><i className="size-[7px] rounded-full border border-white/50" />{r.name}</span>}
-          <span className="text-white/50">{r.entry ? (copiesLabel(r.entry.files) ?? '') : 'not here'}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/** Every media server, with the title's copies on each, plays there, and a link to open it. */
-function AvailableOnCard({ d }: { d: Details }) {
-  const rows = serverRows(d);
-  const have = rows.filter((r) => r.entry).length;
-  return (
-    <Card>
-      <CardHeader icon={Server} title="Where it’s available" subtitle={rows.length > 1 ? `On ${have} of your ${rows.length} media servers` : '1 media server'} />
-      <CardBody>
-        <ul className="divide-y divide-line">
-          {rows.map(({ id, name, type, main, entry: a }) => (
-            <li key={id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-              <ServiceIcon id={type} size={32} className={cn(!a && 'opacity-40')} />
-              <div className="min-w-0 flex-1">
-                <div className={cn('truncate text-[13px] font-medium', !a && 'text-ink-3')}>{name}</div>
-                <div className="text-[11px] text-ink-4">
-                  {MEDIA_SERVERS[type].name}
-                  {main ? ' · sign-in server' : ''}
-                  {!a && ' · not in its library'}
-                </div>
-                {a?.files && a.files.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {a.files.map((f) => (
-                      <span key={f.id} className="rounded-md border border-line-strong px-1.5 py-px text-[11px] text-ink-3">
-                        <b className="font-semibold text-ink-2">{f.video?.resolution ?? f.container?.toUpperCase() ?? 'File'}</b>
-                        {f.video?.range ? ` ${f.video.range === 'DOVI' ? 'DV' : f.video.range}` : ''}
-                        {f.size ? ` · ${bytes(f.size)}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {a && (a.added || a.plays) ? (
-                  <div className="mt-1 text-[11px] text-ink-4">
-                    {[a.added && `Added ${relative(a.added)}`, a.plays && `${a.plays} play${a.plays === 1 ? '' : 's'} here`].filter(Boolean).join(' · ')}
-                  </div>
-                ) : null}
-              </div>
-              {a?.url && /^https?:\/\//.test(a.url) && (
-                <a
-                  href={a.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border px-2.5 text-xs font-semibold transition hover:brightness-125"
-                  style={{ color: MEDIA_SERVERS[type].color, borderColor: `color-mix(in srgb, ${MEDIA_SERVERS[type].color} 45%, transparent)`, background: `color-mix(in srgb, ${MEDIA_SERVERS[type].color} 12%, transparent)` }}
-                >
-                  <Play className="size-3 fill-current" /> Play
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-        {rows.length > 1 && <p className="mt-3 text-[11px] text-ink-4">Matched across servers by TMDb, TVDB and IMDb id, so different file names still count as the same title.</p>}
-      </CardBody>
-    </Card>
-  );
-}
-
 /** Everyone who has watched it, on which server and device (admins). */
 function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runtimeMin?: number; several: boolean }) {
   return (
@@ -266,12 +171,9 @@ function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runti
   );
 }
 
-/** Media info for every copy on every server, as tabs. */
+/** The title's files on the media server. */
 function allCopies(d: Details): { files: MediaFile[]; subtitle?: string } {
-  const withFiles = (d.availableOn ?? []).filter((a) => a.files?.length);
-  if (withFiles.length < 2) return { files: d.library?.files ?? withFiles[0]?.files ?? [] };
-  const files = withFiles.flatMap((a) => a.files!.map((f) => ({ ...f, id: `${a.server}:${f.id}`, serverType: a.type, name: `${a.name} · ${f.video?.resolution ?? f.name ?? 'Version'}` })));
-  return { files, subtitle: `${files.length} copies on ${withFiles.length} servers` };
+  return { files: d.library?.files ?? d.availableOn?.[0]?.files ?? [] };
 }
 
 function Actions({ d }: { d: Details }) {
@@ -285,14 +187,9 @@ function Actions({ d }: { d: Details }) {
   return (
     <>
       {d.jellyfin && (
-        <PlayButton
-          itemId={d.jellyfin.itemId}
-          url={d.jellyfin.url}
-          library={d.library}
-          server={(d.availableOn?.length ?? 0) > 1 ? d.availableOn?.find((a) => a.server === 'jellyfin')?.name ?? 'Jellyfin' : undefined}
-        />
+        <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />
       )}
-      <PlayOnServers d={d} />
+      <PlayOnServer d={d} />
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -335,42 +232,24 @@ function Actions({ d }: { d: Details }) {
   );
 }
 
-/**
- * A play button for every server that has the title (opens it in that
- * server's own app). The main Jellyfin server's button comes from PlayButton.
- */
-function PlayOnServers({ d }: { d: Details }) {
-  const servers = (d.availableOn ?? []).filter((a) => a.url && /^https?:\/\//.test(a.url) && !(d.jellyfin && a.server === 'jellyfin'));
-  if (!servers.length) return null;
-  const several = (d.availableOn?.length ?? 0) > 1;
+/** With Plex or Emby: opens the title in the server's own app, in its colour. */
+function PlayOnServer({ d }: { d: Details }) {
+  const a = !d.jellyfin ? d.availableOn?.find((x) => x.url && /^https?:\/\//.test(x.url)) : undefined;
+  if (!a) return null;
   return (
-    <>
-      {servers.map((a) => {
-        const copies = copiesLabel(a.files);
-        return (
-          <a
-            key={a.server}
-            href={a.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={[`Play on ${a.name}`, MEDIA_SERVERS[a.type].name, copies].filter(Boolean).join(' · ')}
-            className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
-            style={{ background: MEDIA_SERVERS[a.type].color }}
-          >
-            <Play className="size-4 fill-current" />
-            <span>
-              Play on {MEDIA_SERVERS[a.type].name}
-              {several && <span className="font-normal opacity-70"> · {a.name}</span>}
-            </span>
-          </a>
-        );
-      })}
-    </>
+    <a
+      href={a.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
+      style={{ background: MEDIA_SERVERS[a.type].color }}
+    >
+      <Play className="size-4 fill-current" /> Play on {MEDIA_SERVERS[a.type].name}
+    </a>
   );
 }
 
-/** Plays on the main Jellyfin server. `server` (with several servers) colours it Jellyfin purple and names it. */
-function PlayButton({ itemId, url, library, server }: { itemId: string; url?: string; library?: LibraryInfo; server?: string }) {
+function PlayButton({ itemId, url, library }: { itemId: string; url?: string; library?: LibraryInfo }) {
   const next = library?.nextUp;
   const resume = library?.watch?.progress;
   return (
@@ -379,13 +258,11 @@ function PlayButton({ itemId, url, library, server }: { itemId: string; url?: st
       jellyfinUrl={next?.url ?? url}
       play={!!(next || resume)}
       chooser
-      className={cn('inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition', server ? 'hover:brightness-110' : 'bg-white hover:bg-white/90')}
-      style={server ? { background: MEDIA_SERVERS.jellyfin.color } : undefined}
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
     >
       {(app) => (
         <>
           <Play className="size-4 fill-current" /> {next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : `Play in ${app}`}
-          {server && <span className="font-normal opacity-70">· {server}</span>}
         </>
       )}
     </WatchLink>
@@ -726,12 +603,10 @@ function DetailsView({ d }: { d: Details }) {
         tagline={d.tagline}
         poster={d.poster}
         backdrop={d.backdrop}
-        servers={(d.servers?.length ?? 0) > 1 && (d.availableOn?.length ?? 0) > 0 ? <ServerChips d={d} /> : undefined}
         facts={
           <Facts
             items={[
               <Pill key="a" tone={a.tone}>{a.label}</Pill>,
-              (d.servers?.length ?? 0) > 1 && d.availableOn?.length ? <span key="n" className="text-white">On {d.availableOn.length} of {d.servers!.length} servers</span> : null,
               <span key="t">{d.type === 'tv' ? 'Series' : 'Movie'}</span>,
               watchLabel(d.library?.watch, d.type === 'tv') && (
                 <span key="w" className="text-white">
@@ -769,11 +644,10 @@ function DetailsView({ d }: { d: Details }) {
             const c = allCopies(d);
             return c.files.length ? <MediaInfo files={c.files} subtitle={c.subtitle} /> : null;
           })()}
-          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} several={serverRows(d).length > 1} />}
+          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} several={false} />}
           <Cast cast={d.cast} />
         </div>
         <div className="min-w-0 space-y-5">
-          {d.availableOn && d.availableOn.length > 0 && (serverRows(d).length > 1 || !d.library) && <AvailableOnCard d={d} />}
           {d.library && <YourLibrary lib={d.library} />}
           {d.library && <WillItPlay itemId={d.library.itemId} />}
           {d.library && <TitleInfo lib={d.library} />}

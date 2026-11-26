@@ -8,27 +8,24 @@ pages.
 - [Watch history](#watch-history)
 - [Stats](#stats)
 - [Who's watched it](#whos-watched-it)
-- [More than one server](#more-than-one-server)
 - [Privacy](#privacy)
 
 ## How plays are recorded
 
-StreamForge checks what's playing on **every media server** every 30 seconds
+StreamForge checks what's playing on your **media server** every 30 seconds
 and records each play: the person, the title and episode, the app and device,
-the server, whether it played directly or transcoded, and how long they
+whether it played directly or transcoded, and how long they
 actually watched (paused time isn't counted). Plays under a minute are treated
 as someone browsing and left out.
 
 To record in the background, StreamForge needs:
 
-- **Jellyfin as the main server:** a Jellyfin API key under **Settings →
-  Services → Jellyfin** (Dashboard → API Keys in Jellyfin).
-- **Plex or Emby as the main server:** nothing extra; the key from setup is
-  used.
-- **Extra servers:** nothing extra; each already has its key.
+- **Jellyfin:** a Jellyfin API key under **Settings → Services → Jellyfin**
+  (Dashboard → API Keys in Jellyfin).
+- **Plex or Emby:** nothing extra; the key from setup is used.
 
 **Before StreamForge was installed.** The recorder only knows plays from the
-day you install StreamForge. Older plays are filled in from the main server's
+day you install StreamForge. Older plays are filled in from the media server's
 own record, so the pages aren't empty on day one:
 
 - **Jellyfin:** the last time each person finished each movie and episode.
@@ -75,21 +72,8 @@ has plays but no watch time or transcode details. A note on the page says so.
 ## Who's watched it
 
 Admins see **Who's watched it** on a title's page: each person who has watched
-it, how far they got (or Finished), when, how many times, and on which server
-and device. Click a name to open their watch history.
-
-## More than one server
-
-With two or more media servers:
-
-- **Watch history** and **Stats** get a **Played on** filter: all servers, or
-  one, with each server's number of plays. It narrows everything on the page,
-  including the people list, charts and top lists.
-- Each play in Watch history shows the server's name with a coloured dot
-  (purple for Jellyfin, amber for Plex, green for Emby).
-- **Who's watched it** shows each person's server.
-
-With one server none of this appears, and the pages stay simple.
+it, how far they got (or Finished), when, how many times, and on which
+device. Click a name to open their watch history.
 
 ## Privacy
 

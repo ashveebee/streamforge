@@ -388,7 +388,7 @@
           <article class="card reveal" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Now Playing, live</h3>
-            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, across every media server you run: Jellyfin, Emby and Plex. Pause, message or stop a stream when you need to.</p>
+            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, on your Jellyfin, Plex or Emby server. Pause, message or stop a stream when you need to.</p>
           </article>
           <article class="card reveal" style="--c:var(--ok)">
             <div class="ico"><svg class="i"><use href="#i-activity"/></svg></div>
@@ -494,37 +494,37 @@
     <section id="servers" style="padding-top:0">
       <div class="wrap">
         <div class="center">
-          <div class="eyebrow">Every server, every viewer</div>
-          <h2>Know <span class="grad-text">who watched what, and where</span></h2>
-          <p class="section-lede">Run one server or five. StreamForge records plays on all of them, shows which server has each title, and builds Kometa collections for you.</p>
+          <div class="eyebrow">Every viewer, every title</div>
+          <h2>Know <span class="grad-text">who watched what, and how</span></h2>
+          <p class="section-lede">StreamForge records every play on your Jellyfin, Plex or Emby server, brings each title's details together in one page, and builds Kometa collections for you.</p>
         </div>
 
         <div class="show reveal">
           <div class="txt">
             <div class="eyebrow">Watch history</div>
-            <h3>Every person's history, across every server</h3>
-            <p>Pick someone, or everyone, and a time range. Each play shows the poster, the episode, the server and device, how long they watched and whether it transcoded.</p>
+            <h3>Every person's history</h3>
+            <p>Pick someone, or everyone, and a time range. Each play shows the poster, the episode, the device, how long they watched and whether it transcoded.</p>
             <ul class="ticks">
-              <li><svg class="i"><use href="#i-check"/></svg>Filled in from Jellyfin's or Plex's own history, so it isn't empty on day one</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Filter by server, person, time range or title</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Stats get the same server filter; click a viewer to open their history</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Filled in from your server's own history, so it isn't empty on day one</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Filter by person, time range or title</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Click a viewer in Stats to open their history</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="1800" alt="Watch history: a list of people on the left, and each play with its poster, server, device and time watched" loading="lazy"></div>
+          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="1800" alt="Watch history: a list of people on the left, and each play with its poster, device and time watched" loading="lazy"></div>
         </div>
 
         <div class="show flip reveal">
           <div class="txt">
             <div class="eyebrow">Title pages</div>
-            <h3>Which server has it, and in what quality</h3>
-            <p>Under every title: a chip for each server with its best copy, like 4K Dolby Vision on one and 1080p on another, or "not here".</p>
+            <h3>Everything about a title, in one place</h3>
+            <p>Details from your media server, Sonarr or Radarr and Seerr together: files and quality, audio and subtitle tracks, seasons and episodes, and a Play button that opens it in your server's own app.</p>
             <ul class="ticks">
-              <li><svg class="i"><use href="#i-check"/></svg>Media info for every copy on every server</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Who's watched it, on which server and device</li>
-              <li><svg class="i"><use href="#i-check"/></svg>With a single server it stays simple: none of this clutter appears</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Watched ticks on episodes: yours, and for admins everyone else's</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Who's watched it, on which device</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Request it, add it to Sonarr or Radarr, or search for a better copy</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/title-servers.jpg" width="2880" height="1800" alt="A movie page showing it is on two of three servers, with the copies on each server" loading="lazy"></div>
+          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="1800" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
         </div>
 
         <div class="features">
@@ -753,8 +753,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Recently added, linking to each title</li>
               <li><svg class="i"><use href="#i-check"/></svg>Users and when they were last active</li>
               <li><svg class="i"><use href="#i-check"/></svg>Run scheduled tasks such as a library scan now</li>
-              <li><svg class="i"><use href="#i-check"/></svg>More than one Jellyfin server, each in its own tab</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Emby and Plex get pages of their own, with a tab per server</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign in with Jellyfin, or single sign-on through your identity provider</li>
             </ul>
           </div>
         </div>
@@ -762,13 +761,13 @@
           <a class="shot" href="screenshots/emby.jpg"><img src="screenshots/emby.jpg" width="2880" height="1800" loading="lazy" alt="Emby page with libraries, users, server details and recently added items"></a>
           <div class="txt">
             <div class="eyebrow">Emby</div>
-            <h3>Emby, as your main server or alongside</h3>
-            <p>Only run Emby? Pick it at setup and everyone signs in with their Emby account. Or add Emby servers next to Plex or Jellyfin: each gets a page of its own, its streams on Now Playing and its health on System Status.</p>
+            <h3>Run Emby? Pick it at setup</h3>
+            <p>Choose Emby on first run and everyone signs in with their Emby account. The dashboard, stats, history, search and alerts all run on it.</p>
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Libraries with item counts</li>
               <li><svg class="i"><use href="#i-check"/></svg>Recently added, users and the activity log</li>
               <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop Emby streams</li>
-              <li><svg class="i"><use href="#i-check"/></svg>As many Emby servers as you run, each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Watch history filled in from Emby's activity log</li>
             </ul>
           </div>
         </div>
@@ -777,13 +776,13 @@
           <div class="txt">
             <div class="eyebrow">Plex</div>
             <h3>Only have Plex? That works too</h3>
-            <p>Make Plex your main server: everyone signs in with their Plex account, and the dashboard, stats, search, your page and alerts all run on Plex. No Jellyfin needed.</p>
+            <p>Choose Plex on first run: everyone signs in with their Plex account, and the dashboard, stats, search, your page and alerts all run on Plex. No Jellyfin needed.</p>
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Libraries, episode and track counts</li>
               <li><svg class="i"><use href="#i-check"/></svg>Recently added and recent plays from Plex's watch history</li>
               <li><svg class="i"><use href="#i-check"/></svg>Stop a Plex stream with a reason the viewer sees</li>
               <li><svg class="i"><use href="#i-check"/></svg>Sign in with Plex, for you and everyone you share with</li>
-              <li><svg class="i"><use href="#i-check"/></svg>As many Plex servers as you run, each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Watched ticks on episodes from Plex's watch history</li>
             </ul>
           </div>
         </div>
@@ -972,12 +971,12 @@
           <a class="card reveal guide" href="guides/install.html" style="--c:var(--violet)">
             <div class="ico"><svg class="i"><use href="#i-box"/></svg></div>
             <h3>Install and configure</h3>
-            <p>Docker Compose, first run with Plex, Jellyfin or Emby, connecting every service, Docker networking, reverse proxies and Tailscale.</p>
+            <p>Docker Compose, the two-step first run (your media server, then your apps, found for you), Docker networking, reverse proxies and Tailscale.</p>
           </a>
           <a class="card reveal guide" href="guides/media-servers.html" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-film"/></svg></div>
             <h3>Media servers</h3>
-            <p>Adding more Jellyfin, Plex and Emby servers, finding API keys and Plex tokens, and what works on each.</p>
+            <p>Choosing Jellyfin, Plex or Emby, running more than one, finding a Plex token, and what works on each.</p>
           </a>
           <a class="card reveal guide" href="guides/kometa.html" style="--c:#f59e0b">
             <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>

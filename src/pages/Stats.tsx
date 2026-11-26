@@ -5,7 +5,7 @@ import { BarChart3, Clock, MonitorSmartphone, Play, Repeat2, Users } from 'lucid
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useMainServer, usePlaybackStats } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
-import { ServerTag, SERVER_COLOR, SERVER_NAME } from '@/components/ui/ServerTag';
+import { SERVER_COLOR } from '@/components/ui/ServerTag';
 import { pct } from '@/lib/format';
 import type { PlaybackStats } from '@/lib/types';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -21,82 +21,19 @@ const DIRECT = SERIES.sonarr;
 const TRANSCODE = SERIES.radarr;
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type Servers = PlaybackStats['servers'];
-
-/**
- * Each server's colour: purple Jellyfin, amber Plex, green Emby. A second or
- * third server of the same kind gets a lighter or darker shade so they still differ.
- */
-function serverColors(servers: Servers) {
-  const seen: Record<string, number> = {};
-  const out: Record<string, string> = {};
-  for (const x of servers) {
-    const n = (seen[x.type] = (seen[x.type] ?? 0) + 1) - 1;
-    const base = SERVER_COLOR[x.type];
-    out[x.id] = n === 0 ? base : n % 2 ? `color-mix(in oklab, ${base} 60%, white)` : `color-mix(in oklab, ${base} 60%, black)`;
-  }
-  return out;
-}
-
-/** A bar split into each server's share, in the server colours. */
-function ServerSplit({ byServer, servers, colors, width }: { byServer: Record<string, number>; servers: Servers; colors: Record<string, string>; width: number }) {
-  const total = Object.values(byServer).reduce((a, b) => a + b, 0) || 1;
-  return (
-    <div className="flex h-full overflow-hidden rounded-full" style={{ width: `${width}%` }}>
-      {servers.map((x) =>
-        byServer[x.id] ? <div key={x.id} title={`${x.name}: ${byServer[x.id]}`} className="h-full" style={{ width: `${(byServer[x.id]! / total) * 100}%`, background: colors[x.id] }} /> : null,
-      )}
-    </div>
-  );
-}
-
 const shortDate = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-function DailyChart({ d, colors, accent }: { d: PlaybackStats; colors: Record<string, string>; accent: string }) {
+function DailyChart({ d, accent }: { d: PlaybackStats; accent: string }) {
   const main = useMainServer();
   const hasMethod = d.daily.some((x) => x.direct || x.transcode);
-  // With several servers and none picked, the bars are split by server; delivery is the other view.
-  const canSplit = d.servers.length > 1 && !d.server;
-  const [view, setView] = useState<'servers' | 'delivery'>('servers');
-  const mode = canSplit && (view === 'servers' || !hasMethod) ? 'servers' : hasMethod ? 'delivery' : 'plays';
-  const subtitle =
-    mode === 'servers'
-      ? 'Split by the server it was played on'
-      : mode === 'delivery'
-        ? 'Split by how the stream was delivered'
-        : d.servers.length > 1
-          ? 'From the server’s own history'
-          : main.plex
-            ? 'From Plex watch history'
-            : `From the ${main.name} activity log`;
   return (
     <Card>
       <CardHeader
         icon={BarChart3}
         accent={accent}
         title="Plays per day"
-        subtitle={subtitle}
-        action={
-          <div className="flex flex-wrap items-center gap-3">
-            {mode === 'servers' && <Legend items={d.servers.map((x) => ({ label: x.name, color: colors[x.id]! }))} />}
-            {mode === 'delivery' && <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} />}
-            {canSplit && hasMethod && (
-              <div role="radiogroup" aria-label="Split by" className="flex gap-0.5 rounded-lg border border-line p-0.5">
-                {(['servers', 'delivery'] as const).map((v) => (
-                  <button
-                    key={v}
-                    role="radio"
-                    aria-checked={view === v}
-                    onClick={() => setView(v)}
-                    className={cn('h-6 rounded-md px-2 text-[11px] font-medium transition', view === v ? 'bg-white/[0.08] text-ink' : 'text-ink-3 hover:text-ink-2')}
-                  >
-                    {v === 'servers' ? 'Servers' : 'Delivery'}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        }
+        subtitle={hasMethod ? 'Split by how the stream was delivered' : main.plex ? 'From Plex watch history' : `From the ${main.name} activity log`}
+        action={hasMethod ? <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} /> : undefined}
       />
       <CardBody>
         <div className="h-56">
@@ -106,20 +43,7 @@ function DailyChart({ d, colors, accent }: { d: PlaybackStats; colors: Record<st
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} minTickGap={24} />
               <YAxis {...axisProps} allowDecimals={false} width={40} />
               <Tooltip cursor={{ fill: 'rgb(255 255 255 / 0.04)' }} content={<ChartTooltip formatLabel={(l) => shortDate(l)} />} />
-              {mode === 'servers' ? (
-                d.servers.map((x, i) => (
-                  <Bar
-                    key={x.id}
-                    dataKey={(r: PlaybackStats['daily'][number]) => r.byServer?.[x.id] ?? 0}
-                    name={x.name}
-                    stackId="s"
-                    fill={colors[x.id]}
-                    radius={i === d.servers.length - 1 ? [4, 4, 0, 0] : undefined}
-                    stroke="var(--color-surface)"
-                    strokeWidth={1}
-                  />
-                ))
-              ) : mode === 'delivery' ? (
+              {hasMethod ? (
                 <>
                   <Bar dataKey="direct" name="Direct" stackId="m" fill={DIRECT} stroke="var(--color-surface)" strokeWidth={1} />
                   <Bar dataKey="transcode" name="Transcode" stackId="m" fill={TRANSCODE} radius={[4, 4, 0, 0]} stroke="var(--color-surface)" strokeWidth={1} />
@@ -188,7 +112,6 @@ function TopList({
   hours,
   linkFor,
   accent,
-  split,
 }: {
   title: string;
   icon: typeof Users;
@@ -196,8 +119,6 @@ function TopList({
   hours: boolean;
   linkFor?: (r: { name: string; link?: string }) => string | undefined;
   accent: string;
-  /** Several servers, none picked: each bar is split by server. */
-  split?: { servers: Servers; colors: Record<string, string> };
 }) {
   const max = Math.max(1, ...rows.map((r) => (hours ? r.hours : r.plays)));
   return (
@@ -221,11 +142,7 @@ function TopList({
                     </span>
                   </div>
                   <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.05]">
-                    {split ? (
-                      <ServerSplit byServer={r.byServer ?? {}} servers={split.servers} colors={split.colors} width={(v / max) * 100} />
-                    ) : (
-                      <div className="h-full rounded-full" style={{ width: `${(v / max) * 100}%`, background: accent }} />
-                    )}
+                    <div className="h-full rounded-full" style={{ width: `${(v / max) * 100}%`, background: accent }} />
                   </div>
                 </li>
               );
@@ -241,17 +158,15 @@ function TopList({
 
 export default function StatsPage() {
   const [days, setDays] = useState<number>(30);
-  const [server, setServer] = useState('');
-  const q = usePlaybackStats(days, server);
-  const servers = q.data?.servers ?? [];
-  const several = servers.length > 1;
-  const picked = servers.find((x) => x.id === server);
+  const q = usePlaybackStats(days);
   const main = useMainServer();
+  // The media server's colour: purple Jellyfin, amber Plex, green Emby.
+  const accent = SERVER_COLOR[main.type];
   const { user } = useAuth();
   return (
     <>
       <PageHeader
-        eyebrow={several ? (picked ? `${picked.name} · ${SERVER_NAME[picked.type]}` : 'All media servers') : main.name}
+        eyebrow={main.name}
         title="Playback stats"
         description="Who watches what, when, and how it gets to them."
         actions={
@@ -273,39 +188,13 @@ export default function StatsPage() {
       <QueryState query={q} skeleton={<PageLoader label="Crunching playback stats" hint="Adding up plays and watch time…" />}>
         {(d) => {
           const hours = d.totals.hours !== undefined;
-          const colors = serverColors(d.servers);
-          // A picked server tints the page in its colour.
-          const accent = d.server && colors[d.server] ? colors[d.server]! : SERIES.plays;
-          const split = d.servers.length > 1 && !d.server ? { servers: d.servers, colors } : undefined;
           return (
             <div className="space-y-5">
-              {several && (
-                <div role="tablist" aria-label="Media server" className="flex flex-wrap items-center gap-1.5">
-                  <span className="mr-1 text-xs text-ink-4">Played on</span>
-                  {[{ id: '', name: 'All servers', type: undefined, plays: d.servers.reduce((n, x) => n + x.plays, 0) }, ...d.servers].map((x) => (
-                    <button
-                      key={x.id || '*'}
-                      role="tab"
-                      aria-selected={server === x.id}
-                      onClick={() => setServer(x.id)}
-                      className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition', server === x.id ? 'border-white/15 bg-white/[0.08] text-ink' : 'border-line text-ink-3 hover:bg-white/[0.04] hover:text-ink-2')}
-                      style={
-                        server === x.id && x.id && colors[x.id]
-                          ? { borderColor: `color-mix(in oklab, ${colors[x.id]} 55%, transparent)`, background: `color-mix(in oklab, ${colors[x.id]} 14%, transparent)` }
-                          : undefined
-                      }
-                    >
-                      {x.type ? <ServerTag type={x.type} name={x.name} /> : x.name}
-                      <span className="text-ink-4 tabular">{x.plays}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {(d.source !== 'recorder' || !d.recording) && (
                 <p className="rounded-xl border border-line bg-white/[0.02] px-4 py-3 text-xs text-ink-3">
                   {!d.recording
                     ? 'Add a Jellyfin API key in Settings to record watch time and direct-play vs transcode. Until then these figures come from the Jellyfin activity log.'
-                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString() : 'now'} onwards; earlier days come from ${d.servers.length > 1 ? 'each server’s own history' : d.servers[0]?.type === 'plex' ? 'Plex watch history' : 'the server’s activity log'}.`}
+                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString() : 'now'} onwards; earlier days come from ${main.plex ? 'Plex watch history' : `the ${main.name} activity log`}.`}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -321,11 +210,11 @@ export default function StatsPage() {
                   hint="Share of plays that transcoded"
                 />
               </div>
-              <DailyChart d={d} colors={colors} accent={accent} />
+              <DailyChart d={d} accent={accent} />
               <div className="grid gap-5 xl:grid-cols-3">
-                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} accent={accent} split={split} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}${d.server ? `&server=${encodeURIComponent(d.server)}` : ''}` : undefined} />
-                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} accent={accent} split={split} linkFor={(r) => r.link} />
-                <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} accent={accent} split={split} />
+                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} accent={accent} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}` : undefined} />
+                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} accent={accent} linkFor={(r) => r.link} />
+                <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} accent={accent} />
               </div>
               <Heatmap d={d} accent={accent} />
             </div>

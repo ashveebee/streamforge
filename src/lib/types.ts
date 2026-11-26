@@ -463,7 +463,7 @@ export interface JellyfinServerRef {
 export interface MediaServerView {
   id: string;
   type: MediaServerType;
-  /** The server people sign in with (can't be switched off or removed). */
+  /** Always true: the media server chosen at setup. */
   main?: boolean;
   name: string;
   url: string;
@@ -477,14 +477,11 @@ export interface MediaServerView {
 /** A media server found on the local network. */
 export interface DiscoveredServer {
   id: string;
-  /** Settings discovery only; the first-run search lists Jellyfin servers. */
   type?: MediaServerType;
   name: string;
   url: string;
   version?: string;
   reachable: boolean;
-  /** Settings only: already the main server or an extra one. */
-  added?: boolean;
 }
 
 /** An extra instance as shown on the Settings page. */
@@ -615,13 +612,12 @@ export interface PlaybackStats {
   recording: boolean;
   recordingSince?: string;
   totals: { plays: number; hours?: number; users: number; transcodeShare?: number };
-  /** `byServer`: plays per server id, for colouring by server. */
-  daily: { date: string; plays: number; direct: number; transcode: number; hours: number; byServer: Record<string, number> }[];
+  daily: { date: string; plays: number; direct: number; transcode: number; hours: number }[];
   /** [weekday Mon..Sun][hour 0..23] → plays started. */
   heatmap: number[][];
-  topUsers: { name: string; plays: number; hours: number; byServer: Record<string, number> }[];
-  topTitles: { name: string; plays: number; hours: number; byServer: Record<string, number>; link?: string }[];
-  topClients: { name: string; plays: number; hours: number; byServer: Record<string, number> }[];
+  topUsers: { name: string; plays: number; hours: number }[];
+  topTitles: { name: string; plays: number; hours: number; link?: string }[];
+  topClients: { name: string; plays: number; hours: number }[];
 }
 
 export interface StorageForecast {

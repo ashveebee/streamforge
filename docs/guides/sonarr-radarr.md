@@ -83,7 +83,7 @@ Your choices are remembered per instance for next time.
 
 **Cleanup suggestions** lists big movies and series nobody has watched in 3
 months, 6 months, 1 year or 2 years, biggest first, with the space each would
-free. Plays on every media server count. Titles added recently are never
+free. Every play on your media server counts. Titles added recently are never
 suggested.
 
 **Watched by everyone** lists movies and series that every person you choose
@@ -98,8 +98,8 @@ has finished, biggest first. A series counts once every episode is watched.
 
 On both cards, the bookmark button on a row means **Keep**: the title is
 never suggested again. Removing always goes through Sonarr or Radarr, so
-nothing gets downloaded again. **Watched by everyone** needs Jellyfin as the
-main server, because it uses Jellyfin's watched status for each user.
+nothing gets downloaded again. **Watched by everyone** needs Jellyfin as your
+media server, because it uses Jellyfin's watched status for each user.
 
 ## Stuck downloads and auto-import
 
