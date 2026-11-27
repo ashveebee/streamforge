@@ -74,9 +74,10 @@ server.
 - **Multiple languages.** English, Español, Français, Deutsch and Português
   (Brasil). StreamForge follows the browser's language, and anyone can change it
   on the sign-in screen or on **My activity**; the choice is saved per device.
-  Dates and numbers follow the chosen language everywhere. The navigation,
-  search, sign-in, Overview, Settings → Services and My activity are translated
-  so far; other pages show English until they are converted.
+  The whole interface is translated, and dates and numbers follow the chosen
+  language. Text that comes from the server or your apps (error messages, audit
+  log entries, buffering findings, notifications, Sonarr warnings and so on)
+  stays in English.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:

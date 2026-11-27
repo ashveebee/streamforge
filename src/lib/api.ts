@@ -1,4 +1,9 @@
-import { t } from '@/i18n';
+/**
+ * Text this file shows itself. The language layer fills it in, so this file
+ * imports nothing from the app (the demo server type-checks it on its own).
+ */
+export const apiText = { unreachable: 'Cannot reach the StreamForge server' };
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -44,7 +49,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     });
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
-    throw new ApiError(t('common.unreachable'), 0, 'network');
+    throw new ApiError(apiText.unreachable, 0, 'network');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

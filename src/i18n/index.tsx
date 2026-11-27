@@ -4,14 +4,15 @@ import es from './locales/es';
 import fr from './locales/fr';
 import de from './locales/de';
 import ptBR from './locales/pt-BR';
+import { apiText } from '@/lib/api';
 
 /**
  * A small, typed translation layer. English is the source of truth: every
  * other locale must have the same keys (the type checker enforces it), and a
  * missing or empty string falls back to English at runtime.
  *
- * To add a language: copy `locales/en.ts`, translate it, and add it to
- * LOCALES below.
+ * To add a language: copy the `locales/en/` folder, translate every file,
+ * and add it to LOCALES below. See CONTRIBUTING.md.
  */
 export const LOCALES = [
   { code: 'en', name: 'English', messages: en },
@@ -102,6 +103,12 @@ function resolve(locale: Locale, key: string, vars?: Vars): string {
   return interpolate(leaf, vars);
 }
 
+/** Keeps text shown by modules that can't import this one in the active language. */
+function syncPlainText() {
+  apiText.unreachable = resolve(current, 'common.unreachable');
+}
+syncPlainText();
+
 /** Translate outside React. Prefer `useT()` in components. */
 export const t: TFunction = (key, vars) => resolve(current, key, vars);
 
@@ -118,6 +125,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const setLocale = useCallback((l: Locale) => {
     current = l;
+    syncPlainText();
     try {
       localStorage.setItem(STORAGE_KEY, l);
     } catch {

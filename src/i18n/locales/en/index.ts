@@ -1,4 +1,4 @@
-// Generated: each area of the app has its own file. Add an area in en/ first.
+// Every area of the app has its own file. A new area goes in en/ first, then here and in each language.
 import core from './core';
 import admin from './admin';
 import kometa from './kometa';
