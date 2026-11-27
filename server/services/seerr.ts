@@ -1,8 +1,11 @@
 import { derived } from '../settings.js';
-import { createClient, type ServiceClient } from '../lib/http.js';
+import { createClient, UpstreamError, type ServiceClient } from '../lib/http.js';
 import { cache } from '../lib/cache.js';
 import type { HealthProbe } from './types.js';
 import { emit } from './notify.js';
+import { mainSilo } from './mainServer.js';
+import { requestSource, siloRequests } from './requestSource.js';
+import * as silo from './silo.js';
 
 export const seerrClient = (url: string, apiKey: string) => createClient('seerr', url, { 'X-Api-Key': apiKey });
 export const seerr = derived('seerr', (s) => (s.url && s.apiKey ? seerrClient(s.url, s.apiKey) : undefined));
@@ -132,8 +135,10 @@ export async function seerrUserFor(jellyfinUserId: string) {
   return users.results.find((u) => u.jellyfinUserId?.replace(/-/g, '').toLowerCase() === id);
 }
 
-/** One user's own requests, newest first. */
+/** One user's own requests, newest first (from Silo when its requests are in use). */
 export async function userRequests(jellyfinUserId: string, take = 20) {
+  const si = await siloRequests();
+  if (si) return { linked: true, requests: await silo.requestsBy(si, jellyfinUserId) };
   const user = await seerrUserFor(jellyfinUserId);
   if (!user) return { linked: false, requests: [] };
   const res = await cache.get(`seerr:requests:user:${user.id}`, 30_000, () =>
@@ -143,6 +148,8 @@ export async function userRequests(jellyfinUserId: string, take = 20) {
 }
 
 export async function seerrOverview() {
+  const si = await siloRequests();
+  if (si) return silo.requestsOverview(si);
   const [counts, recent, pending] = await Promise.all([
     cache.get('seerr:count', 15_000, () => seerr()!.get<RequestCount>('/api/v1/request/count')),
     requests('all', 16),
@@ -168,31 +175,40 @@ export async function seerrOverview() {
 /* Approvals                                                           */
 /* ------------------------------------------------------------------ */
 
-export async function decideRequest(id: number, decision: 'approve' | 'decline') {
+export async function decideRequest(id: string, decision: 'approve' | 'decline') {
+  const si = await siloRequests();
+  if (si) return silo.decideRequest(si, id, decision);
+  if (!/^[1-9][0-9]{0,9}$/.test(id)) throw new UpstreamError('Unknown request', 400, 'seerr');
   await seerr()!.post(`/api/v1/request/${id}/${decision}`, {});
   cache.delete('seerr:requests:');
   cache.delete('seerr:count');
+  // Title pages cache each title's details and request state.
+  cache.delete('seerr:details:');
 }
 
 /*
  * Watches for new pending requests so admins can be notified. The first look
  * after start-up only records what is already waiting.
  */
-let known: Set<number> | undefined;
+let known: Set<number | string> | undefined;
 
 async function checkPending() {
-  if (!seerr()) {
+  const source = await requestSource();
+  if (!source) {
     known = undefined;
     return;
   }
-  const pending = await requests('pending', 20);
+  const si = source === 'silo' ? mainSilo() : undefined;
+  const pending: { id: number | string; title: string; year?: number; type: 'movie' | 'tv'; seasons: number[]; is4k: boolean; requestedBy: string }[] = si
+    ? await silo.pendingRequests(si)
+    : await requests('pending', 20);
   const fresh = known ? pending.filter((r) => !known!.has(r.id)) : [];
   known = new Set(pending.map((r) => r.id));
   for (const r of fresh) {
     emit('request_pending', {
       title: `New request: ${r.title}${r.year ? ` (${r.year})` : ''}`,
       message: `${r.requestedBy} requested this ${r.type === 'tv' ? `series${r.seasons.length ? ` (season ${r.seasons.join(', ')})` : ''}` : 'movie'}${r.is4k ? ' in 4K' : ''}.`,
-      url: '/seerr',
+      url: si ? '/requests' : '/seerr',
     });
   }
 }

@@ -37,6 +37,7 @@ import { addClient, adapterFor, CLIENT_FIELDS, CLIENT_NAMES, CLIENT_TYPES, descr
 import { addInstance, describeInstances, getStoredInstance, removeInstance, updateInstance } from './services/instances.js';
 import { describeServers, getStoredServer, ignoredServers, MEDIA_SERVER_NAMES, updateServer, type MediaServerType } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
+import * as silo from './services/silo.js';
 import { isMainServer, notJellyfinMain } from './services/mainServer.js';
 import { APPS, discoverApps, fromConnectedApps, type AppId } from './services/appDiscovery.js';
 import { kometaSettings, updateKometa } from './services/kometa.js';
@@ -403,6 +404,7 @@ const KEY_HELP: Record<MediaServerType, string> = {
   jellyfin: 'an API key (Dashboard → API Keys in Jellyfin)',
   emby: 'an API key (Settings → Advanced → API Keys in Emby)',
   plex: 'a Plex token (see the X-Plex-Token help article from Plex)',
+  silo: 'an admin API key (Settings → API Keys in Silo)',
 };
 
 /** Tests a media server's details with the probe for its type. */
@@ -410,7 +412,7 @@ async function testMediaServer(type: MediaServerType, target: { url: string; api
   if (type === 'jellyfin') return runTest('jellyfin', target);
   const started = performance.now();
   try {
-    const r = type === 'plex' ? await plex.probe(target) : await jellyfin.embyProbe(target);
+    const r = type === 'plex' ? await plex.probe(target) : type === 'silo' ? await silo.probe(target) : await jellyfin.embyProbe(target);
     return { ok: true as const, version: r.version, latencyMs: Math.round(performance.now() - started), issues: r.issues };
   } catch (err) {
     if (!(err instanceof UpstreamError)) console.error(`[settings] test ${type}`, err);

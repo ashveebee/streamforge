@@ -172,6 +172,7 @@ class PaletteBoundary extends Component<{ children: React.ReactNode; onReset: ()
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const main = useMainServer();
+  const cfgRequests = useServiceConfig().data?.requests;
   const [text, setText] = useState('');
   const q = useDeferredValue(text.trim());
   const pages = usePages();
@@ -293,7 +294,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   {s.hits.map((h) => {
                     const i = ++idx;
                     const st = h.status ? STATUS[h.status] : undefined;
-                    const svc = h.source === 'plex' || h.source === 'emby' ? MEDIA_SERVERS[h.source] : SERVICES[h.source as ServiceId];
+                    const svc = h.source === 'plex' || h.source === 'emby' || h.source === 'silo' ? MEDIA_SERVERS[h.source] : SERVICES[h.source as ServiceId];
                     return (
                       <div key={h.key} id={`cmd-${i}`} role="option" aria-selected={active === i} onMouseMove={() => setActive(i)} onClick={() => go(i)} className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2', active === i ? 'bg-white/[0.07]' : '')}>
                         <FadeImage src={h.image} alt="" className="h-12 w-8 shrink-0 rounded-md ring-1 ring-white/10" />
@@ -328,7 +329,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               <span><kbd className="font-sans">↑↓</kbd> to move</span>
               <span><kbd className="font-sans">↵</kbd> to open</span>
               {d?.canRequest && <span className="hidden sm:inline"><kbd className="font-sans">⇧↵</kbd> to request</span>}
-              <span className="ml-auto">Searches {main.name}, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
+              <span className="ml-auto">Searches {main.name}, your *arr apps{d?.canRequest ? (cfgRequests === 'silo' ? ' and Silo requests' : ' and Seerr') : ''}</span>
             </div>
           </motion.div>
         </motion.div>

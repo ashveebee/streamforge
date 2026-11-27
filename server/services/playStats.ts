@@ -2,10 +2,11 @@ import { db } from '../lib/db.js';
 import { isConfigured } from '../settings.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
-import { allLibraryItems, canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
+import { allLibraryItems, canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex, mainSilo } from './mainServer.js';
 import { titleLinks } from './history.js';
 import { mediaServers } from './mediaServers.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 
 /*
  * Playback statistics.
@@ -46,7 +47,7 @@ async function everyStream() {
   const extras = mediaServers().filter((s) => s.id !== main?.id);
   const lists = await Promise.all([
     mainNowPlaying().catch(() => undefined),
-    ...extras.map((srv) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv)).catch(() => undefined)),
+    ...extras.map((srv) => (srv.type === 'plex' ? plex.nowPlaying(srv) : srv.type === 'silo' ? silo.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv)).catch(() => undefined)),
   ]);
   if (lists.every((l) => l === undefined)) return undefined;
   return lists.flatMap((l) => l ?? []);
@@ -144,7 +145,7 @@ const mainId = () => mainExtra()?.id ?? 'jellyfin';
 /** Every media server StreamForge knows, main one first. */
 async function allServers() {
   const main = mainExtra();
-  const list: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' }[] = [];
+  const list: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo' }[] = [];
   if (!main && isConfigured('jellyfin')) list.push({ id: 'jellyfin', name: (await jellyfin.publicInfo().catch(() => undefined))?.ServerName ?? 'Jellyfin', type: 'jellyfin' });
   if (main) list.push({ id: main.id, name: main.name, type: main.type });
   for (const s of mediaServers()) if (s.id !== main?.id) list.push({ id: s.id, name: s.name, type: s.type });
@@ -173,7 +174,10 @@ async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
   const sources: Promise<Play[]>[] = [];
   const p = mainPlex();
   const emby = mainEmby();
+  const si = mainSilo();
   if (p) sources.push(plex.playsSince(p, since).then((xs) => xs.map((x) => ({ server: p.id, user: x.user, title: x.title, group: x.group, at: x.at }))));
+  // Silo's history has watch time and how each play was delivered, like StreamForge's own recorder.
+  else if (si) sources.push(silo.playsSince(si, since).then((xs) => xs.map((x) => ({ server: si.id, user: x.user, title: x.title, group: x.group, at: x.at, watchedMs: x.watchedMs, method: x.method, client: x.client }))));
   else if (emby) sources.push(jellyfin.remotePlaybackEntries(emby, new Date(since)).then((es) => fromLog(emby.id, es)));
   else if (isConfigured('jellyfin')) sources.push(jellyfin.playbackEntries(ctx, new Date(since)).then((es) => fromLog(mainId(), es)));
   const results = await Promise.allSettled(sources);

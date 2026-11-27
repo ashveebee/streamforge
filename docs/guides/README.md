@@ -6,7 +6,7 @@ Step-by-step guides for setting up and using StreamForge. The
 | Guide | What it covers |
 | --- | --- |
 | [Install and configure](install.md) | Docker Compose, first-run setup, connecting each service, Docker networking, reverse proxies and Tailscale, updating and backups |
-| [Media servers: Jellyfin, Plex and Emby](media-servers.md) | Choosing Jellyfin, Plex or Emby, running more than one, finding a Plex token, what works on each |
+| [Media servers: Jellyfin, Plex, Emby and Silo](media-servers.md) | Choosing Jellyfin, Plex, Emby or Silo, running more than one, finding a Plex token, what works on each |
 | [Kometa](kometa.md) | Run reports through webhooks, and making collections from StreamForge: mounting the config folder, wiring up `collection_files`, every collection option, troubleshooting |
 | [Sonarr and Radarr](sonarr-radarr.md) | Connecting instances (including 4K and anime instances), adding titles one at a time or in bulk, every add option, freeing up space |
 | [Watch history and stats](watch-history-and-stats.md) | How plays are recorded, the Watch history page, Stats, filtering by server, who's watched a title, privacy |

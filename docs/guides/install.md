@@ -4,7 +4,7 @@ This guide takes you from nothing to a working StreamForge: the container,
 your media server, your other services, and getting to it from outside your
 home. It takes about 15 minutes.
 
-**You need:** Docker (with Compose), and a Jellyfin, Plex or Emby server that
+**You need:** Docker (with Compose), and a Jellyfin, Plex, Emby or Silo server that
 the machine running StreamForge can reach.
 
 - [1. Start the container](#1-start-the-container)
@@ -100,6 +100,17 @@ needs to reach `plex.tv` (for sign-in) and your Plex server.
 2. Enter the server address (or find it on the network).
 3. Sign in with an **Emby administrator** account. StreamForge creates its own
    API key on the server for background features.
+
+### Silo
+
+1. Choose **Silo**.
+2. Enter the server's web address, for example `http://192.168.1.10:8090`
+   (Silo's own port, not its Jellyfin-compatible 8096).
+3. Sign in with a **Silo admin** account. StreamForge creates its own admin
+   API key on Silo for background features.
+
+Silo is pre-release, and its API can still change before 1.0. StreamForge uses
+Silo's native `/api/v2`.
 
 ## 3. First run, step 2: set up your apps
 

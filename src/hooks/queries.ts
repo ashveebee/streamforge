@@ -64,11 +64,13 @@ export const useServiceConfig = () =>
         instances: ArrInstanceRef[];
         jellyfinServers?: JellyfinServerRef[];
         /** The server people sign in with. */
-        mainServer?: 'jellyfin' | 'plex' | 'emby';
+        mainServer?: 'jellyfin' | 'plex' | 'emby' | 'silo';
         kometa?: boolean;
         access: Area[] | null;
         downloadClients?: boolean;
         moonfin?: { openIn: 'web' | 'app'; web?: string };
+        /** Where requests go: Seerr, or Silo's own request system. */
+        requests?: 'seerr' | 'silo';
       }>('/config'),
     staleTime: Infinity,
   });
@@ -77,9 +79,9 @@ export const useServiceConfig = () =>
 export function useMainServer() {
   const { data } = useServiceConfig();
   const type = data?.mainServer ?? 'jellyfin';
-  const name = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[type];
-  /** `other`: the sign-in server is Plex or Emby, so Jellyfin-only features are off. */
-  return { type, name, plex: type === 'plex', emby: type === 'emby', other: type !== 'jellyfin' };
+  const name = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' }[type];
+  /** `other`: the sign-in server is Plex, Emby or Silo, so Jellyfin-only features are off. */
+  return { type, name, plex: type === 'plex', emby: type === 'emby', silo: type === 'silo', other: type !== 'jellyfin' };
 }
 
 export function useConfigured(id: ServiceId) {
@@ -455,7 +457,7 @@ export function useSearch(kind: ArrKind | 'lidarr' | 'readarr') {
 export function useDecideRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, decision }: { id: number; decision: 'approve' | 'decline' }) =>
+    mutationFn: ({ id, decision }: { id: number | string; decision: 'approve' | 'decline' }) =>
       api<{ ok: true }>(`/seerr/requests/${id}/${decision}`, { method: 'POST' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seerr'] }),
   });

@@ -22,7 +22,7 @@ export function ActivityWidget({ limit = 8, server, serverType: given }: { limit
   const q = useActivity(server);
   return (
     <Card className="h-full">
-      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
+      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : serverType === 'silo' ? 'Recent plays from Silo’s playback history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
       <CardBody>
         <QueryState
           query={q}

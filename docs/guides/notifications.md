@@ -32,7 +32,7 @@ that one is saved.
 | **Auto-import succeeded** | A stuck download was imported |
 | **Import failed or gave up** | An import failed, or auto-import gave up |
 | **Stalled download removed** | Stalled download cleanup removed something |
-| **New request to approve** | Someone made a request in Seerr |
+| **New request to approve** | Someone made a request in Seerr (or in Silo, when Silo's own requests are on) |
 | **Transcode and bandwidth alerts** | Too many transcodes, too much bandwidth, or a 4K file transcoding |
 | **Weekly digest** | Every week: what was added and what people watched |
 | **StreamForge update available** | A new release is out |

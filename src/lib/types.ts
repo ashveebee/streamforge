@@ -346,7 +346,10 @@ export interface ProwlarrOverview {
 }
 
 export interface SeerrRequest {
-  id: number;
+  /** Seerr's ids are numbers; Silo's are long numbers kept as strings. */
+  id: number | string;
+  /** Silo only: where it was sent after approval and how the download is going. */
+  delivery?: { phase: string; server?: string; percent?: number; eta?: string; message?: string };
   type: 'movie' | 'tv';
   title: string;
   year?: number;
@@ -449,7 +452,7 @@ export interface ArrInstanceRef {
   primary: boolean;
 }
 
-export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
+export type MediaServerType = 'jellyfin' | 'emby' | 'plex' | 'silo';
 
 /** A media server as listed in /api/config (only when there are several). */
 export interface JellyfinServerRef {
@@ -605,7 +608,7 @@ export interface MissingPage {
 export interface PlaybackStats {
   days: number;
   /** Every media server, with its plays in the range; a filter shows when there's more than one. */
-  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
+  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo'; plays: number }[];
   /** The server the figures are narrowed to, if any. */
   server?: string;
   source: 'recorder' | 'activity' | 'mixed';

@@ -7,9 +7,11 @@ import { jf, libraryItems, remote as jfRemote, type JfCtx } from './jellyfin.js'
 import { titleWatchers } from './history.js';
 import { mediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
-import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
+import * as silo from './silo.js';
+import { allLibraryItems, idKeys, mainSilo, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 import { seasonWatch, type Me } from './watchState.js';
+import { requestSource, siloRequests } from './requestSource.js';
 
 /*
  * Title details: everything StreamForge knows about one movie or series,
@@ -48,7 +50,8 @@ interface SeerrDetails {
   mediaInfo?: {
     status?: number;
     seasons?: { seasonNumber: number; status: number }[];
-    requests?: { id: number; status: number; createdAt: string; is4k?: boolean; requestedBy?: { displayName?: string }; seasons?: { seasonNumber: number }[] }[];
+    /** Seerr's ids are numbers; Silo's are long numbers kept as strings. */
+    requests?: { id: number | string; status: number; createdAt: string; is4k?: boolean; requestedBy?: { displayName?: string }; seasons?: { seasonNumber: number }[] }[];
   };
 }
 
@@ -106,8 +109,32 @@ const remote = (imgs: ArrImage[] | undefined, type: string) => {
 };
 
 async function seerrDetails(type: MediaType, tmdbId: number) {
+  // Silo's own requests, when in use, give the same TMDb details and request state.
+  const si = await siloRequests();
+  if (si) return (await silo.titleDetail(si, type, tmdbId)) as SeerrDetails | undefined;
   if (!isConfigured('seerr')) return undefined;
   return cache.get(`seerr:details:${type}:${tmdbId}`, 60_000, () => seerr()!.get<SeerrDetails>(`/api/v1/${type}/${tmdbId}`)).catch(() => undefined);
+}
+
+/** Titles like this one (TMDb recommendations) from Seerr, with whether each is in the library or requested. */
+async function seerrSimilar(type: MediaType, tmdbId: number) {
+  if (!isConfigured('seerr')) return [];
+  type R = { id: number; mediaType?: string; title?: string; name?: string; releaseDate?: string; firstAirDate?: string; posterPath?: string; mediaInfo?: { status?: number } };
+  const res = await cache
+    .get(`seerr:similar:${type}:${tmdbId}`, 30 * 60_000, () => seerr()!.get<{ results?: R[] }>(`/api/v1/${type}/${tmdbId}/recommendations`, { page: 1 }))
+    .catch(() => undefined);
+  return (res?.results ?? []).slice(0, 20).map((r) => {
+    const date = r.releaseDate ?? r.firstAirDate;
+    const st = r.mediaInfo?.status ?? 0;
+    return {
+      type: (r.mediaType === 'tv' ? 'tv' : r.mediaType === 'movie' ? 'movie' : type) as MediaType,
+      tmdbId: r.id,
+      title: r.title ?? r.name ?? 'Untitled',
+      year: date ? Number(date.slice(0, 4)) || undefined : undefined,
+      poster: r.posterPath ? `${TMDB}/w342${r.posterPath}` : undefined,
+      status: (st === 5 ? 'available' : st === 4 ? 'partial' : st === 2 || st === 3 ? 'requested' : 'none') as 'available' | 'partial' | 'requested' | 'none',
+    };
+  });
 }
 
 /** Library entries for this title in every Sonarr/Radarr instance. */
@@ -183,7 +210,7 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
         }
         const srv = mediaServer(a.server);
         if (!srv) return;
-        const got = await (srv.type === 'plex' ? plex.itemFiles(srv, a.itemId, opts.isAdmin) : remoteFiles(srv, a.itemId, opts.isAdmin)).catch(() => undefined);
+        const got = await (srv.type === 'plex' ? plex.itemFiles(srv, a.itemId, opts.isAdmin) : srv.type === 'silo' ? silo.itemFiles(srv, a.itemId, opts.isAdmin) : remoteFiles(srv, a.itemId, opts.isAdmin)).catch(() => undefined);
         if (got) Object.assign(a, got);
       }),
     );
@@ -259,10 +286,14 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     is4k: !!r.is4k,
     seasons: (r.seasons ?? []).map((x) => x.seasonNumber),
   }));
+  const source = await requestSource();
   if (!canSeeRequests) {
     // Members only see their own requests.
-    const me = await seerrUserFor(ctx.userId).catch(() => undefined);
-    requests = me ? requests.filter((r) => r.requestedBy === me.displayName) : [];
+    const si = source === 'silo' ? mainSilo() : undefined;
+    const myName = si
+      ? (await silo.accountList(si).catch(() => [])).find((u) => u.id === ctx.userId)?.name
+      : (await seerrUserFor(ctx.userId).catch(() => undefined))?.displayName;
+    requests = myName ? requests.filter((r) => r.requestedBy === myName) : [];
   }
 
   const canRequestArea = opts.isAdmin || opts.can('requests');
@@ -313,12 +344,14 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     })),
     requests,
     can: {
-      request: canRequestArea && isConfigured('seerr') && (type === 'movie' ? availability === 'none' || availability === 'missing' : missingSeasons > 0 || availability === 'none'),
+      request: canRequestArea && !!source && (type === 'movie' ? availability === 'none' || availability === 'missing' : missingSeasons > 0 || availability === 'none'),
       add: opts.isAdmin && arr.length === 0 && arrInstances(type === 'movie' ? 'radarr' : 'sonarr').length > 0,
       search: opts.isAdmin && arr.length > 0,
-      approve: opts.isAdmin && isConfigured('seerr'),
+      approve: opts.isAdmin && !!source,
     },
     sources: { seerr: !!s, jellyfin: !!jfItem },
+    /** More like this: TMDb recommendations from Silo or Seerr. */
+    similar: source === 'silo' ? ((s as { similar?: unknown[] } | undefined)?.similar ?? []) : source === 'seerr' ? await seerrSimilar(type, tmdbId) : [],
   };
 }
 
@@ -519,7 +552,7 @@ async function serverDetails(availableOn: { server: string; itemId: string }[]) 
   for (const a of availableOn) {
     const srv = mediaServer(a.server);
     if (!srv) continue;
-    const d = await (srv.type === 'plex' ? plex.itemDetails(srv, a.itemId) : remoteDetails(srv, a.itemId)).catch(() => undefined);
+    const d = await (srv.type === 'plex' ? plex.itemDetails(srv, a.itemId) : srv.type === 'silo' ? silo.itemDetails(srv, a.itemId) : remoteDetails(srv, a.itemId)).catch(() => undefined);
     if (d) return d;
   }
   return undefined;

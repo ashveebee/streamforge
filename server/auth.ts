@@ -13,10 +13,11 @@ import { beginSetup, disable as disableMfa, finishSetup, mfaEnabled, mfaInfo, ve
 import { authorizeUrl, finishLogin, oidcReady, oidcSettings } from './services/oidc.js';
 import * as jellyfin from './services/jellyfin.js';
 import { isConfigured, saveSettings } from './settings.js';
-import { mainEmby, mainPlex, mediaReady, notJellyfinMain, plexMode, setMainServer } from './services/mainServer.js';
+import { mainEmby, mainPlex, mainSilo, mediaReady, notJellyfinMain, plexMode, setMainServer } from './services/mainServer.js';
 import { addServer, describeServers, getStoredServer, updateServer } from './services/mediaServers.js';
 import * as plexAuth from './services/plexAuth.js';
 import * as plex from './services/plex.js';
+import * as silo from './services/silo.js';
 import { urlField } from './settingsRoutes.js';
 import { discoverServers } from './services/mediaDiscovery.js';
 
@@ -81,8 +82,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   if (Date.now() - session.lastValidatedAt > REVALIDATE_MS) {
-    if (session.method === 'plex' || session.method === 'emby') {
-      if (!(await (session.method === 'plex' ? revalidatePlex : revalidateEmby)(req, res, session))) return;
+    if (session.method === 'plex' || session.method === 'emby' || session.method === 'silo') {
+      const check = session.method === 'plex' ? revalidatePlex : session.method === 'silo' ? revalidateSilo : revalidateEmby;
+      if (!(await check(req, res, session))) return;
       sessions.touch(session, req.get('user-agent'));
       req.session = session;
       next();
@@ -160,6 +162,29 @@ async function revalidateEmby(req: Request, res: Response, session: Session) {
   return true;
 }
 
+/** Re-checks a Silo sign-in with StreamForge's admin key: the account still exists, is enabled and allowed in. */
+async function revalidateSilo(req: Request, res: Response, session: Session) {
+  const srv = mainSilo();
+  try {
+    if (!srv) throw new UpstreamError('Silo is no longer the sign-in server', 401);
+    const user = await silo.userStatus(srv, session.userId);
+    if (!user || !user.enabled) throw new UpstreamError('Access revoked', 401);
+    session.isAdmin = user.role === 'admin';
+    if (!session.isAdmin && !membersCanSignIn()) throw new UpstreamError('Access revoked', 401);
+    session.lastValidatedAt = Date.now();
+    sessions.save(session);
+  } catch (err) {
+    if (err instanceof UpstreamError && (err.status === 401 || err.status === 403)) {
+      sessions.destroy(session.id);
+      res.clearCookie(SESSION_COOKIE, cookieOptions(req));
+      res.status(401).json({ error: 'unauthenticated', message: 'Your Silo sign-in has ended' });
+      return false;
+    }
+    // Silo temporarily unreachable: keep the session, try again later.
+  }
+  return true;
+}
+
 /** Ends a sign-in on the server it came from (Jellyfin or Emby keep a device per sign-in). */
 async function remoteLogout(s: Pick<Session, 'method' | 'token' | 'deviceId'>) {
   if (s.method === 'password' || !s.method) await jellyfin.logout(s.token, s.deviceId);
@@ -220,6 +245,16 @@ const loginBody = z.object({
 export const authRouter = Router();
 
 authRouter.get('/server', async (_req, res) => {
+  const si = mainSilo();
+  if (si) {
+    try {
+      const info = await silo.probe({ url: si.url });
+      res.json({ type: 'silo', name: info.meta?.server ?? si.name, version: info.version, online: true, configured: true });
+    } catch {
+      res.json({ type: 'silo', name: si.name, online: false, configured: true });
+    }
+    return;
+  }
   const e = mainEmby();
   if (e) {
     try {
@@ -472,6 +507,93 @@ authRouter.post('/emby/setup', setupLimiter, async (req, res) => {
   }
 });
 
+/* ------------------------------ Silo sign-in ------------------------------ */
+
+/**
+ * First run, Silo: checks the server, signs the administrator in, creates an
+ * admin API key for background features, and makes it the media server.
+ */
+authRouter.post('/silo/setup', setupLimiter, async (req, res) => {
+  const b = z
+    .object({ url: urlField.refine((v) => v !== '', 'Enter your Silo server address'), username: z.string().trim().min(1).max(256), password: z.string().max(1024).default('') })
+    .strict()
+    .safeParse(req.body ?? {});
+  if (!b.success) {
+    res.status(400).json({ error: 'bad_request', message: b.error.issues[0]?.message ?? 'Invalid request' });
+    return;
+  }
+  if (mediaReady()) {
+    res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+    return;
+  }
+  const { url, username, password } = b.data;
+  let info;
+  try {
+    info = await silo.probe({ url });
+  } catch (err) {
+    res.status(502).json({ error: 'upstream', message: `Could not reach Silo: ${(err as Error).message}` });
+    return;
+  }
+  try {
+    const auth = await silo.login(url, username, password);
+    if (auth.user.role !== 'admin') {
+      res.status(403).json({ error: 'forbidden', message: 'Sign in with a Silo admin account to set StreamForge up.' });
+      return;
+    }
+    const apiKey = await silo.createApiKey(url, auth.accessToken);
+    if (mediaReady()) {
+      res.status(409).json({ error: 'already_configured', message: 'A media server is already set up.' });
+      return;
+    }
+    const name = typeof info.meta?.server === 'string' ? info.meta.server : 'Silo';
+    const serverId = await silo.identity(url);
+    const existing = describeServers().find((s) => s.type === 'silo' && s.url === url);
+    const srv = existing ? updateServer(existing.id, { apiKey, serverId, enabled: true })! : addServer({ type: 'silo', name, url, apiKey, serverId });
+    setMainServer('silo', srv.id);
+    audit({ ip: req.ip }, `[settings] Silo server “${name}” (${url}) set as the media server during first-run setup`);
+    // The person's Silo session stays server-side, for requests in their own name.
+    const session = startSession(req, res, { userId: auth.user.id, userName: auth.user.username, isAdmin: true, token: auth.accessToken, serverToken: auth.refreshToken, deviceId: newDeviceId(), serverId, method: 'silo' });
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Silo');
+    res.json({ user: publicUser(session) });
+  } catch (err) {
+    const e = err as UpstreamError;
+    if (e.status === 401) res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
+    else res.status(502).json({ error: 'upstream', message: `Could not finish setting up Silo: ${e.message}` });
+  }
+});
+
+/** Signs in to the Silo server with a username and password (from /login). */
+async function signInWithSilo(req: Request, res: Response, username: string, password: string) {
+  const srv = mainSilo()!;
+  try {
+    const { user, accessToken, refreshToken } = await silo.login(srv.url, username, password);
+    const isAdmin = user.role === 'admin';
+    if (!isAdmin && !membersCanSignIn()) {
+      audit({ userId: user.id, userName: user.username, ip: req.ip }, '[auth] sign-in refused: member access is off', false);
+      res.status(403).json({ error: 'forbidden', message: 'StreamForge is restricted to Silo admins.' });
+      return;
+    }
+    // StreamForge reads Silo with its admin key; the person's own Silo session stays
+    // server-side, only for making requests in their name.
+    const data: SessionData = { userId: user.id, userName: user.username, isAdmin, token: accessToken, serverToken: refreshToken, deviceId: newDeviceId(), serverId: srv.serverId, method: 'silo' };
+    if (mfaEnabled(data.userId)) {
+      const challenge = randomBytes(24).toString('base64url');
+      challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });
+      res.json({ mfaRequired: true, challenge });
+      return;
+    }
+    const session = startSession(req, res, data);
+    audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Silo');
+    res.json({ user: publicUser(session) });
+  } catch (err) {
+    const e = err as UpstreamError;
+    if (e.status === 401) {
+      audit({ userName: username, ip: req.ip }, '[auth] sign-in failed: wrong username or password', false);
+      res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
+    } else res.status(502).json({ error: 'upstream', message: `Could not reach Silo: ${e.message}` });
+  }
+}
+
 /** Signs in to the main Emby server with a name and password (from /login). */
 async function signInWithEmby(req: Request, res: Response, username: string, password: string) {
   const srv = mainEmby()!;
@@ -574,6 +696,10 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   }
   if (mainEmby()) {
     await signInWithEmby(req, res, body.data.username, body.data.password);
+    return;
+  }
+  if (mainSilo()) {
+    await signInWithSilo(req, res, body.data.username, body.data.password);
     return;
   }
   if (!isConfigured('jellyfin')) {

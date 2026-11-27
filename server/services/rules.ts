@@ -2,16 +2,17 @@ import { randomBytes } from 'node:crypto';
 import { audit } from '../lib/audit.js';
 import { readPref, writePref } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
-import { isConfigured } from '../settings.js';
 import { healthSnapshot } from '../health.js';
 import { adapterFor, clientsSnapshot, enabledClients } from './clients/index.js';
 import { runCleanup, stalledMap } from './cleanup.js';
 import { arrInstances } from './instances.js';
 import { jf, serverApiKey, type JfCtx } from './jellyfin.js';
-import { mainNowPlaying, notJellyfinMain } from './mainServer.js';
+import { mainNowPlaying, mainSilo, notJellyfinMain } from './mainServer.js';
 import { emit } from './notify.js';
 import { reclaimSuggestions } from './reclaim.js';
 import { seerr } from './seerr.js';
+import { requestSource } from './requestSource.js';
+import * as silo from './silo.js';
 import { storageForecast } from './storage.js';
 
 /*
@@ -122,8 +123,10 @@ async function evaluate(r: Rule): Promise<Result> {
       return { matched: count >= n, summary: `${count} download${count === 1 ? ' is' : 's are'} stalled` };
     }
     case 'pending_requests': {
-      if (!isConfigured('seerr')) return { matched: false, summary: 'Seerr isn’t connected' };
-      const c = await seerr()!.get<{ pending: number }>('/api/v1/request/count');
+      const source = await requestSource();
+      if (!source) return { matched: false, summary: 'Requests aren’t set up' };
+      const si = source === 'silo' ? mainSilo() : undefined;
+      const c = si ? { pending: (await silo.pendingRequests(si)).length } : await seerr()!.get<{ pending: number }>('/api/v1/request/count');
       return { matched: c.pending >= n, summary: `${c.pending} request${c.pending === 1 ? '' : 's'} waiting` };
     }
     case 'active_streams': {

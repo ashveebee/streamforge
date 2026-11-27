@@ -153,7 +153,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
         if (!cur.where.includes(j.server.name)) cur.where.push(j.server.name);
         continue;
       }
-      const serverName = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[j.server.type];
+      const serverName = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' }[j.server.type];
       seen.set(key, {
         title: j.name,
         year: j.year,
@@ -173,7 +173,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
     hasRadarr: radarrs.length > 0,
     hasJellyfin: !!lib,
     /** What the library cross-checks compare with: one server's kind, or every media server. */
-    server: several ? 'your media servers' : jf?.servers[0] ? { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[jf.servers[0].type] : mainName(),
+    server: several ? 'your media servers' : jf?.servers[0] ? { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' }[jf.servers[0].type] : mainName(),
     /** Servers that couldn't be read, so their titles weren't compared. */
     unreachable: jf?.failed.length ? jf.failed : undefined,
     incomplete: section(incomplete),

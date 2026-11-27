@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, History, Images, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, History, Images, Inbox, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useServiceConfig } from '@/hooks/queries';
+import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useSeerr, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
@@ -90,14 +90,18 @@ export function Sidebar({
   const newVersion = user?.isAdmin ? updates.data?.available : undefined;
   const byId = new Map(health.data?.services.map((s) => [s.id, s]));
   // Services switched off in Settings are hidden from navigation.
-  const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
+  // Silo's own requests get a main-menu entry instead of a place under Services.
+  const siloRequests = config.data?.requests === 'silo';
+  const shown = SERVICE_ORDER.filter((id) => (config.data?.enabled?.[id] ?? true) && !(id === 'seerr' && siloRequests));
+  const requests = useSeerr();
+  const waiting = siloRequests && user?.isAdmin ? (requests.data?.counts.pending ?? 0) : 0;
   const streams = playing.data?.length ?? 0;
   // Emby and Plex get their own entries, right after Jellyfin, once a server of that kind is added.
   const servers = useJellyfinServers();
   const main = useMainServer();
   const mediaOn = config.data?.enabled?.jellyfin ?? true;
   // The sign-in server's kind comes first; Jellyfin only shows when there's a Jellyfin server.
-  const mediaTypes = [main.type, ...(['jellyfin', 'emby', 'plex'] as MediaServerType[]).filter((t) => t !== main.type)];
+  const mediaTypes = [main.type, ...(['jellyfin', 'emby', 'plex', 'silo'] as MediaServerType[]).filter((t) => t !== main.type)];
   const shownTypes = mediaTypes.filter((t) => mediaOn && (t === 'jellyfin' ? !main.other || servers.some((s) => s.type === 'jellyfin') : servers.some((s) => s.type === t)));
   const RANK: Record<ServiceHealth['status'], number> = { offline: 3, degraded: 2, unconfigured: 1, healthy: 0 };
   const worstOf = (type: MediaServerType) =>
@@ -175,6 +179,24 @@ export function Sidebar({
         <NavItem to="/digest" icon={Newspaper} label="This week" collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
         {user?.isAdmin && <NavItem to="/history" icon={History} label="Watch history" collapsed={collapsed} onNavigate={onNavigate} />}
+        {siloRequests && canSee('seerr') && (
+          <NavItem
+            to="/requests"
+            icon={Inbox}
+            label="Requests"
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+            trailing={
+              waiting > 0 ? (
+                collapsed ? (
+                  <span className="block size-2 rounded-full bg-warn" />
+                ) : (
+                  <span className="rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold text-warn tabular" title={`${waiting} waiting for approval`}>{waiting}</span>
+                )
+              ) : undefined
+            }
+          />
+        )}
         {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}

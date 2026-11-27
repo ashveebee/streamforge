@@ -4,6 +4,7 @@ import { arrProbe, arrQueue } from './services/arr.js';
 import { arrInstances, onInstancesChange } from './services/instances.js';
 import { MEDIA_SERVER_NAMES, mediaServers, onServersChange, type MediaServerType } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
+import * as silo from './services/silo.js';
 import { notJellyfinMain } from './services/mainServer.js';
 import { prowlarr } from './services/prowlarr.js';
 import { seerr, seerrProbe } from './services/seerr.js';
@@ -84,7 +85,7 @@ function extraProbe(id: string) {
   const srv = mediaServers().find((s) => s.id === id);
   if (!srv) return undefined;
   const target = { url: srv.url, apiKey: srv.apiKey };
-  return srv.type === 'plex' ? () => plex.probe(target) : srv.type === 'emby' ? () => jellyfin.embyProbe(target) : () => jellyfin.probe(target);
+  return srv.type === 'plex' ? () => plex.probe(target) : srv.type === 'silo' ? () => silo.probe(target) : srv.type === 'emby' ? () => jellyfin.embyProbe(target) : () => jellyfin.probe(target);
 }
 
 /** Every extra instance that should be monitored, with its display name. */

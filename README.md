@@ -1,11 +1,11 @@
 # StreamForge
 
-A modern control centre for a **Jellyfin, Plex or Emby** media server and the
+A modern control centre for a **Jellyfin, Plex, Emby or Silo** media server and the
 services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
 Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
 NZBGet). Each install watches one media server, chosen on first run; then
 StreamForge finds your apps on the network so you only paste their keys.
-Using Plex or Emby? See [Plex-only and Emby-only households](#plex-only-and-emby-only-households).
+Using Plex, Emby or Silo? See [Plex, Emby and Silo households](#plex-emby-and-silo-households).
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
@@ -58,7 +58,7 @@ server.
   </tr>
   <tr>
     <td><a href="docs/screenshots/history.jpg"><img src="docs/screenshots/history.jpg" alt="Watch history: people on the left, and each play with its poster, server, device and time watched"></a><br><b>Watch history.</b> Everyone's plays, with their device and time watched.</td>
-    <td><a href="docs/screenshots/title.jpg"><img src="docs/screenshots/title.jpg" alt="A movie page with its details, files, cast and who has watched it"></a><br><b>Title pages.</b> Details, files and audio tracks, and who has watched it.</td>
+    <td><a href="docs/screenshots/title.jpg"><img src="docs/screenshots/title.jpg" alt="A movie page with its details, files, cast and who has watched it"></a><br><b>Title pages.</b> Details, files and audio tracks, who has watched it, and more like this.</td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/buffering.jpg"><img src="docs/screenshots/buffering.jpg" alt="Buffering diagnosis: a stream that stalled, the likely cause with evidence, and what to try"></a><br><b>Why did it buffer?</b> Spots streams that stalled and explains the likely cause, from the transcoder to your upload.</td>
@@ -67,7 +67,7 @@ server.
 
 ## Features
 
-- **Jellyfin, Plex or Emby sign-in.** Users sign in with their account on your
+- **Jellyfin, Plex, Emby or Silo sign-in.** Users sign in with their account on your
   media server: a Jellyfin or Emby username and password, or **Sign in with
   Plex**. The server keeps the token, and the browser only holds an opaque
   HttpOnly session cookie. The user's profile and avatar come from that server.
@@ -271,7 +271,7 @@ server.
 ## Installation
 
 StreamForge runs as a single Docker container (images for `amd64` and `arm64`).
-All you need is Docker and a Jellyfin, Plex or Emby server it can reach.
+All you need is Docker and a Jellyfin, Plex, Emby or Silo server it can reach.
 
 > **Guides:** the [install and configure guide](docs/guides/install.md) walks
 > through everything below in more detail, including reverse proxies and
@@ -337,11 +337,19 @@ server you use. People sign in to StreamForge with their account on it.
   sign in with an **Emby administrator** account. StreamForge creates its own
   API key on the server for background features, and everyone else signs in
   with their Emby account.
+- **Silo:** enter your Silo server's web address (port 8090 by default) and
+  sign in with a **Silo admin** account. StreamForge creates its own admin API
+  key on Silo for background features, and everyone else signs in with their
+  Silo account. Silo is pre-release; StreamForge uses its native `/api/v2`.
+  When Silo's own requests are switched on, StreamForge uses them instead of
+  Seerr for the Requests page, Request buttons and approvals, with each
+  request's download progress. Silo sends approved requests through its
+  request servers, such as the community Sonarr & Radarr or Seerr plugins.
 
 Each install watches the one media server you choose. Running two? Run a
 StreamForge for each.
 
-<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin or Emby"></a>
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin, Emby or Silo"></a>
 <a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="32%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
 <a href="docs/screenshots/setup-emby.jpg"><img src="docs/screenshots/setup-emby.jpg" width="32%" alt="Emby setup: the server address, servers found on the network, and an administrator sign-in"></a>
 
@@ -357,9 +365,9 @@ know. Apps you skip are switched off; turn them on any time in Settings.
 
 <a href="docs/screenshots/setup-apps.jpg"><img src="docs/screenshots/setup-apps.jpg" width="60%" alt="Set up your apps: Sonarr and Seerr connected, Radarr, Prowlarr and Bazarr found with their addresses filled in, and an offer to connect Radarr using Seerr's details"></a>
 
-### Plex-only and Emby-only households
+### Plex, Emby and Silo households
 
-With Plex or Emby as your media server, the whole app runs on it. Jellyfin isn't
+With Plex, Emby or Silo as your media server, the whole app runs on it. Jellyfin isn't
 needed at all. **Emby** works almost exactly like Jellyfin (it has the same
 API): pausing and messaging streams, the activity log and scans all work. The
 notes below are mostly about **Plex**.
@@ -387,6 +395,29 @@ notes below are mostly about **Plex**.
   sign-on and Moonfin are Jellyfin features and are hidden (with Emby too).
 - **Needs:** the StreamForge server must be able to reach `plex.tv` (for
   sign-in) and your Plex server.
+
+**Silo** (pre-release) is read through its own API (`/api/v2`), with an admin
+API key StreamForge creates at setup.
+
+<a href="docs/screenshots/silo-only.jpg"><img src="docs/screenshots/silo-only.jpg" width="49%" alt="The dashboard of a Silo install: Silo streams, Requests in the menu with three waiting, and service health"></a>
+<a href="docs/screenshots/requests-silo.jpg"><img src="docs/screenshots/requests-silo.jpg" width="49%" alt="Silo's requests in StreamForge: three awaiting approval, and recent requests with download progress"></a>
+
+- **Silo sign-in:** username and password. Silo admins are StreamForge
+  administrators; other Silo users are members.
+- **Works the same:** dashboard, Now Playing (pause, message and stop), the
+  Silo page with libraries, users, recently added and scans, Stats and Watch
+  history (with watch time and direct play vs transcode, from Silo's playback
+  history), title pages, ⌘K search, cleanup suggestions, the weekly digest and
+  episode watched ticks.
+- **Requests:** when Silo's own requests are switched on, StreamForge uses them
+  instead of Seerr. **Requests** moves into the main menu with a count of
+  what's waiting; people request in their own Silo account (an admin's own
+  requests are approved straight away); and each request shows where Silo sent
+  it and how its download is going. To send requests to Sonarr and Radarr,
+  install Silo's community Sonarr & Radarr (or Seerr) requests plugin and add
+  your servers in Silo; see the [media server guide](docs/guides/media-servers.md).
+- **Not for Silo:** Kometa, continue watching on your page, and finding the
+  server on the network.
 
 ### 4. Change them later in Settings
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
+import { ScrollRow } from '@/components/ui/ScrollRow';
 import {
   ArrowLeft,
   Check,
@@ -23,8 +24,9 @@ import {
   Star,
   Users,
   X,
+  Sparkles,
 } from 'lucide-react';
-import { useDecideRequest } from '@/hooks/queries';
+import { useDecideRequest, useServiceConfig } from '@/hooks/queries';
 import {
   useInvalidateMedia,
   useJellyfinMedia,
@@ -37,6 +39,7 @@ import {
   type MediaFile,
   type TitleWatcher,
   type MediaDetails as Details,
+  type SimilarTitle,
   type MediaType,
   type Season,
   type WatchState,
@@ -113,13 +116,52 @@ function Hero({ title, year, tagline, poster, backdrop, facts, servers, children
   );
 }
 
+const SIMILAR_BADGE: Record<SimilarTitle['status'], { label: string; cls: string } | undefined> = {
+  available: { label: 'In library', cls: 'bg-ok text-black' },
+  partial: { label: 'Partly in library', cls: 'bg-ok/80 text-black' },
+  requested: { label: 'Requested', cls: 'bg-warn text-black' },
+  none: undefined,
+};
+
+/** More like this: similar titles, each marked when it's in the library or requested. */
+function MoreLikeThis({ items }: { items: SimilarTitle[] }) {
+  if (!items.length) return null;
+  return (
+    <Card>
+      <CardHeader icon={Sparkles} accent="var(--color-brand)" title="More like this" subtitle={`${items.filter((x) => x.status === 'available' || x.status === 'partial').length} in your library`} />
+      <CardBody>
+        <ScrollRow label="similar titles">
+          {items.map((x) => {
+            const badge = SIMILAR_BADGE[x.status];
+            return (
+              <Link key={`${x.type}-${x.tmdbId}`} to={`/media/${x.type}/${x.tmdbId}`} className="group w-28 shrink-0 snap-start">
+                <div className="relative">
+                  <FadeImage
+                    src={x.poster}
+                    alt=""
+                    className="aspect-[2/3] w-28 rounded-lg ring-1 ring-white/10 transition group-hover:ring-white/30"
+                    fallback={<div className="grid size-full place-items-center bg-surface-3 p-2 text-center text-[11px] text-ink-4">{x.title}</div>}
+                  />
+                  {badge && <span className={cn('absolute top-1.5 left-1.5 rounded px-1.5 py-px text-[9.5px] font-semibold', badge.cls)}>{badge.label}</span>}
+                </div>
+                <div className="mt-1.5 truncate text-[12px] font-medium transition group-hover:text-brand" title={x.title}>{x.title}</div>
+                <div className="text-[11px] text-ink-4">{[x.year, x.type === 'tv' ? 'Series' : 'Movie'].filter(Boolean).join(' · ')}</div>
+              </Link>
+            );
+          })}
+        </ScrollRow>
+      </CardBody>
+    </Card>
+  );
+}
+
 function Cast({ cast }: { cast: CastMember[] }) {
   if (!cast.length) return null;
   return (
     <Card>
       <CardHeader icon={Users} accent="var(--color-seerr)" title="Cast" />
       <CardBody>
-        <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+        <ScrollRow label="cast">
           {cast.map((c, i) => (
             <div key={`${c.name}-${i}`} className="w-24 shrink-0 snap-start text-center">
               <FadeImage src={c.image} alt="" className="mx-auto aspect-[2/3] w-24 rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3 text-lg font-semibold text-ink-4">{c.name.charAt(0)}</div>} />
@@ -127,7 +169,7 @@ function Cast({ cast }: { cast: CastMember[] }) {
               {c.character && <div className="truncate text-[11px] text-ink-4" title={c.character}>{c.character}</div>}
             </div>
           ))}
-        </div>
+        </ScrollRow>
       </CardBody>
     </Card>
   );
@@ -472,10 +514,11 @@ function InYourApps({ d }: { d: Details }) {
 function Requests({ d }: { d: Details }) {
   const decide = useDecideRequest();
   const refresh = useInvalidateMedia();
+  const silo = useServiceConfig().data?.requests === 'silo';
   if (!d.requests.length) return null;
   return (
     <Card>
-      <CardHeader icon={Inbox} accent="var(--color-seerr)" title="Requests" subtitle="From Seerr" />
+      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title="Requests" subtitle={silo ? 'From Silo' : 'From Seerr'} />
       <CardBody>
         <ul className="divide-y divide-line">
           {d.requests.map((r) => (
@@ -646,6 +689,7 @@ function DetailsView({ d }: { d: Details }) {
           })()}
           {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} several={false} />}
           <Cast cast={d.cast} />
+          <MoreLikeThis items={d.similar ?? []} />
         </div>
         <div className="min-w-0 space-y-5">
           {d.library && <YourLibrary lib={d.library} />}

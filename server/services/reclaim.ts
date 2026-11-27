@@ -4,8 +4,9 @@ import { HttpError } from '../lib/handle.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, serverToken, type JfCtx } from './jellyfin.js';
-import { allLibraryItems, idKeys, mainEmby, mainPlex, notJellyfinMain } from './mainServer.js';
+import { allLibraryItems, idKeys, mainEmby, mainPlex, mainSilo, notJellyfinMain } from './mainServer.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 
 /*
  * Cleanup suggestions: big movies and series that nobody has watched in a
@@ -62,6 +63,12 @@ async function lastPlayed(ctx: JfCtx) {
   const p = mainPlex();
   if (p) {
     const items = await plex.libraryItems(p);
+    return new Map(items.filter((i) => i.lastPlayed).map((i) => [i.id, i.lastPlayed!] as const));
+  }
+  // Silo: its playback history says when each title was last watched.
+  const si = mainSilo();
+  if (si) {
+    const items = await silo.libraryItems(si);
     return new Map(items.filter((i) => i.lastPlayed).map((i) => [i.id, i.lastPlayed!] as const));
   }
   // Emby: per-user watch data needs each user's token, so StreamForge's own play records stand in.

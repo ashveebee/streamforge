@@ -49,7 +49,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
             {s.state.isPaused ? 'Paused' : 'Playing'}
           </span>
           {s.serverName && (
-            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={`Playing on this ${s.serverType === 'plex' ? 'Plex' : s.serverType === 'emby' ? 'Emby' : 'Jellyfin'} server`}>
+            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={`Playing on this ${s.serverType ? MEDIA_SERVERS[s.serverType].name : 'Jellyfin'} server`}>
               {(() => {
                 const m = MEDIA_SERVERS[s.serverType ?? 'jellyfin'];
                 const Icon = m.icon ?? Server;

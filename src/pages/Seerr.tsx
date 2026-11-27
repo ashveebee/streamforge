@@ -1,6 +1,8 @@
 import { CheckCircle2, Clock, Film, Inbox, Loader, Tv, XCircle } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
-import { useSeerr } from '@/hooks/queries';
+import { useSeerr, useServiceConfig } from '@/hooks/queries';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { ServiceIcon } from '@/components/ui/ServiceIcon';
 import { relative } from '@/lib/format';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -20,10 +22,16 @@ const SPLIT = [
 
 export default function SeerrPage() {
   const q = useSeerr();
+  const silo = useServiceConfig().data?.requests === 'silo';
   return (
     <>
-      <ServiceHeader id="seerr" />
-      <QueryState query={q} skeleton={<PageLoader label="Loading requests" hint="Asking Seerr for the latest requests…" />}>
+      {/* With Silo's own requests, this page shows those instead of Seerr's. */}
+      {silo ? (
+        <PageHeader icon={<ServiceIcon id="silo" size={52} />} eyebrow="Silo" title="Requests" description="Requests made in Silo or here. Approved ones go to the request servers set up in Silo, such as its Sonarr & Radarr or Seerr plugins." />
+      ) : (
+        <ServiceHeader id="seerr" />
+      )}
+      <QueryState query={q} skeleton={<PageLoader label="Loading requests" hint={`Asking ${silo ? 'Silo' : 'Seerr'} for the latest requests…`} />}>
         {(d) => {
           const split = SPLIT.map((s) => ({ name: s.label, value: d.counts[s.key], color: s.color }));
           return (

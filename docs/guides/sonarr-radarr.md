@@ -47,7 +47,8 @@ Admins can add a movie or series from its page in StreamForge (open it from
 
 Titles already in any instance of that kind are skipped, so you won't end up
 with the same movie in Radarr and Radarr 4K by accident. Everyone else can
-request titles through Seerr instead, if it's connected.
+request titles through Seerr instead, if it's connected (or through Silo's own
+requests, when Silo is your media server and they're switched on).
 
 ## Adding many titles at once
 

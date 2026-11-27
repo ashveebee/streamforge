@@ -49,7 +49,7 @@ function NoServers({ type }: { type: MediaServerType }) {
   );
 }
 
-/** The Jellyfin, Emby or Plex page: one tab per server of that kind. */
+/** The media server's page (Jellyfin, Emby, Plex or Silo). */
 export default function MediaServerPage({ type = 'jellyfin' }: { type?: MediaServerType }) {
   const server = useSelectedMediaServer(type);
   if (!server) return <NoServers type={type} />;

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { ArtworkRef } from '@/lib/api';
 
-export type ServerType = 'jellyfin' | 'plex' | 'emby';
+export type ServerType = 'jellyfin' | 'plex' | 'emby' | 'silo';
 export type SourceType = 'tmdb_list' | 'imdb_list' | 'trakt_list' | 'tmdb_trending_weekly' | 'tmdb_popular' | 'tmdb_keyword' | 'manual';
 export type CollectionStatus = 'built' | 'waiting' | 'scheduled' | 'error';
 

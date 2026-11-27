@@ -167,7 +167,7 @@ export default function KometaCollectionPage() {
         {(d) => {
           const st = STATUS[d.status];
           const c = d.collection;
-          const serverName = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[d.library.serverType];
+          const serverName = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' }[d.library.serverType];
           const missing = d.titles.filter((t) => !t.inLibrary && t.tmdbId).length;
           return (
             <div className="space-y-5">

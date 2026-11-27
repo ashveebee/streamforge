@@ -389,7 +389,7 @@ export type NowPlaying = ReturnType<typeof normaliseSession> & {
   /** Set for streams on an extra media server, or a main Plex or Emby server. */
   server?: string;
   serverName?: string;
-  serverType?: 'jellyfin' | 'emby' | 'plex';
+  serverType?: 'jellyfin' | 'emby' | 'plex' | 'silo';
 };
 
 async function rawSessions(ctx: JfCtx) {
@@ -759,7 +759,7 @@ export interface JfServerTarget {
   name: string;
   url: string;
   apiKey: string;
-  type?: 'jellyfin' | 'emby' | 'plex';
+  type?: 'jellyfin' | 'emby' | 'plex' | 'silo';
 }
 
 const REMOTE_DEVICE = 'streamforge-server';

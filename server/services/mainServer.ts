@@ -4,6 +4,7 @@ import { isConfigured, resolve } from '../settings.js';
 import * as jellyfin from './jellyfin.js';
 import { getStoredServer, setActiveServer, type MediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 
 /*
  * The media server: the one StreamForge watches and people sign in with.
@@ -16,7 +17,7 @@ import * as plex from './plex.js';
  * named here.
  */
 
-export type MainType = 'jellyfin' | 'plex' | 'emby';
+export type MainType = 'jellyfin' | 'plex' | 'emby' | 'silo';
 
 interface MainPref {
   type: MainType;
@@ -37,23 +38,26 @@ export function mainExtra(): MediaServer | undefined {
 
 export const mainPlex = () => (mainExtra()?.type === 'plex' ? mainExtra() : undefined);
 export const mainEmby = () => (mainExtra()?.type === 'emby' ? mainExtra() : undefined);
+export const mainSilo = () => (mainExtra()?.type === 'silo' ? mainExtra() : undefined);
 
 /** True when people sign in with Plex. */
 export const plexMode = () => !!mainPlex();
 /** True when people sign in with Emby. */
 export const embyMode = () => !!mainEmby();
-/** True when the sign-in server is Plex or Emby rather than Jellyfin. */
+/** True when people sign in with Silo. */
+export const siloMode = () => !!mainSilo();
+/** True when the sign-in server is Plex, Emby or Silo rather than Jellyfin. */
 export const notJellyfinMain = () => !!mainExtra();
 
 /** Which kind of server people sign in with. */
 export const mainType = (): MainType => mainExtra()?.type ?? 'jellyfin';
-export const mainName = () => ({ jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' })[mainType()];
+export const mainName = () => ({ jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' })[mainType()];
 
 /** True once a main server is set up (any kind). */
 export const mediaReady = () => notJellyfinMain() || isConfigured('jellyfin');
 
-/** Chooses Plex or Emby as the media server (first-run setup only). */
-export function setMainServer(type: 'plex' | 'emby', id: string) {
+/** Chooses Plex, Emby or Silo as the media server (first-run setup only). */
+export function setMainServer(type: 'plex' | 'emby' | 'silo', id: string) {
   pref = { type, id };
   writePref(PREF, pref);
   setActiveServer(id);
@@ -64,7 +68,7 @@ export const isMainServer = (id: string) => pref.type !== 'jellyfin' && pref.id 
 /** Active streams on the main server, for background features (recorder, alerts, rules). */
 export async function mainNowPlaying(): Promise<jellyfin.NowPlaying[] | undefined> {
   const m = mainExtra();
-  if (m) return m.type === 'plex' ? plex.nowPlaying(m) : jellyfin.remoteNowPlaying(m);
+  if (m) return m.type === 'plex' ? plex.nowPlaying(m) : m.type === 'silo' ? silo.nowPlaying(m) : jellyfin.remoteNowPlaying(m);
   return jellyfin.serverNowPlaying();
 }
 
@@ -76,6 +80,7 @@ export async function controlMainSession(sessionId: string, command: jellyfin.Se
   const m = mainExtra();
   if (!m) return jellyfin.controlSessionAsServer(sessionId, command, text);
   if (m.type === 'emby') return jellyfin.controlRemoteSession(m, sessionId, command, text);
+  if (m.type === 'silo') return silo.controlSession(m, sessionId, command === 'unpause' ? 'resume' : command, text);
   // Plex can only end a stream; the message becomes the reason shown to the viewer.
   if (command === 'stop') return plex.stopSession(m, sessionId, text);
 }
@@ -84,7 +89,7 @@ export async function controlMainSession(sessionId: string, command: jellyfin.Se
 export function mainLibraryItems(ctx: jellyfin.JfCtx) {
   const m = mainExtra();
   if (!m) return jellyfin.libraryItems(ctx);
-  return m.type === 'plex' ? plex.libraryItems(m) : jellyfin.remoteLibraryItems(m);
+  return m.type === 'plex' ? plex.libraryItems(m) : m.type === 'silo' ? silo.libraryItems(m) : jellyfin.remoteLibraryItems(m);
 }
 
 /* ------------------------------ the library ------------------------------ */
@@ -119,7 +124,8 @@ export async function libraryServer(): Promise<LibraryServer | undefined> {
   const m = mainExtra();
   if (m) {
     // Plex links need the server's machine id; servers added by address may not have it stored yet.
-    const serverId = m.serverId ?? (m.type === 'plex' ? await cache.get(`plex:${m.id}:ident`, 60 * 60_000, () => plex.identity(m.url)).catch(() => undefined) : undefined);
+    const ident = m.type === 'plex' ? plex.identity : m.type === 'silo' ? silo.identity : undefined;
+    const serverId = m.serverId ?? (ident ? await cache.get(`${m.type}:${m.id}:ident`, 60 * 60_000, () => ident(m.url)).catch(() => undefined) : undefined);
     return { id: m.id, type: m.type, name: m.name, main: true, openUrl: m.publicUrl || m.url, serverId };
   }
   if (!isConfigured('jellyfin')) return undefined;
@@ -156,6 +162,7 @@ export function openLink(server: LibraryServer, itemId: string) {
     const key = encodeURIComponent(`/library/metadata/${itemId}`);
     return server.serverId ? `${base}/web/index.html#!/server/${server.serverId}/details?key=${key}` : `${base}/web/index.html`;
   }
+  if (server.type === 'silo') return `${base}/item/${encodeURIComponent(itemId)}`;
   if (server.type === 'emby') return `${base}/web/index.html#!/item?id=${encodeURIComponent(itemId)}${server.serverId ? `&serverId=${server.serverId}` : ''}`;
   return `${base}/web/#/details?id=${encodeURIComponent(itemId)}${server.serverId ? `&serverId=${server.serverId}` : ''}`;
 }

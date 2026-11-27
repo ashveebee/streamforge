@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Clapperboard, MonitorPlay, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Projector, Radar, Server, ShieldCheck, User } from 'lucide-react';
+import { ArrowRight, Clapperboard, Cylinder, MonitorPlay, Eye, EyeOff, Globe, KeyRound, LoaderCircle, Lock, Projector, Radar, Server, ShieldCheck, User } from 'lucide-react';
 import type { User as AppUser } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
@@ -19,7 +19,7 @@ function Field({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElem
   );
 }
 
-type ServerInfo = { type?: 'jellyfin' | 'plex' | 'emby'; name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
+type ServerInfo = { type?: 'jellyfin' | 'plex' | 'emby' | 'silo'; name?: string; version?: string; online: boolean; configured?: boolean; sso?: { label: string; hidePassword: boolean } };
 
 type PlexResult = { pending?: boolean; servers?: { id: string; name: string; version?: string }[]; user?: AppUser; mfaRequired?: boolean; challenge?: string };
 
@@ -166,7 +166,7 @@ function PlexSetup({ onBack }: { onBack: () => void }) {
 }
 
 /** First run: which media server do people sign in with? */
-type SetupType = 'jellyfin' | 'plex' | 'emby';
+type SetupType = 'jellyfin' | 'plex' | 'emby' | 'silo';
 
 /** First run, Emby: the server's address and an administrator's sign-in, in one step. */
 function EmbySetup({ onBack }: { onBack: () => void }) {
@@ -261,6 +261,55 @@ function EmbySetup({ onBack }: { onBack: () => void }) {
   );
 }
 
+/** First run, Silo: the server's address and an admin's sign-in, in one step. */
+function SiloSetup({ onBack }: { onBack: () => void }) {
+  const { signedIn } = useAuth();
+  const [url, setUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      const r = await api<{ user: AppUser }>('/auth/silo/setup', { method: 'POST', body: { url, username, password } });
+      signedIn(r.user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not connect to Silo');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="glass rounded-3xl p-6 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] sm:p-7">
+      <p className="mb-4 text-sm leading-relaxed text-ink-2">
+        Where is your Silo server? Use its web address (port 8090 by default). Sign in with a Silo admin account: StreamForge checks the server, creates its own API key, and
+        everyone else signs in with their Silo account.
+      </p>
+      <Field icon={Globe} type="url" inputMode="url" placeholder="http://192.168.1.20:8090" autoComplete="url" spellCheck={false} autoFocus value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Silo server address" required />
+      <div className="mt-4 space-y-3">
+        <Field icon={User} placeholder="Silo admin username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        <Field icon={Lock} type="password" placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </div>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <button
+        type="submit"
+        disabled={busy || !url.trim() || !username.trim()}
+        className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#8fb3d9] text-sm font-semibold text-black shadow-[0_12px_32px_-12px_rgb(143_179_217/0.8)] transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
+      >
+        {busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Connect and sign in <ArrowRight className="size-4" /></>}
+      </button>
+      <p className="mt-3 text-center text-[11px] leading-relaxed text-ink-4">Silo is pre-release; StreamForge uses its /api/v2.</p>
+      <button type="button" onClick={onBack} className="mt-2 w-full text-center text-xs text-ink-4 hover:text-ink-2">
+        Choose a different server
+      </button>
+    </form>
+  );
+}
+
 function ChooseServer({ onPick }: { onPick: (t: SetupType) => void }) {
   const card = 'flex w-full items-center gap-3 rounded-2xl border border-line bg-white/[0.02] p-4 text-left transition hover:border-line-strong hover:bg-white/[0.05]';
   return (
@@ -289,6 +338,14 @@ function ChooseServer({ onPick }: { onPick: (t: SetupType) => void }) {
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-ink">Emby</span>
             <span className="block text-xs text-ink-3">Sign in with your Emby account</span>
+          </span>
+          <ArrowRight className="size-4 text-ink-4" />
+        </button>
+        <button type="button" className={card} onClick={() => onPick('silo')}>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#8fb3d9]/15"><Cylinder className="size-5 text-[#8fb3d9]" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">Silo</span>
+            <span className="block text-xs text-ink-3">Sign in with your Silo account</span>
           </span>
           <ArrowRight className="size-4 text-ink-4" />
         </button>
@@ -501,7 +558,7 @@ export default function Login() {
   const needsSetup = server?.configured === false;
   const plexSignIn = server?.type === 'plex';
   // Jellyfin and Emby both sign in with a name and password.
-  const pwName = server?.type === 'emby' ? 'Emby' : 'Jellyfin';
+  const pwName = server?.type === 'emby' ? 'Emby' : server?.type === 'silo' ? 'Silo' : 'Jellyfin';
   // ?password forces the password form, in case single sign-on is broken.
   const hidePassword = !!server?.sso?.hidePassword && !new URLSearchParams(location.search).has('password');
 
@@ -561,7 +618,7 @@ export default function Login() {
           <p className="mt-1.5 text-sm text-ink-3">
             {needsSetup
               ? setupType
-                ? `Let’s connect your ${{ plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' }[setupType]} server`
+                ? `Let’s connect your ${{ plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby', silo: 'Silo' }[setupType]} server`
                 : 'Let’s connect your media server'
               : plexSignIn
                 ? 'Sign in with your Plex account'
@@ -574,6 +631,8 @@ export default function Login() {
             <PlexSetup onBack={() => setSetupType(undefined)} />
           ) : setupType === 'emby' ? (
             <EmbySetup onBack={() => setSetupType(undefined)} />
+          ) : setupType === 'silo' ? (
+            <SiloSetup onBack={() => setSetupType(undefined)} />
           ) : setupType === 'jellyfin' ? (
             <Setup onDone={setServer} onBack={() => setSetupType(undefined)} />
           ) : (
@@ -657,7 +716,7 @@ export default function Login() {
         {!(needsSetup && !setupType) && <p className="mt-6 text-center text-[11px] text-ink-4">
           {plexSignIn || setupType === 'plex'
             ? 'You sign in on plex.tv. StreamForge never sees your Plex password.'
-            : `Credentials are sent directly to your ${setupType === 'emby' ? 'Emby' : pwName} server and never stored.`}
+            : `Credentials are sent directly to your ${setupType === 'emby' ? 'Emby' : setupType === 'silo' ? 'Silo' : pwName} server and never stored.`}
         </p>}
       </motion.div>
     </div>
