@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.2.0](https://github.com/ashveebee/streamforge/compare/v2.1.0...v2.2.0) (2026-11-27)
+
+
+### Features
+
+* **i18n:** convert service, admin and settings pages (English strings) ([058ec27](https://github.com/ashveebee/streamforge/commit/058ec27b35c91f984a30e428e66dee712317b10b))
+* **i18n:** French for service, Kometa, admin and settings pages ([a086912](https://github.com/ashveebee/streamforge/commit/a0869126c166612b584bbce2d3074695e8b144ce))
+* **i18n:** German for service, Kometa, admin and settings pages ([2c58eb3](https://github.com/ashveebee/streamforge/commit/2c58eb37efbf34baa79497da6e479502c681501a))
+* **i18n:** Portuguese for service, Kometa, admin and settings pages ([c861d68](https://github.com/ashveebee/streamforge/commit/c861d68d7ef4c81405bf1fed643ddac7c4821754))
+* **i18n:** Spanish for service, Kometa, admin and settings pages ([44b1292](https://github.com/ashveebee/streamforge/commit/44b1292641ac5dba14c3933c890231a452fed813))
+* **i18n:** translate dashboard widgets and shared labels ([811b657](https://github.com/ashveebee/streamforge/commit/811b657198d09b93dcc2a19b40e2d75376b45e02))
+* **i18n:** translate member pages and title pages ([482df95](https://github.com/ashveebee/streamforge/commit/482df95903f9b09083943ea628da5abb71788aea))
+* multi-language UI (Spanish, French, German, Portuguese) ([3894d4a](https://github.com/ashveebee/streamforge/commit/3894d4a4354a34478c8f2b21777773e88093be8d))
+* multi-language UI (Spanish, French, German, Portuguese) ([b4693b8](https://github.com/ashveebee/streamforge/commit/b4693b8536351fa78b43009178b11cab91c8507b))
+
+
+### Bug Fixes
+
+* **i18n:** keep api.ts free of app imports; document the per-area language files ([eed5563](https://github.com/ashveebee/streamforge/commit/eed55630b0ed3a9c0f19931549024f30215dca77))
+
 ## [2.1.0](https://github.com/ashveebee/streamforge/compare/v2.0.0...v2.1.0) (2026-11-27)
 
 
