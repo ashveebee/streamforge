@@ -265,6 +265,7 @@ const es: Core = {
     },
     groups: {
       media: { title: 'Servidor multimedia', description: 'El servidor que supervisa esta instalación y con el que inician sesión las personas.' },
+      audiobooks: { title: 'Audiolibros y pódcasts', description: 'Tu servidor de audiolibros y pódcasts.' },
       library: { title: 'Gestores de biblioteca', description: 'Encuentra, descarga y organiza series, películas, música y libros.' },
       indexers: { title: 'Indexadores y descargas', description: 'Dónde se encuentran las publicaciones y los clientes que las descargan.' },
       requests: { title: 'Solicitudes', description: 'Permite que las personas pidan nuevas películas y series.' },
@@ -281,6 +282,7 @@ const es: Core = {
       arr: 'Settings → General → Security → API Key',
       seerr: 'Settings → General → API Key',
       infinidisk: 'Opcional si el endpoint de estado es público.',
+      audiobookshelf: 'Settings → API Keys (o Users → tu cuenta → API token). Usa la clave de un administrador para ver la actividad de escucha.',
     },
     service: {
       savedHere: 'Guardado en StreamForge',

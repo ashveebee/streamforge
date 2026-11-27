@@ -117,8 +117,8 @@ Silo's native `/api/v2`.
 <a id="step-2-set-up-your-apps"></a>
 
 After you sign in for the first time, StreamForge opens **Set up your apps**
-and starts looking for Sonarr, Radarr, Seerr, Prowlarr, Bazarr, Lidarr and
-Readarr. It checks:
+and starts looking for Sonarr, Radarr, Seerr, Prowlarr, Bazarr, Lidarr,
+Readarr and Audiobookshelf. It checks:
 
 - **Docker service names** on their usual ports, such as `http://sonarr:8989`,
   when StreamForge runs in the same Compose project;
@@ -145,6 +145,7 @@ you don't use and they disappear from the sidebar.
 | --- | --- |
 | Sonarr, Radarr, Lidarr, Readarr, Prowlarr | Settings → General → Security → API Key |
 | Bazarr | Settings → General → Security → API Key |
+| Audiobookshelf | Settings → API Keys, or Users → your account → API token (an admin's, to see listening activity) |
 | Seerr (Overseerr / Jellyseerr) | Settings → General → API Key |
 | qBittorrent, Transmission, NZBGet | Your web UI username and password (**Settings → Download clients**) |
 | SABnzbd | Config → General → API Key (**Settings → Download clients**) |

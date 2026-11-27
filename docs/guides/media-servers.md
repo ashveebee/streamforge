@@ -53,7 +53,7 @@ Playing, stats, watch history, title pages, search, library health, alerts and
 your own page.
 
 After that comes step 2, **Set up your apps**: StreamForge looks for Sonarr,
-Radarr, Seerr, Prowlarr, Bazarr, Lidarr and Readarr and you paste each API key
+Radarr, Seerr, Prowlarr, Bazarr, Lidarr, Readarr and Audiobookshelf and you paste each API key
 to connect. See the [install guide](install.md#step-2-set-up-your-apps).
 
 ## Changing the address or key

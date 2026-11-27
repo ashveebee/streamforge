@@ -25,6 +25,7 @@ const Seerr = lazyPage(() => import('@/pages/Seerr'));
 const Bazarr = lazyPage(() => import('@/pages/Bazarr'));
 const Lidarr = lazyPage(() => import('@/pages/Music').then((m) => ({ default: m.LidarrPage })));
 const Readarr = lazyPage(() => import('@/pages/Music').then((m) => ({ default: m.ReadarrPage })));
+const Audiobookshelf = lazyPage(() => import('@/pages/Audiobookshelf'));
 const Infinidisk = lazyPage(() => import('@/pages/Infinidisk'));
 const System = lazyPage(() => import('@/pages/System'));
 const Stats = lazyPage(() => import('@/pages/Stats'));
@@ -157,6 +158,7 @@ const router = createBrowserRouter([
       { path: '/bazarr', element: page(<Bazarr />, 'bazarr') },
       { path: '/lidarr', element: page(<Lidarr />, 'lidarr') },
       { path: '/readarr', element: page(<Readarr />, 'readarr') },
+      { path: '/audiobookshelf', element: page(<Audiobookshelf />, 'audiobookshelf') },
       { path: '*', element: page(<NotFound />) },
     ],
   },

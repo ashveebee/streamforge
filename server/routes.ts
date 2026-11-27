@@ -46,6 +46,7 @@ import { knownRequestSource, requestSource } from './services/requestSource.js';
 import { infinidiskOverview } from './services/infinidisk.js';
 import { bazarrOverview, bazarrSearch } from './services/bazarr.js';
 import { musicMissing, musicOverview, musicQueueRemove, musicSearch, type BookOrMusic } from './services/music.js';
+import { audiobookshelfCover, audiobookshelfOverview, audiobookshelfScan, isValidId as isAbsId } from './services/audiobookshelf.js';
 
 export const api = Router();
 api.use(requireAuth);
@@ -596,6 +597,34 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
     }),
   );
 }
+
+/* ------------------------------ audiobookshelf ------------------------------ */
+
+api.get('/audiobookshelf/overview', handle('audiobookshelf', () => audiobookshelfOverview()));
+api.post(
+  '/audiobookshelf/libraries/:id/scan',
+  requireAdmin,
+  handle('audiobookshelf', async (req) => {
+    const id = String(req.params.id);
+    if (!isAbsId(id)) throw new HttpError(400, 'Invalid library');
+    const name = typeof (req.body as { name?: unknown } | undefined)?.name === 'string' ? String((req.body as { name: string }).name).slice(0, 120) : id;
+    audit(req, `[audiobookshelf] library scan: ${name}`);
+    return audiobookshelfScan(id);
+  }),
+);
+// Covers are artwork, like media server images: open to anyone signed in.
+api.get('/audiobookshelf/cover/:id', (req, res) => {
+  const id = String(req.params.id);
+  if (!isConfigured('audiobookshelf')) {
+    res.status(404).end();
+    return;
+  }
+  if (!isAbsId(id)) {
+    res.status(400).end();
+    return;
+  }
+  void pipeImage(res, audiobookshelfCover(id, imageOpts(req).maxWidth));
+});
 
 /* --------------------------------- media -------------------------------- */
 

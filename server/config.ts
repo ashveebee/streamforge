@@ -52,6 +52,9 @@ const schema = z.object({
   BAZARR_URL: optionalUrl,
   BAZARR_PUBLIC_URL: optionalUrl,
   BAZARR_API_KEY: optionalString,
+  AUDIOBOOKSHELF_URL: optionalUrl,
+  AUDIOBOOKSHELF_PUBLIC_URL: optionalUrl,
+  AUDIOBOOKSHELF_API_KEY: optionalString,
   LIDARR_URL: optionalUrl,
   LIDARR_PUBLIC_URL: optionalUrl,
   LIDARR_API_KEY: optionalString,
@@ -116,6 +119,7 @@ export const config = {
     bazarr: { url: env.BAZARR_URL, publicUrl: env.BAZARR_PUBLIC_URL, apiKey: env.BAZARR_API_KEY },
     lidarr: { url: env.LIDARR_URL, publicUrl: env.LIDARR_PUBLIC_URL, apiKey: env.LIDARR_API_KEY },
     readarr: { url: env.READARR_URL, publicUrl: env.READARR_PUBLIC_URL, apiKey: env.READARR_API_KEY },
+    audiobookshelf: { url: env.AUDIOBOOKSHELF_URL, publicUrl: env.AUDIOBOOKSHELF_PUBLIC_URL, apiKey: env.AUDIOBOOKSHELF_API_KEY },
     infinidisk: {
       url: env.INFINIDISK_URL,
       publicUrl: env.INFINIDISK_PUBLIC_URL,

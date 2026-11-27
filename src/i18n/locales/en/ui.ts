@@ -16,6 +16,7 @@ export default {
     bazarr: 'Subtitles',
     lidarr: 'Music',
     readarr: 'Books',
+    audiobookshelf: 'Audiobooks',
   },
   method: {
     directPlay: 'Direct Play',

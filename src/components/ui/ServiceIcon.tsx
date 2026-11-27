@@ -1,4 +1,4 @@
-import { BookOpen, Captions, Clapperboard, Cylinder, Film, HardDrive, Inbox, MonitorPlay, Music, Radar, Tv, Projector } from 'lucide-react';
+import { BookOpen, Captions, Clapperboard, Cylinder, Film, HardDrive, Headphones, Inbox, MonitorPlay, Music, Radar, Tv, Projector } from 'lucide-react';
 import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { t } from '@/i18n';
@@ -13,6 +13,7 @@ export const SERVICES: Record<ServiceId, { name: string; color: string; icon: ty
   bazarr: { name: 'Bazarr', color: 'var(--color-bazarr)', icon: Captions, get tagline() { return t('ui.tagline.bazarr'); }, path: '/bazarr' },
   lidarr: { name: 'Lidarr', color: 'var(--color-lidarr)', icon: Music, get tagline() { return t('ui.tagline.lidarr'); }, path: '/lidarr' },
   readarr: { name: 'Readarr', color: 'var(--color-readarr)', icon: BookOpen, get tagline() { return t('ui.tagline.readarr'); }, path: '/readarr' },
+  audiobookshelf: { name: 'Audiobookshelf', color: 'var(--color-audiobookshelf)', icon: Headphones, get tagline() { return t('ui.tagline.audiobookshelf'); }, path: '/audiobookshelf' },
 };
 
 type Meta = (typeof SERVICES)[ServiceId];

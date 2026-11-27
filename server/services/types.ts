@@ -1,4 +1,4 @@
-export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr';
+export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr' | 'audiobookshelf';
 
 export interface HealthIssue {
   level: 'info' | 'warning' | 'error';

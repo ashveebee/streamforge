@@ -12,6 +12,7 @@ const ui: Messages['ui'] = {
     bazarr: 'Sous-titres',
     lidarr: 'Musique',
     readarr: 'Livres',
+    audiobookshelf: 'Livres audio',
   },
   method: { directPlay: 'Lecture directe', directStream: 'Flux direct', transcode: 'Transcodage' },
   kind: {

@@ -206,7 +206,7 @@ function useSettingsChanged() {
 
 /* ----------------------- first-run setup: your apps ----------------------- */
 
-export type SetupAppId = 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'bazarr' | 'lidarr' | 'readarr';
+export type SetupAppId = 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'bazarr' | 'lidarr' | 'readarr' | 'audiobookshelf';
 
 /** An app found on the network (no key: those are entered, or imported server-side). */
 export interface FoundApp {

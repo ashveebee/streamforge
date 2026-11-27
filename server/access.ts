@@ -12,7 +12,7 @@ import { readPref, writePref } from './lib/db.js';
  * is admin-only regardless.
  */
 
-export const AREAS = ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr', 'downloads', 'requests'] as const;
+export const AREAS = ['now-playing', 'stats', 'library', 'system', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr', 'audiobookshelf', 'downloads', 'requests'] as const;
 export type Area = (typeof AREAS)[number];
 
 interface MemberAccess {
@@ -49,14 +49,14 @@ export function canSee(req: Request, area: Area) {
 
 /** API path (below /api) → the areas that use it. Unlisted paths are open to any signed-in user. */
 function areasFor(path: string): Area[] | undefined {
-  if (path.startsWith('/jellyfin/image/')) return undefined;
+  if (path.startsWith('/jellyfin/image/') || path.startsWith('/audiobookshelf/cover/')) return undefined;
   if (path.startsWith('/jellyfin/now-playing')) return ['now-playing'];
   if (path.startsWith('/jellyfin/stats')) return ['stats'];
   if (path.startsWith('/jellyfin/')) return ['jellyfin'];
   if (path.startsWith('/library/')) return ['library'];
   if (path.startsWith('/system/') || path.startsWith('/downloads') || path.startsWith('/storage/') || path.startsWith('/kometa/')) return ['system'];
   if (path.startsWith('/clients')) return ['downloads'];
-  for (const a of ['sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr'] as const) if (path.startsWith(`/${a}/`)) return [a];
+  for (const a of ['sonarr', 'radarr', 'prowlarr', 'seerr', 'infinidisk', 'bazarr', 'lidarr', 'readarr', 'audiobookshelf'] as const) if (path.startsWith(`/${a}/`)) return [a];
   return undefined;
 }
 

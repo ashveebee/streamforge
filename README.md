@@ -2,7 +2,7 @@
 
 A modern control centre for a **Jellyfin, Plex, Emby or Silo** media server and the
 services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
-Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
+Audiobookshelf, Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
 NZBGet). Each install watches one media server, chosen on first run; then
 StreamForge finds your apps on the network so you only paste their keys.
 Using Plex, Emby or Silo? See [Plex, Emby and Silo households](#plex-emby-and-silo-households).
@@ -95,7 +95,7 @@ server.
     leave a bridge network.
 
     Step 2, **Set up your apps**, looks for Sonarr, Radarr, Seerr, Prowlarr,
-    Bazarr, Lidarr and Readarr: by Docker service name (`http://sonarr:8989`),
+    Bazarr, Lidarr, Readarr and Audiobookshelf: by Docker service name (`http://sonarr:8989`),
     on this machine, the Docker host and the media server's machine at their
     usual ports, and at subdomains next to the media server's
     (`sonarr.example.com`). Found apps have their address filled in; paste the
@@ -137,6 +137,10 @@ server.
     buttons.
   - *Bazarr:* episodes and movies missing subtitles, with per-title and bulk
     searches, plus recent subtitle activity.
+  - *Audiobookshelf:* audiobook and podcast totals, each library with a scan
+    button, who's listening now and how far through they are, recent listening
+    sessions and the newest additions with covers. Listening activity needs an
+    admin's API key.
   - *Jellyfin maintenance:* admins can scan all libraries or one, refresh a
     library's metadata, and run or stop Jellyfin's scheduled tasks.
 - **System status.** A background monitor checks every service on an interval
@@ -363,7 +367,7 @@ StreamForge for each.
 ### 3. Set up your apps
 
 After you sign in, StreamForge opens **Set up your apps** and looks for Sonarr,
-Radarr, Seerr, Prowlarr, Bazarr, Lidarr and Readarr: by Docker service name,
+Radarr, Seerr, Prowlarr, Bazarr, Lidarr, Readarr and Audiobookshelf: by Docker service name,
 on this machine and the media server's machine at their usual ports, and at
 subdomains next to your media server's. Found apps have their address filled
 in; paste each API key and click **Test and connect**. Once Seerr or Prowlarr
@@ -442,6 +446,7 @@ immediately; no restart is needed. Skip any service you don't run.
 | Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
 | Seerr | Settings → General → API Key |
 | Lidarr / Readarr / Bazarr | Settings → General → Security → API Key |
+| Audiobookshelf | Settings → API Keys, or Users → your account → API token (an admin's, to see listening activity) |
 | qBittorrent / Transmission / NZBGet | Your web UI username and password (Settings → Download clients) |
 | SABnzbd | Config → General → API Key (Settings → Download clients) |
 | Infinidisk | Your Infinidisk settings (optional if its status endpoint is public) |

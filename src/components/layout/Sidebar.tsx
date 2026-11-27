@@ -13,7 +13,7 @@ import { StatusDot } from '../ui/Status';
 import { LogoMark } from './Logo';
 import { useT } from '@/i18n';
 
-const SERVICE_ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
+const SERVICE_ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'audiobookshelf', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 function NavItem({
   to,

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useConfigured } from './queries';
 
-/* Bazarr, Lidarr and Readarr. */
+/* Bazarr, Lidarr, Readarr and Audiobookshelf. */
 
 export interface BazarrOverview {
   counts: { episodes: number; movies: number; providerIssues: number; healthIssues: number };
@@ -57,6 +57,32 @@ export function useMusicQueueRemove(kind: MusicKind) {
   return useMutation({
     mutationFn: ({ id, blocklist }: { id: number; blocklist: boolean }) => api<{ ok: boolean }>(`/${kind}/queue/${id}/remove`, { method: 'POST', body: { blocklist } }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [kind] }),
+  });
+}
+
+/* ------------------------------ Audiobookshelf ------------------------------ */
+
+type AbsKind = 'book' | 'podcast';
+
+export interface AudiobookshelfOverview {
+  /** Durations are in seconds, sizes in bytes. */
+  totals: { books: number; podcasts: number; duration: number; size: number };
+  libraries: { id: string; name: string; kind: AbsKind; items: number; authors: number; duration: number; size: number; tracks: number }[];
+  listening: { id: string; user?: string; title: string; author?: string; kind: AbsKind; position: number; duration: number; device?: string; cover?: string; updatedAt?: string }[];
+  recentSessions: { id: string; user?: string; title: string; author?: string; kind: AbsKind; listened: number; device?: string; at?: string }[];
+  recentlyAdded: { id: string; libraryId: string; kind: AbsKind; title: string; author?: string; narrator?: string; series?: string; duration?: number; episodes?: number; cover?: string; addedAt?: string }[];
+}
+
+export const useAudiobookshelf = () => {
+  const on = useConfigured('audiobookshelf');
+  return useQuery({ queryKey: ['audiobookshelf'], queryFn: ({ signal }) => api<AudiobookshelfOverview>('/audiobookshelf/overview', { signal }), refetchInterval: 15_000, enabled: on });
+};
+
+export function useAudiobookshelfScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api<{ ok: boolean }>(`/audiobookshelf/libraries/${encodeURIComponent(id)}/scan`, { method: 'POST', body: { name } }),
+    onSuccess: () => setTimeout(() => void qc.invalidateQueries({ queryKey: ['audiobookshelf'] }), 5000),
   });
 }
 

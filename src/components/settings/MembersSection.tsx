@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
 import { t, type MessageKey } from '@/i18n';
 
-const NAMES: Partial<Record<Area, string>> = { jellyfin: 'Jellyfin', sonarr: 'Sonarr', radarr: 'Radarr', prowlarr: 'Prowlarr', infinidisk: 'Infinidisk', bazarr: 'Bazarr', lidarr: 'Lidarr', readarr: 'Readarr' };
+const NAMES: Partial<Record<Area, string>> = { jellyfin: 'Jellyfin', sonarr: 'Sonarr', radarr: 'Radarr', prowlarr: 'Prowlarr', infinidisk: 'Infinidisk', bazarr: 'Bazarr', lidarr: 'Lidarr', readarr: 'Readarr', audiobookshelf: 'Audiobookshelf' };
 const KEYS: Partial<Record<Area, MessageKey>> = {
   'now-playing': 'nav.nowPlaying',
   stats: 'nav.stats',

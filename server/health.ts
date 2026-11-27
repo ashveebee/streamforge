@@ -11,6 +11,7 @@ import { seerr, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe } from './services/infinidisk.js';
 import { bazarr, bazarrProbe } from './services/bazarr.js';
 import { lidarr, readarr } from './services/music.js';
+import { audiobookshelf, audiobookshelfProbe } from './services/audiobookshelf.js';
 import { onQueueSample } from './services/queueWatch.js';
 import { stalledMap } from './services/cleanup.js';
 import { clientTotals } from './services/clients/index.js';
@@ -75,6 +76,8 @@ function probeFor(id: ServiceId): (() => Promise<HealthProbe>) | undefined {
       return arr(lidarr(), 'v1');
     case 'readarr':
       return arr(readarr(), 'v1');
+    case 'audiobookshelf':
+      return audiobookshelf() && (() => audiobookshelfProbe());
   }
 }
 

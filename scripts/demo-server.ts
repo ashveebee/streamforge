@@ -493,8 +493,9 @@ const VERSIONS: Record<ServiceId, string> = {
   bazarr: '1.5.3',
   lidarr: '2.13.3.4711',
   readarr: '0.4.18.2805',
+  audiobookshelf: '2.30.0',
 };
-const BASE_MS: Record<ServiceId, number> = { jellyfin: 38, sonarr: 64, radarr: 71, prowlarr: 112, seerr: 55, infinidisk: 22, bazarr: 48, lidarr: 69, readarr: 83 };
+const BASE_MS: Record<ServiceId, number> = { jellyfin: 38, sonarr: 64, radarr: 71, prowlarr: 112, seerr: 55, infinidisk: 22, bazarr: 48, lidarr: 69, readarr: 83, audiobookshelf: 41 };
 
 function health(): HealthSnapshot {
   const now = Date.now();
@@ -910,7 +911,7 @@ const autoImport: AutoImportStatus = {
 };
 
 function settings(): ServiceSettingsView[] {
-  const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined, bazarr: '••••c55e', lidarr: '••••12fd', readarr: '••••e771' };
+  const hints: Record<ServiceId, string | undefined> = { jellyfin: '••••7f3a', sonarr: '••••b21c', radarr: '••••9e04', prowlarr: '••••4d18', seerr: '••••0aa9', infinidisk: undefined, bazarr: '••••c55e', lidarr: '••••12fd', readarr: '••••e771', audiobookshelf: '••••a3b0' };
   return (Object.keys(VERSIONS) as ServiceId[]).map((id) => ({
     id,
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
@@ -1066,7 +1067,7 @@ app.put('/api/settings/moonfin', (req, res) => {
   Object.assign(moonfin, req.body);
   res.json({ ...moonfin, webUrl: 'https://jellyfin.example.com/Moonfin/Web/' });
 });
-const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'downloads', 'requests', 'jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'] };
+const members: MemberAccess = { signIn: true, areas: ['now-playing', 'jellyfin', 'seerr', 'stats'], available: ['now-playing', 'stats', 'library', 'system', 'downloads', 'requests', 'jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'audiobookshelf', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'] };
 app.get('/api/settings/members', json(() => members));
 app.put('/api/settings/members', (req, res) => {
   Object.assign(members, req.body);
@@ -1331,6 +1332,38 @@ app.get('/api/bazarr/overview', json(() => ({
   movies: { total: 6, items: ['Quiet Orbit', 'Northbound'].map((t, i) => ({ movieId: i + 1, title: t, missing: ['English'] })) },
   history: ['Atlas Station', 'Saltwind', 'Kitchen Brigade'].map((t, i) => ({ kind: i === 1 ? 'movie' : 'episode', title: t, subtitle: i === 1 ? '' : `S01E0${i + 1}`, language: 'English', provider: 'opensubtitlescom', description: 'English subtitles downloaded', at: iso((i + 1) * 3 * HOUR) })),
 })));
+
+const AUDIOBOOKS = [
+  { title: 'The Lantern Keeper', author: 'Mira Okafor', narrator: 'Sam Reyes', hours: 11.4 },
+  { title: 'Saltwind Chronicles', author: 'Elias Brandt', narrator: 'Nora Vale', hours: 18.2 },
+  { title: 'A Map of Quiet Places', author: 'June Halloway', narrator: 'June Halloway', hours: 7.9 },
+  { title: 'Iron & Ivy', author: 'Theo Lindqvist', narrator: 'Ada Moreau', hours: 14.6 },
+  { title: 'The Long Northbound', author: 'Priya Nandakumar', narrator: 'Leo Hart', hours: 9.3 },
+  { title: 'Gardens Under Glass', author: 'Ines Carvalho', narrator: 'Ruth Abara', hours: 12.1 },
+];
+const PODCASTS = [
+  { title: 'Signal & Noise', author: 'Copper Valley Media', episodes: 214 },
+  { title: 'Kitchen Brigade Radio', author: 'Atlas Audio', episodes: 88 },
+];
+app.get('/api/audiobookshelf/overview', json(() => ({
+  totals: { books: 1284, podcasts: 37, duration: 14_820 * 3600, size: 1.9 * 1024 * GB },
+  libraries: [
+    { id: 'lib-books', name: 'Audiobooks', kind: 'book', items: 1284, authors: 612, duration: 13_400 * 3600, size: 1.6 * 1024 * GB, tracks: 9812 },
+    { id: 'lib-pods', name: 'Podcasts', kind: 'podcast', items: 37, authors: 0, duration: 1_420 * 3600, size: 0.3 * 1024 * GB, tracks: 4211 },
+  ],
+  listening: [
+    { id: 'abs-s1', user: 'harper', title: AUDIOBOOKS[1]!.title, author: AUDIOBOOKS[1]!.author, kind: 'book', position: 6.2 * 3600, duration: AUDIOBOOKS[1]!.hours * 3600, device: 'Audiobookshelf app · Pixel 9 · Android' },
+    { id: 'abs-s2', user: 'sam', title: 'Ep. 212 · Tuning the Static', author: PODCASTS[0]!.author, kind: 'podcast', position: 1420, duration: 3310, device: 'Web · Firefox · macOS' },
+  ],
+  recentSessions: [...AUDIOBOOKS.slice(0, 4), ...AUDIOBOOKS.slice(2, 5)].map((b, i) => ({
+    id: `abs-h${i}`, user: ['harper', 'sam', 'alex', 'jordan'][i % 4], title: b.title, author: b.author, kind: 'book', listened: (20 + i * 13) * 60, device: i % 2 ? 'Web · Chrome · Windows' : 'Audiobookshelf app · iPhone · iOS', at: iso((i + 1) * 5 * HOUR),
+  })),
+  recentlyAdded: [
+    ...AUDIOBOOKS.map((b, i) => ({ id: `abs-b${i}`, libraryId: 'lib-books', kind: 'book', title: b.title, author: b.author, narrator: b.narrator, duration: b.hours * 3600, addedAt: iso((i + 1) * 0.8 * DAY) })),
+    ...PODCASTS.map((p, i) => ({ id: `abs-p${i}`, libraryId: 'lib-pods', kind: 'podcast', title: p.title, author: p.author, episodes: p.episodes, addedAt: iso((i + 2) * 1.3 * DAY) })),
+  ].sort((a, b) => b.addedAt.localeCompare(a.addedAt)),
+})));
+app.post('/api/audiobookshelf/libraries/:id/scan', json(() => ({ ok: true })));
 
 const clientItems = (seed: string, torrent: boolean) =>
   (torrent ? ['Atlas.Station.S01E07.2160p.WEB-DL', 'Paper.Kingdoms.2023.1080p.BluRay', 'Copper.Valley.S03.1080p.WEB', 'Quiet.Orbit.2024.2160p.UHD.BluRay'] : ['Northbound.2025.1080p.WEB-DL', 'Low.Tide.S02E05.1080p.HDTV']).map((name, i) => {

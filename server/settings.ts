@@ -12,7 +12,7 @@ import type { ServiceId } from './services/types.js';
  * Changes apply immediately — clients are rebuilt on the next call.
  */
 
-export const SERVICE_IDS: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
+export const SERVICE_IDS: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'audiobookshelf', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 export const SERVICE_NAMES: Record<ServiceId, string> = {
   jellyfin: 'Jellyfin',
@@ -24,6 +24,7 @@ export const SERVICE_NAMES: Record<ServiceId, string> = {
   bazarr: 'Bazarr',
   lidarr: 'Lidarr',
   readarr: 'Readarr',
+  audiobookshelf: 'Audiobookshelf',
 };
 
 export interface ServiceSettings {
@@ -53,6 +54,7 @@ const CACHE_PREFIX: Record<ServiceId, string> = {
   bazarr: 'bazarr:',
   lidarr: 'lidarr:',
   readarr: 'readarr:',
+  audiobookshelf: 'audiobookshelf:',
 };
 
 interface Row {

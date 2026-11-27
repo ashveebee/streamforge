@@ -28,8 +28,8 @@ import { getLocale, t } from '@/i18n';
  */
 
 /** Most useful first; the rest are for people who run them. */
-const APPS: SetupAppId[] = ['sonarr', 'radarr', 'seerr', 'prowlarr', 'bazarr', 'lidarr', 'readarr'];
-const OPTIONAL = new Set<SetupAppId>(['bazarr', 'lidarr', 'readarr']);
+const APPS: SetupAppId[] = ['sonarr', 'radarr', 'seerr', 'prowlarr', 'bazarr', 'lidarr', 'readarr', 'audiobookshelf'];
+const OPTIONAL = new Set<SetupAppId>(['bazarr', 'lidarr', 'readarr', 'audiobookshelf']);
 
 /** Where each app shows its API key, relative to its address. */
 const KEY_PAGE: Record<SetupAppId, { path: string; where: string }> = {
@@ -40,6 +40,7 @@ const KEY_PAGE: Record<SetupAppId, { path: string; where: string }> = {
   readarr: { path: '/settings/general', where: 'Settings → General → Security' },
   bazarr: { path: '/settings/general', where: 'Settings → General → Security' },
   seerr: { path: '/settings', where: 'Settings → General → API Key' },
+  audiobookshelf: { path: '/config/api-keys', where: 'Settings → API Keys' },
 };
 
 const PLACEHOLDER: Record<SetupAppId, string> = {
@@ -50,6 +51,7 @@ const PLACEHOLDER: Record<SetupAppId, string> = {
   bazarr: 'http://192.168.1.20:6767',
   lidarr: 'http://192.168.1.20:8686',
   readarr: 'http://192.168.1.20:8787',
+  audiobookshelf: 'http://192.168.1.20:13378',
 };
 
 const VIA = (v: FoundApp['via']) => t(`admin.setup.via.${v}`);

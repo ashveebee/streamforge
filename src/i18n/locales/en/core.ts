@@ -256,6 +256,7 @@ const en = {
     },
     groups: {
       media: { title: 'Media server', description: 'The server this install watches and people sign in with.' },
+      audiobooks: { title: 'Audiobooks and podcasts', description: 'Your audiobook and podcast server.' },
       library: { title: 'Library managers', description: 'Find, download and organise TV, movies, music and books.' },
       indexers: { title: 'Indexers and downloads', description: 'Where releases are found, and the clients that download them.' },
       requests: { title: 'Requests', description: 'Let people ask for new movies and shows.' },
@@ -272,6 +273,7 @@ const en = {
       arr: 'Settings → General → Security → API Key',
       seerr: 'Settings → General → API Key',
       infinidisk: 'Optional if the status endpoint is public.',
+      audiobookshelf: 'Settings → API Keys (or Users → your account → API token). Use an admin’s key to see listening activity.',
     },
     service: {
       savedHere: 'Saved in StreamForge',

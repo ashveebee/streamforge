@@ -265,6 +265,7 @@ const fr: Core = {
     },
     groups: {
       media: { title: 'Serveur multimédia', description: 'Le serveur que cette installation surveille et avec lequel les utilisateurs se connectent.' },
+      audiobooks: { title: 'Livres audio et podcasts', description: 'Votre serveur de livres audio et de podcasts.' },
       library: { title: 'Gestionnaires de bibliothèque', description: 'Trouver, télécharger et organiser séries, films, musique et livres.' },
       indexers: { title: 'Indexeurs et téléchargements', description: 'Où trouver les sorties, et les clients qui les téléchargent.' },
       requests: { title: 'Demandes', description: 'Permettre de demander de nouveaux films et séries.' },
@@ -281,6 +282,7 @@ const fr: Core = {
       arr: 'Settings → General → Security → API Key',
       seerr: 'Settings → General → API Key',
       infinidisk: 'Facultatif si le point d’accès d’état est public.',
+      audiobookshelf: 'Settings → API Keys (ou Users → votre compte → API token). Utilisez la clé d’un administrateur pour voir l’activité d’écoute.',
     },
     service: {
       savedHere: 'Enregistré dans StreamForge',

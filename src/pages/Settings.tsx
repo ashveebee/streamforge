@@ -59,6 +59,7 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: MessageKey; keyOpt
   bazarr: { placeholder: 'https://bazarr.example.com', keyHelp: 'settings.keyHelp.arr' },
   lidarr: { placeholder: 'https://lidarr.example.com', keyHelp: 'settings.keyHelp.arr' },
   readarr: { placeholder: 'https://readarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  audiobookshelf: { placeholder: 'https://audiobookshelf.example.com', keyHelp: 'settings.keyHelp.audiobookshelf' },
   infinidisk: { placeholder: 'https://infinidisk.example.com', keyHelp: 'settings.keyHelp.infinidisk', keyOptional: true },
 };
 
@@ -499,6 +500,7 @@ function SettingsTabs({ update }: { update?: string }) {
 const GROUPS = [
   { id: 'media', services: ['jellyfin'] },
   { id: 'library', services: ['sonarr', 'radarr', 'lidarr', 'readarr'] },
+  { id: 'audiobooks', services: ['audiobookshelf'] },
   { id: 'indexers', services: ['prowlarr'] },
   { id: 'requests', services: ['seerr'] },
   { id: 'metadata', services: ['bazarr'] },

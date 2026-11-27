@@ -13,6 +13,7 @@ import { arrProbe } from './services/arr.js';
 import { seerrClient, seerrProbe } from './services/seerr.js';
 import { infinidiskProbe, infinidiskTarget } from './services/infinidisk.js';
 import { bazarrClient, bazarrProbe } from './services/bazarr.js';
+import { audiobookshelfClient, audiobookshelfProbe } from './services/audiobookshelf.js';
 import {
   addPushSubscription,
   CHANNEL_TYPES,
@@ -149,6 +150,8 @@ export async function testSettings(id: ServiceId, s: ServiceSettings): Promise<H
       return arrProbe(createClient(id, url, { 'X-Api-Key': apiKey }), id === 'sonarr' || id === 'radarr' ? 'v3' : 'v1');
     case 'bazarr':
       return bazarrProbe(bazarrClient(url, apiKey));
+    case 'audiobookshelf':
+      return audiobookshelfProbe(audiobookshelfClient(url, apiKey));
     case 'seerr':
       return seerrProbe(seerrClient(url, apiKey));
     case 'infinidisk':

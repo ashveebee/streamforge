@@ -265,6 +265,7 @@ const de: Core = {
     },
     groups: {
       media: { title: 'Medienserver', description: 'Der Server, den diese Installation überwacht und mit dem sich alle anmelden.' },
+      audiobooks: { title: 'Hörbücher und Podcasts', description: 'Dein Server für Hörbücher und Podcasts.' },
       library: { title: 'Bibliotheksverwaltung', description: 'Serien, Filme, Musik und Bücher finden, herunterladen und organisieren.' },
       indexers: { title: 'Indexer und Downloads', description: 'Wo Releases gefunden werden, und die Clients, die sie herunterladen.' },
       requests: { title: 'Anfragen', description: 'Lass andere neue Filme und Serien anfragen.' },
@@ -281,6 +282,7 @@ const de: Core = {
       arr: 'Settings → General → Security → API Key',
       seerr: 'Settings → General → API Key',
       infinidisk: 'Optional, wenn der Status-Endpunkt öffentlich ist.',
+      audiobookshelf: 'Settings → API Keys (oder Users → dein Konto → API token). Mit dem Schlüssel eines Admins wird auch die Höraktivität angezeigt.',
     },
     service: {
       savedHere: 'In StreamForge gespeichert',

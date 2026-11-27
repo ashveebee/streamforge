@@ -2,7 +2,7 @@ import type { ArtworkRef } from './api';
 
 /* Client-side view of the StreamForge API. Mirrors server/ responses. */
 
-export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr';
+export type ServiceId = 'jellyfin' | 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'infinidisk' | 'bazarr' | 'lidarr' | 'readarr' | 'audiobookshelf';
 export type ServiceStatus = 'healthy' | 'degraded' | 'offline' | 'unconfigured';
 
 export interface User {

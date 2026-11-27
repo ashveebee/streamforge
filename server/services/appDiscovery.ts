@@ -29,7 +29,7 @@ import { seerr } from './seerr.js';
  * Keys found that way stay on the server.
  */
 
-export type AppId = Extract<ServiceId, 'sonarr' | 'radarr' | 'prowlarr' | 'lidarr' | 'readarr' | 'bazarr' | 'seerr'>;
+export type AppId = Extract<ServiceId, 'sonarr' | 'radarr' | 'prowlarr' | 'lidarr' | 'readarr' | 'bazarr' | 'seerr' | 'audiobookshelf'>;
 
 interface AppMeta {
   id: AppId;
@@ -46,6 +46,7 @@ export const APPS: AppMeta[] = [
   { id: 'bazarr', port: 6767, names: ['bazarr'] },
   { id: 'lidarr', port: 8686, names: ['lidarr'] },
   { id: 'readarr', port: 8787, names: ['readarr'] },
+  { id: 'audiobookshelf', port: 13378, names: ['audiobookshelf', 'abs'] },
 ];
 
 /** Title words → app. Seerr is also known by its forks' names. */
@@ -56,6 +57,7 @@ const TITLES: [RegExp, AppId, string][] = [
   [/\blidarr\b/i, 'lidarr', 'Lidarr'],
   [/\breadarr\b/i, 'readarr', 'Readarr'],
   [/\bbazarr\b/i, 'bazarr', 'Bazarr'],
+  [/\baudiobookshelf\b/i, 'audiobookshelf', 'Audiobookshelf'],
   [/\bjellyseerr\b/i, 'seerr', 'Jellyseerr'],
   [/\boverseerr\b/i, 'seerr', 'Overseerr'],
   [/\bseerr\b/i, 'seerr', 'Seerr'],
@@ -132,6 +134,11 @@ async function identify(c: { url: string; expect: AppId }): Promise<{ service: A
       const status = await fetchText(`${c.url}/api/v1/status`);
       const json = JSON.parse(status.text) as { version?: string; commitTag?: string };
       if (status.status === 200 && json.version && 'commitTag' in json) return { service: 'seerr', name: 'Seerr' };
+    } else if (c.expect === 'audiobookshelf') {
+      // Its web app is rendered in the browser; the public status endpoint names it.
+      const status = await fetchText(`${c.url}/status`);
+      const json = JSON.parse(status.text) as { app?: string };
+      if (status.status === 200 && json.app === 'audiobookshelf') return { service: 'audiobookshelf', name: 'Audiobookshelf' };
     } else if (page.status === 401) {
       // Basic auth hides the page; the *arr apps still answer /ping without it.
       const ping = await fetchText(`${c.url}/ping`);
