@@ -1,7 +1,7 @@
 {
   "name": "streamforge",
   "private": true,
-  "version": "1.8.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "A unified control centre for your Jellyfin, Plex or Emby media server ecosystem.",
   "license": "GPL-2.0-only",
