@@ -71,6 +71,13 @@ server.
   media server: a Jellyfin or Emby username and password, or **Sign in with
   Plex**. The server keeps the token, and the browser only holds an opaque
   HttpOnly session cookie. The user's profile and avatar come from that server.
+- **Multiple languages.** English, Español, Français, Deutsch and Português
+  (Brasil). StreamForge follows the browser's language, and anyone can change it
+  on the sign-in screen or on **My activity**; the choice is saved per device.
+  The whole interface is translated, and dates and numbers follow the chosen
+  language. Text that comes from the server or your apps (error messages, audit
+  log entries, buffering findings, notifications, Sonarr warnings and so on)
+  stays in English.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:

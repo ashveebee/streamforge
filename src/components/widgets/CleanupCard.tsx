@@ -9,11 +9,12 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
 import { EmptyState } from '@/components/ui/States';
+import { t, type MessageKey } from '@/i18n';
 
-const ACTION_LABEL: Record<CleanupAction, string> = {
-  'blocklist-search': 'Blocklist & search again',
-  blocklist: 'Blocklist only',
-  remove: 'Remove only',
+const ACTION_LABEL: Record<CleanupAction, MessageKey> = {
+  'blocklist-search': 'widgets.queue.blocklistSearch',
+  blocklist: 'widgets.cleanup.blocklistOnly',
+  remove: 'widgets.cleanup.removeOnly',
 };
 
 const selectCls =
@@ -21,7 +22,7 @@ const selectCls =
 
 function Row({ e }: { e: CleanupEntry }) {
   const tone = e.outcome === 'done' ? 'ok' : e.outcome === 'failed' ? 'bad' : 'brand';
-  const label = e.outcome === 'done' ? 'Removed' : e.outcome === 'failed' ? 'Failed' : 'Would remove';
+  const label = e.outcome === 'done' ? t('widgets.cleanup.removed') : e.outcome === 'failed' ? t('widgets.requests.failed') : t('widgets.cleanup.wouldRemove');
   return (
     <li className="flex items-start gap-3 py-2.5">
       <Pill tone={tone} className="mt-0.5 shrink-0">{label}</Pill>
@@ -58,39 +59,39 @@ export function CleanupCard() {
     <Card>
       <CardHeader
         icon={Recycle}
-        title="Stalled download cleanup"
+        title={t('widgets.cleanup.title')}
         subtitle={
           !s
-            ? 'Removes downloads that stop making progress'
+            ? t('widgets.cleanup.about')
             : on
-              ? `On · ${s.pending ? `${s.pending} to act on` : 'nothing stalled'} · watching ${s.watching} download${s.watching === 1 ? '' : 's'}`
-              : 'Off · removes downloads that stop making progress'
+              ? `${t('widgets.cleanup.on')} · ${s.pending ? t('widgets.cleanup.pending', { count: s.pending }) : t('widgets.cleanup.nothing')} · ${t('widgets.cleanup.watching', { count: s.watching })}`
+              : `${t('widgets.cleanup.off')} · ${t('widgets.cleanup.about')}`
         }
-        action={admin && s ? <Switch checked={on} disabled={busy} onChange={(v) => update.mutate({ enabled: v })} label={on ? 'Turn off cleanup' : 'Turn on cleanup'} /> : undefined}
+        action={admin && s ? <Switch checked={on} disabled={busy} onChange={(v) => update.mutate({ enabled: v })} label={on ? t('widgets.cleanup.turnOff') : t('widgets.cleanup.turnOn')} /> : undefined}
       />
       <CardBody className="space-y-4">
         {admin && s && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink-3">
             <label className="flex items-center gap-2">
-              Stalled after
+              {t('widgets.cleanup.after')}
               <select className={selectCls} value={s.settings.stalledHours} disabled={busy} onChange={(e) => update.mutate({ stalledHours: Number(e.target.value) })}>
-                {s.stallHours.map((h) => <option key={h} value={h}>{h} h</option>)}
+                {s.stallHours.map((h) => <option key={h} value={h}>{t('widgets.cleanup.hours', { n: h })}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2">
-              Then
+              {t('widgets.cleanup.then')}
               <select className={selectCls} value={s.settings.action} disabled={busy} onChange={(e) => update.mutate({ action: e.target.value as CleanupAction })}>
-                {s.actions.map((a) => <option key={a} value={a}>{ACTION_LABEL[a]}</option>)}
+                {s.actions.map((a) => <option key={a} value={a}>{t(ACTION_LABEL[a])}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2">
-              <Switch checked={s.settings.failed} disabled={busy} onChange={(v) => update.mutate({ failed: v })} label="Also remove failed downloads" />
-              Failed downloads too
+              <Switch checked={s.settings.failed} disabled={busy} onChange={(v) => update.mutate({ failed: v })} label={t('widgets.cleanup.failedLabel')} />
+              {t('widgets.cleanup.failed')}
             </label>
             <div className="ml-auto flex gap-2">
-              <Button size="sm" disabled={busy} onClick={() => void go(true)}><Eye className="size-3.5" /> Preview</Button>
-              <Button size="sm" variant="primary" disabled={busy || !on} onClick={() => void go(false)} title={on ? undefined : 'Turn cleanup on first'}>
-                {run.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Run now
+              <Button size="sm" disabled={busy} onClick={() => void go(true)}><Eye className="size-3.5" /> {t('widgets.cleanup.preview')}</Button>
+              <Button size="sm" variant="primary" disabled={busy || !on} onClick={() => void go(false)} title={on ? undefined : t('widgets.cleanup.onFirst')}>
+                {run.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} {t('widgets.cleanup.run')}
               </Button>
             </div>
           </div>
@@ -101,22 +102,22 @@ export function CleanupCard() {
         {preview && (
           <div>
             <h3 className="mb-1 flex text-[11px] font-semibold tracking-wide text-ink-4 uppercase">
-              Preview — nothing was changed
-              <button type="button" className="ml-auto font-normal tracking-normal normal-case hover:text-ink-2" onClick={() => setPreview(undefined)}>Dismiss</button>
+              {t('widgets.cleanup.previewTitle')}
+              <button type="button" className="ml-auto font-normal tracking-normal normal-case hover:text-ink-2" onClick={() => setPreview(undefined)}>{t('widgets.cleanup.dismiss')}</button>
             </h3>
-            {preview.length ? <ul className="divide-y divide-line">{preview.map((e) => <Row key={e.id} e={e} />)}</ul> : <p className="text-xs text-ink-3">Nothing is stalled or failed right now.</p>}
+            {preview.length ? <ul className="divide-y divide-line">{preview.map((e) => <Row key={e.id} e={e} />)}</ul> : <p className="text-xs text-ink-3">{t('widgets.cleanup.clear')}</p>}
           </div>
         )}
         <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-wide text-ink-4 uppercase">Recent activity{s?.lastRun ? ` · last checked ${relative(s.lastRun)}` : ''}</h3>
+          <h3 className="mb-1 text-[11px] font-semibold tracking-wide text-ink-4 uppercase">{t('widgets.cleanup.recent')}{s?.lastRun ? ` · ${t('widgets.cleanup.lastChecked', { when: relative(s.lastRun) })}` : ''}</h3>
           {s?.log.length ? (
             <ul className="max-h-[320px] divide-y divide-line overflow-y-auto">{s.log.map((e) => <Row key={e.id} e={e} />)}</ul>
           ) : (
-            <EmptyState icon={Recycle} title="Nothing removed yet" description="Stalled and failed downloads that get cleaned up will show here." />
+            <EmptyState icon={Recycle} title={t('widgets.cleanup.none')} description={t('widgets.cleanup.noneHint')} />
           )}
         </div>
         <p className="text-[11px] text-ink-4">
-          Downloads that finished but won’t import are left to auto-import. Progress is tracked from when StreamForge starts, so a restart resets the clock.
+          {t('widgets.cleanup.note')}
         </p>
       </CardBody>
     </Card>

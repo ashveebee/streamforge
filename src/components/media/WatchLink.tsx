@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Globe, MonitorPlay, Smartphone, X } from 'lucide-react';
 import { useServiceConfig } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
+import { t } from '@/i18n';
 
 /*
  * Opening a title in Jellyfin or Moonfin. When an admin switches Moonfin on,
@@ -103,22 +104,22 @@ function Chooser({
   }[] = [
     {
       id: 'moonfin-app',
-      label: 'Moonfin app',
-      hint: 'The Moonfin app installed on this device',
+      label: t('media.open.app'),
+      hint: t('media.open.appHint'),
       icon: Smartphone,
       show: true,
     },
     {
       id: 'moonfin-web',
-      label: 'Moonfin in the browser',
-      hint: 'The Moonfin web app on your Jellyfin server',
+      label: t('media.open.web'),
+      hint: t('media.open.webHint'),
       icon: Globe,
       show: hasWeb,
     },
     {
       id: 'jellyfin',
       label: 'Jellyfin',
-      hint: 'Jellyfin’s own web app',
+      hint: t('media.open.jellyfinHint'),
       icon: MonitorPlay,
       show: hasJellyfin,
     },
@@ -145,9 +146,9 @@ function Chooser({
           >
             <div className="mb-3 flex items-center gap-2">
               <h2 id="open-with-h" className="flex-1 text-[15px] font-semibold">
-                Open in Moonfin?
+                {t('media.open.title')}
               </h2>
-              <button onClick={onClose} className="grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-white/5 hover:text-ink" aria-label="Close">
+              <button onClick={onClose} className="grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-white/5 hover:text-ink" aria-label={t('media.close')}>
                 <X className="size-4" />
               </button>
             </div>
@@ -169,7 +170,7 @@ function Chooser({
                       <span className="block text-[13px] font-medium">{o.label}</span>
                       <span className="block text-[11px] text-ink-4">{o.hint}</span>
                     </span>
-                    {o.id === suggested && <span className="text-[10px] text-brand">Suggested</span>}
+                    {o.id === suggested && <span className="text-[10px] text-brand">{t('media.open.suggested')}</span>}
                   </button>
                 ))}
             </div>
@@ -178,7 +179,7 @@ function Chooser({
                 {remember && <Check className="size-3" strokeWidth={3} />}
               </span>
               <input type="checkbox" className="sr-only" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              Remember on this device
+              {t('media.open.remember')}
             </label>
           </motion.div>
         </motion.div>

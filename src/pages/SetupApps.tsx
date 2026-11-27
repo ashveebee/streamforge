@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/Card';
 import { inputCls } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
 import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
+import { getLocale, t } from '@/i18n';
 
 /*
  * First-run setup, step 2: the apps around the media server. Step 1 (the
@@ -51,13 +52,13 @@ const PLACEHOLDER: Record<SetupAppId, string> = {
   readarr: 'http://192.168.1.20:8787',
 };
 
-const VIA: Record<FoundApp['via'], string> = { docker: 'on the Docker network', host: 'on this machine', domain: 'on your domain' };
+const VIA = (v: FoundApp['via']) => t(`admin.setup.via.${v}`);
 
 function Stepper({ step }: { step: 1 | 2 }) {
   const main = useMainServer();
   const items = [
-    { n: 1, label: 'Media server', detail: main.name },
-    { n: 2, label: 'Your apps', detail: 'Sonarr, Radarr, Seerr…' },
+    { n: 1, label: t('settings.groups.media.title'), detail: main.name },
+    { n: 2, label: t('admin.setup.yourApps'), detail: 'Sonarr, Radarr, Seerr…' },
   ];
   return (
     <ol className="flex flex-wrap items-center gap-2 text-xs">
@@ -132,29 +133,29 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[14px] font-semibold">{found?.name && found.service === 'seerr' ? found.name : meta.name}</span>
               <span className="text-[11px] text-ink-4">{meta.tagline}</span>
-              {OPTIONAL.has(id) && !connected && !found && <span className="text-[11px] text-ink-4">· optional</span>}
+              {OPTIONAL.has(id) && !connected && !found && <span className="text-[11px] text-ink-4">· {t('admin.setup.optional')}</span>}
             </div>
             <div className="mt-0.5 truncate text-[11px]">
               {connected ? (
-                <span className="text-ok">Connected · {s!.url}</span>
+                <span className="text-ok">{t('settings.service.connected')} · {s!.url}</span>
               ) : found ? (
                 <span className="text-ink-2">
-                  Found {VIA[found.via]} · <span className="font-mono">{found.url}</span>
+                  {t('admin.setup.found', { where: VIA(found.via) })} · <span className="font-mono">{found.url}</span>
                 </span>
               ) : scanning ? (
-                <span className="text-ink-4">Looking…</span>
+                <span className="text-ink-4">{t('admin.setup.looking')}</span>
               ) : (
-                <span className="text-ink-4">Not found automatically</span>
+                <span className="text-ink-4">{t('admin.setup.notFound')}</span>
               )}
             </div>
           </div>
           {connected ? (
             <Pill tone="ok">
-              <Check className="size-3" strokeWidth={3} /> Connected
+              <Check className="size-3" strokeWidth={3} /> {t('settings.service.connected')}
             </Pill>
           ) : (
             <Button size="sm" variant={found && !open ? 'primary' : 'ghost'} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-              {open ? 'Close' : found ? 'Connect' : 'Add'}
+              {open ? t('media.close') : found ? t('login.connect') : t('admin.setup.add')}
             </Button>
           )}
         </div>
@@ -162,7 +163,7 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
           <form onSubmit={connect} className="space-y-3 border-t border-line bg-white/[0.015] p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">Address</span>
+                <span className="mb-1 block text-[11px] text-ink-3">{t('admin.setup.address')}</span>
                 <input
                   className={cn(inputCls, 'h-9 font-mono text-[13px]')}
                   type="url"
@@ -179,7 +180,7 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
                 />
               </label>
               <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">API key</span>
+                <span className="mb-1 block text-[11px] text-ink-3">{t('settings.service.apiKey')}</span>
                 <span className="relative block">
                   <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-ink-4" />
                   <input
@@ -187,7 +188,7 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
                     type="password"
                     autoComplete="new-password"
                     spellCheck={false}
-                    placeholder="Paste the API key"
+                    placeholder={t('settings.service.pasteKey')}
                     value={apiKey}
                     onChange={(e) => {
                       setApiKey(e.target.value);
@@ -208,12 +209,12 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
                   <span className="text-bad" role="alert">{(save.error as Error).message}</span>
                 ) : (
                   <span className="text-ink-4">
-                    Find the key in {meta.name} under {KEY_PAGE[id].where}
+                    {t('admin.setup.findKey', { app: meta.name, where: KEY_PAGE[id].where })}
                     {keyPage && (
                       <>
                         {' · '}
                         <a href={keyPage} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 text-brand hover:underline">
-                          open it <ExternalLink className="size-3" />
+                          {t('admin.setup.openIt')} <ExternalLink className="size-3" />
                         </a>
                       </>
                     )}
@@ -222,7 +223,7 @@ function AppCard({ id, s, found, scanning }: { id: SetupAppId; s?: ServiceSettin
               </div>
               <Button type="submit" variant="primary" size="sm" disabled={busy || !url.trim() || !apiKey.trim()}>
                 {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />}
-                {test.isPending ? 'Testing…' : save.isPending ? 'Saving…' : 'Test and connect'}
+                {test.isPending ? t('admin.setup.testing') : save.isPending ? t('admin.setup.saving') : t('admin.setup.testConnect')}
               </Button>
             </div>
           </form>
@@ -238,7 +239,7 @@ function ImportBanner({ items, onDone }: { items: ImportableApp[]; onDone: () =>
   if (!items.length && !imp.data) return null;
   const byFrom = new Map<string, SetupAppId[]>();
   for (const i of items) byFrom.set(i.from, [...(byFrom.get(i.from) ?? []), i.service]);
-  const names = (ids: SetupAppId[]) => ids.map((i) => SERVICES[i].name).join(' and ');
+  const names = (ids: SetupAppId[]) => new Intl.ListFormat(getLocale(), { type: 'conjunction' }).format(ids.map((i) => SERVICES[i].name));
   return (
     <Card className="border-brand/30 bg-brand/[0.06] p-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -249,7 +250,7 @@ function ImportBanner({ items, onDone }: { items: ImportableApp[]; onDone: () =>
               {imp.data.results.map((r) => (
                 <li key={r.service} className={cn('flex items-center gap-1.5', r.ok ? 'text-ok' : 'text-bad')}>
                   {r.ok ? <CircleCheck className="size-3.5" /> : <CircleX className="size-3.5" />}
-                  {SERVICES[r.service].name}: {r.ok ? `connected using ${SERVICES[r.from].name}’s details` : r.message}
+                  {SERVICES[r.service].name}: {r.ok ? t('admin.setup.usingDetails', { app: SERVICES[r.from].name }) : r.message}
                 </li>
               ))}
             </ul>
@@ -257,17 +258,17 @@ function ImportBanner({ items, onDone }: { items: ImportableApp[]; onDone: () =>
             <>
               {[...byFrom].map(([from, ids]) => (
                 <p key={from}>
-                  <b className="font-semibold">{SERVICES[from as SetupAppId].name}</b> already knows your {names(ids)}. Connect {ids.length > 1 ? 'them' : 'it'} with the same address and key?
+                  <b className="font-semibold">{SERVICES[from as SetupAppId].name}</b> {t('admin.setup.knows', { count: ids.length, apps: names(ids) })}
                 </p>
               ))}
-              <p className="mt-0.5 text-[11px] text-ink-3">Each is tested first. Keys are copied on the server and never shown here.</p>
+              <p className="mt-0.5 text-[11px] text-ink-3">{t('admin.setup.tested')}</p>
             </>
           )}
         </div>
         {!imp.data && (
           <Button size="sm" variant="primary" disabled={imp.isPending} onClick={() => imp.mutate(undefined, { onSuccess: onDone })}>
             {imp.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-            Connect {items.length > 1 ? `all ${items.length}` : SERVICES[items[0]!.service].name}
+            {items.length > 1 ? t('admin.setup.connectAll', { count: items.length }) : t('admin.setup.connectOne', { app: SERVICES[items[0]!.service].name })}
           </Button>
         )}
       </div>
@@ -303,14 +304,14 @@ export default function SetupAppsPage() {
               <Check className="size-5" strokeWidth={3} />
             </span>
             <span className="text-[13px] text-ink-3">
-              {main.name} is connected. <span className="text-ink-4">It’s the media server this install watches.</span>
+              {t('admin.setup.connected', { server: main.name })} <span className="text-ink-4">{t('admin.setup.watches')}</span>
             </span>
           </div>
           <Stepper step={2} />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Set up your apps</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('admin.setup.title')}</h1>
             <p className="mt-1 max-w-2xl text-sm text-ink-3">
-              Connect the apps around {main.name}: downloads, requests, indexers and subtitles. StreamForge looks for them on your network; paste each API key to connect. Skip any you don’t use. You can change them later in Settings.
+              {t('admin.setup.intro', { server: main.name })}
             </p>
           </div>
         </header>
@@ -318,18 +319,18 @@ export default function SetupAppsPage() {
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-3">
           {discover.isPending ? (
             <span className="inline-flex items-center gap-1.5">
-              <LoaderCircle className="size-3.5 animate-spin" /> Looking for Sonarr, Radarr, Seerr and the rest…
+              <LoaderCircle className="size-3.5 animate-spin" /> {t('admin.setup.lookingFor')}
             </span>
           ) : discover.data ? (
             <span>
-              Found {discover.data.found.length} app{discover.data.found.length === 1 ? '' : 's'}
-              {connected ? ` · ${connected} connected` : ''}
+              {t('admin.setup.foundCount', { count: discover.data.found.length })}
+              {connected ? ` · ${t('admin.setup.connectedCount', { count: connected })}` : ''}
             </span>
           ) : discover.error ? (
             <span className="text-bad">{(discover.error as Error).message}</span>
           ) : null}
           <Button size="sm" variant="ghost" disabled={discover.isPending} onClick={() => discover.mutate()}>
-            <Radar className="size-3.5" /> Search again
+            <Radar className="size-3.5" /> {t('login.searchAgain')}
           </Button>
         </div>
 
@@ -343,16 +344,15 @@ export default function SetupAppsPage() {
 
         {discover.data && discover.data.found.length === 0 && (
           <p className="text-[11px] leading-relaxed text-ink-4">
-            Nothing answered automatically. StreamForge looks for apps by their Docker service names (like <code className="font-mono">sonarr</code>), on this machine and on the media server’s machine at their usual ports, and at
-            subdomains next to the media server’s (like <code className="font-mono">sonarr.example.com</code>). Add any app by its address instead.
+            {t('admin.setup.nothing')}
           </p>
         )}
 
         <footer className="flex flex-wrap items-center gap-3 border-t border-line pt-5">
-          <span className="mr-auto text-xs text-ink-4">{finish.error ? <span className="text-bad">{(finish.error as Error).message}</span> : 'Apps you don’t connect are switched off. Turn them on any time in Settings.'}</span>
+          <span className="mr-auto text-xs text-ink-4">{finish.error ? <span className="text-bad">{(finish.error as Error).message}</span> : t('admin.setup.switchedOff')}</span>
           <Button variant={connected ? 'primary' : 'ghost'} disabled={finish.isPending} onClick={done}>
             {finish.isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}
-            {connected ? 'Finish setup' : 'Skip for now'} <ArrowRight className="size-4" />
+            {connected ? t('admin.setup.finish') : t('admin.setup.skip')} <ArrowRight className="size-4" />
           </Button>
         </footer>
       </div>

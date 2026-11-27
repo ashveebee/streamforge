@@ -8,6 +8,7 @@ import { bytes } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
+import { t } from '@/i18n';
 
 export type ArrKind = 'sonarr' | 'radarr';
 
@@ -49,16 +50,7 @@ interface Result {
   message?: string;
 }
 
-const SERIES_MONITOR: [string, string][] = [
-  ['all', 'All episodes'],
-  ['future', 'Future episodes'],
-  ['missing', 'Missing episodes'],
-  ['existing', 'Existing episodes'],
-  ['firstSeason', 'First season'],
-  ['lastSeason', 'Latest season'],
-  ['pilot', 'Pilot only'],
-  ['none', 'None'],
-];
+const SERIES_MONITOR = ['all', 'future', 'missing', 'existing', 'firstSeason', 'lastSeason', 'pilot', 'none'] as const;
 
 const select =
   'h-10 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink outline-none transition focus:border-brand/60 focus:ring-4 focus:ring-brand/10 [&>option]:bg-surface-2';
@@ -124,8 +116,7 @@ export function AddToArrDialog({
   }, [add.isPending, onClose]);
 
   const name = kind === 'radarr' ? 'Radarr' : 'Sonarr';
-  const noun = kind === 'radarr' ? 'movie' : 'series';
-  const plural = (n: number) => `${n} ${noun}${n === 1 || kind === 'sonarr' ? '' : 's'}`;
+  const plural = (n: number) => t(kind === 'radarr' ? 'media.add.movies' : 'media.add.series', { count: n });
   const toAdd = check.data?.items.filter((i) => i.status === 'new').length ?? 0;
   const results = useMemo(() => new Map(add.data?.results.map((r) => [r.key, r])), [add.data]);
   const done = !!add.data;
@@ -150,11 +141,11 @@ export function AddToArrDialog({
         <div className="flex items-start gap-3 px-6 pt-5 pb-2">
           <div className="min-w-0 flex-1">
             <h2 id="arr-add-h" className="text-lg font-semibold">
-              {done ? `Added to ${add.data!.instance}` : `Add ${items.length === 1 ? (items[0]!.title ?? `1 ${noun}`) : plural(items.length)} to ${name}`}
+              {done ? t('palette.addedTo', { instance: add.data!.instance }) : t('media.add.title', { what: items.length === 1 ? (items[0]!.title ?? plural(1)) : plural(items.length), app: name })}
             </h2>
-            {from && <p className="mt-0.5 text-xs text-ink-4">From {from}</p>}
+            {from && <p className="mt-0.5 text-xs text-ink-4">{t('media.from', { server: from })}</p>}
           </div>
-          <button onClick={onClose} disabled={add.isPending} className="grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-white/5 hover:text-ink" aria-label="Close">
+          <button onClick={onClose} disabled={add.isPending} className="grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-white/5 hover:text-ink" aria-label={t('media.close')}>
             <X className="size-4" />
           </button>
         </div>
@@ -163,60 +154,60 @@ export function AddToArrDialog({
           {opts.isError ? (
             <p className="text-sm text-bad" role="alert">{(opts.error as Error).message}</p>
           ) : !opts.data || !choices ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-ink-3"><LoaderCircle className="size-4 animate-spin" /> Asking {name} for its settings…</div>
+            <div className="flex items-center gap-2 py-6 text-sm text-ink-3"><LoaderCircle className="size-4 animate-spin" /> {t('media.add.asking', { app: name })}</div>
           ) : (
             !done && (
               <>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label={`${name} instance`}>
+                  <Field label={t('media.add.instance', { app: name })}>
                     <select className={select} value={opts.data.instance} onChange={(e) => setInstance(e.target.value)} disabled={opts.data.instances.length < 2}>
                       {opts.data.instances.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </select>
                   </Field>
-                  <Field label="Quality profile">
+                  <Field label={t('media.add.profile')}>
                     <select className={select} value={choices.qualityProfileId} onChange={(e) => setChoices({ ...choices, qualityProfileId: Number(e.target.value) })}>
                       {opts.data.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </Field>
-                  <Field label="Root folder">
+                  <Field label={t('media.add.root')}>
                     <select className={select} value={choices.rootFolderPath} onChange={(e) => setChoices({ ...choices, rootFolderPath: e.target.value })}>
                       {opts.data.roots.map((r) => (
                         <option key={r.path} value={r.path} disabled={!r.accessible}>
-                          {r.path}{r.freeSpace !== undefined ? ` · ${bytes(r.freeSpace)} free` : ''}{r.accessible ? '' : ' · not reachable'}
+                          {r.path}{r.freeSpace !== undefined ? ` · ${t('library.dl.free', { size: bytes(r.freeSpace) })}` : ''}{r.accessible ? '' : ` · ${t('media.add.unreachable')}`}
                         </option>
                       ))}
                     </select>
                   </Field>
                   {kind === 'radarr' ? (
-                    <Field label="Minimum availability">
+                    <Field label={t('media.add.minAvail')}>
                       <select className={select} value={choices.minimumAvailability} onChange={(e) => setChoices({ ...choices, minimumAvailability: e.target.value as Options['defaults']['minimumAvailability'] })}>
-                        <option value="announced">Announced</option>
-                        <option value="inCinemas">In cinemas</option>
-                        <option value="released">Released</option>
+                        <option value="announced">{t('media.add.announced')}</option>
+                        <option value="inCinemas">{t('widgets.upcoming.cinema')}</option>
+                        <option value="released">{t('media.released')}</option>
                       </select>
                     </Field>
                   ) : (
-                    <Field label="Monitor">
+                    <Field label={t('media.add.monitor')}>
                       <select className={select} value={choices.seriesMonitor} onChange={(e) => setChoices({ ...choices, seriesMonitor: e.target.value })}>
-                        {SERIES_MONITOR.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        {SERIES_MONITOR.map((v) => <option key={v} value={v}>{t(`media.add.monitorOpt.${v}`)}</option>)}
                       </select>
                     </Field>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
-                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.monitored} onChange={(v) => setChoices({ ...choices, monitored: v, search: v && choices.search })} label="Monitor" />Monitor</span>
-                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.search && choices.monitored} disabled={!choices.monitored} onChange={(v) => setChoices({ ...choices, search: v })} label="Search now" />Search now</span>
-                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.tag} onChange={(v) => setChoices({ ...choices, tag: v })} label="Add tag “streamforge”" />Add tag “streamforge”</span>
+                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.monitored} onChange={(v) => setChoices({ ...choices, monitored: v, search: v && choices.search })} label={t('media.add.monitor')} />{t('media.add.monitor')}</span>
+                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.search && choices.monitored} disabled={!choices.monitored} onChange={(v) => setChoices({ ...choices, search: v })} label={t('media.searchNow')} />{t('media.searchNow')}</span>
+                  <span className="inline-flex items-center gap-2 text-[13px] text-ink-2"><Switch checked={choices.tag} onChange={(v) => setChoices({ ...choices, tag: v })} label={t('media.add.tag')} />{t('media.add.tag')}</span>
                 </div>
               </>
             )
           )}
 
           <div>
-            <div className="mb-1.5 text-xs font-medium text-ink-3">Titles</div>
+            <div className="mb-1.5 text-xs font-medium text-ink-3">{t('media.add.titles')}</div>
             <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
               {!check.data ? (
-                <li className="flex items-center gap-2 px-3 py-3 text-xs text-ink-3"><LoaderCircle className="size-3.5 animate-spin" /> Checking what’s already in {name}…</li>
+                <li className="flex items-center gap-2 px-3 py-3 text-xs text-ink-3"><LoaderCircle className="size-3.5 animate-spin" /> {t('media.add.checking', { app: name })}</li>
               ) : (
                 check.data.items.map((c) => {
                   const r = results.get(c.key);
@@ -228,12 +219,12 @@ export function AddToArrDialog({
                       {r ? (
                         <span className={cn('inline-flex shrink-0 items-center gap-1 text-[11.5px]', r.status === 'added' ? 'text-ok' : r.status === 'failed' ? 'text-bad' : 'text-ink-4')}>
                           {r.status === 'added' ? <Check className="size-3.5" /> : r.status === 'failed' ? <CircleAlert className="size-3.5" /> : null}
-                          {r.status === 'added' ? 'Added' : r.message}
+                          {r.status === 'added' ? t('media.added') : r.message}
                         </span>
                       ) : c.status === 'new' ? (
-                        <span className="shrink-0 text-[11.5px] text-ok">{add.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : 'Will add'}</span>
+                        <span className="shrink-0 text-[11.5px] text-ok">{add.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : t('media.add.will')}</span>
                       ) : (
-                        <span className="shrink-0 text-[11.5px] text-ink-4">{c.status === 'exists' ? `Already in ${c.instance} · skipped` : 'No TMDB/TVDB id · skipped'}</span>
+                        <span className="shrink-0 text-[11.5px] text-ink-4">{c.status === 'exists' ? t('media.add.exists', { instance: c.instance }) : t('media.add.noId')}</span>
                       )}
                     </li>
                   );
@@ -242,20 +233,20 @@ export function AddToArrDialog({
             </ul>
           </div>
           {add.error && <p className="text-xs text-bad" role="alert">{(add.error as Error).message}</p>}
-          {done && add.data!.searching && <p className="text-xs text-ink-3">{name} is searching for them now, one after another.</p>}
-          {!done && choices?.search && choices.monitored && toAdd > 1 && <p className="text-xs text-ink-4">{name} searches for them one after another, so your indexers aren’t flooded.</p>}
+          {done && add.data!.searching && <p className="text-xs text-ink-3">{t('media.add.searching', { app: name })}</p>}
+          {!done && choices?.search && choices.monitored && toAdd > 1 && <p className="text-xs text-ink-4">{t('media.add.oneByOne', { app: name })}</p>}
         </div>
 
         <div className="flex items-center gap-2 border-t border-line px-6 py-4">
-          <span className="mr-auto text-[11px] text-ink-4">{done ? '' : 'These choices are remembered for next time.'}</span>
+          <span className="mr-auto text-[11px] text-ink-4">{done ? '' : t('media.add.remembered')}</span>
           {done ? (
-            <Button variant="primary" onClick={onClose}>Done</Button>
+            <Button variant="primary" onClick={onClose}>{t('common.done')}</Button>
           ) : (
             <>
-              <Button onClick={onClose} disabled={add.isPending}>Cancel</Button>
+              <Button onClick={onClose} disabled={add.isPending}>{t('media.cancel')}</Button>
               <Button variant="primary" disabled={!ready || add.isPending} onClick={() => add.mutate()}>
                 {add.isPending ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                {toAdd ? `Add ${plural(toAdd)}` : 'Nothing to add'}
+                {toAdd ? t('media.add.add', { what: plural(toAdd) }) : t('media.add.nothing')}
               </Button>
             </>
           )}

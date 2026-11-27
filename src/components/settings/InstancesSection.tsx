@@ -7,6 +7,7 @@ import type { ArrInstanceView, ArrKind } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
+import { t } from '@/i18n';
 
 const inputCls =
   'h-9 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink placeholder:text-ink-4 transition outline-none focus:border-brand/60 focus:bg-white/[0.05] focus:ring-4 focus:ring-brand/10 aria-[invalid=true]:border-bad/60';
@@ -42,15 +43,15 @@ function InstanceRow({ kind, inst, onDone }: { kind: ArrKind; inst?: ArrInstance
     <form onSubmit={onSubmit} noValidate className={cn('space-y-3 px-5 py-4', inst && !inst.enabled && 'opacity-70')}>
       <div className="grid gap-3 md:grid-cols-[minmax(120px,0.7fr)_minmax(180px,1.3fr)_minmax(180px,1fr)]">
         <input
-          aria-label="Instance name"
+          aria-label={t('sec.inst.name')}
           className={inputCls}
-          placeholder={`Name, e.g. ${kind === 'radarr' ? '4K' : 'Anime'}`}
+          placeholder={t('sec.inst.namePh', { example: kind === 'radarr' ? '4K' : 'Anime' })}
           value={form.name}
           aria-invalid={err?.field === 'name'}
           onChange={(e) => set('name', e.target.value)}
         />
         <input
-          aria-label="Server address"
+          aria-label={t('settings.service.address')}
           className={inputCls}
           type="url"
           inputMode="url"
@@ -64,12 +65,12 @@ function InstanceRow({ kind, inst, onDone }: { kind: ArrKind; inst?: ArrInstance
         <div className="relative">
           <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-ink-4" />
           <input
-            aria-label="API key"
+            aria-label={t('settings.service.apiKey')}
             className={cn(inputCls, 'pl-8 font-mono text-[13px]')}
             type="password"
             autoComplete="new-password"
             spellCheck={false}
-            placeholder={inst?.apiKeySet ? `Saved ${inst.apiKeyHint ?? '••••'} — blank keeps it` : 'API key'}
+            placeholder={inst?.apiKeySet ? t('sec.savedHint', { hint: inst.apiKeyHint ?? '••••' }) : t('settings.service.apiKey')}
             value={form.apiKey}
             aria-invalid={err?.field === 'apiKey'}
             onChange={(e) => set('apiKey', e.target.value)}
@@ -82,12 +83,12 @@ function InstanceRow({ kind, inst, onDone }: { kind: ArrKind; inst?: ArrInstance
             <span className="text-bad" role="alert">{err.message}</span>
           ) : test.data ? (
             test.data.ok ? (
-              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> Connected{test.data.version ? ` · v${test.data.version}` : ''}</span>
+              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> {t('settings.service.connected')}{test.data.version ? ` · v${test.data.version}` : ''}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-bad"><CircleX className="size-3.5" /> {test.data.message}</span>
             )
           ) : inst ? (
-            <span className="text-ink-4">{inst.enabled ? 'Active' : 'Switched off'}</span>
+            <span className="text-ink-4">{inst.enabled ? t('sec.active') : t('sec.switchedOff')}</span>
           ) : null}
         </div>
         {inst && (
@@ -96,7 +97,7 @@ function InstanceRow({ kind, inst, onDone }: { kind: ArrKind; inst?: ArrInstance
               checked={inst.enabled}
               disabled={busy}
               onChange={(v) => save.mutate({ id: inst.id, enabled: v })}
-              label={inst.enabled ? `Switch off ${inst.name}` : `Switch on ${inst.name}`}
+              label={inst.enabled ? t('sec.switchOff', { name: inst.name }) : t('sec.switchOn', { name: inst.name })}
             />
             <Button
               type="button"
@@ -104,25 +105,25 @@ function InstanceRow({ kind, inst, onDone }: { kind: ArrKind; inst?: ArrInstance
               size="sm"
               disabled={busy}
               onClick={() => {
-                if (confirm(`Remove the ${APP[kind]} instance "${inst.name}"?`)) remove.mutate(inst.id);
+                if (confirm(t('sec.inst.confirmRemove', { app: APP[kind], name: inst.name }))) remove.mutate(inst.id);
               }}
             >
-              <Trash2 className="size-3.5" /> Remove
+              <Trash2 className="size-3.5" /> {t('library.dl.remove')}
             </Button>
           </>
         )}
         {!inst && (
           <Button type="button" variant="ghost" size="sm" onClick={onDone}>
-            Cancel
+            {t('media.cancel')}
           </Button>
         )}
         <Button type="button" size="sm" disabled={busy || !form.url.trim()} onClick={() => test.mutate(input())}>
           {test.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />}
-          Test
+          {t('sec.sso.test')}
         </Button>
         <Button type="submit" variant="primary" size="sm" disabled={busy || !dirty}>
           {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-          {inst ? 'Save' : 'Add'}
+          {inst ? t('common.save') : t('admin.setup.add')}
         </Button>
       </div>
     </form>
@@ -139,14 +140,14 @@ export function InstancesSection({ kind }: { kind: ArrKind }) {
       <Card>
         <header className="flex items-center gap-3 px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-[13px] font-semibold">More {APP[kind]} instances</h3>
+            <h3 className="text-[13px] font-semibold">{t('sec.inst.more', { app: APP[kind] })}</h3>
             <p className="text-[11px] text-ink-4">
-              For a second {APP[kind]}, such as {kind === 'radarr' ? 'a 4K library' : 'an anime library'}. Each gets its own tab on the {APP[kind]} page.
+              {t(kind === 'radarr' ? 'sec.inst.hint4k' : 'sec.inst.hintAnime', { app: APP[kind] })}
             </p>
           </div>
           {!adding && (
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" /> Add instance
+              <Plus className="size-3.5" /> {t('sec.inst.add')}
             </Button>
           )}
         </header>

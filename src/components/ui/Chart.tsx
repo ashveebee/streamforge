@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { getLocale } from '@/i18n';
 
 /* Shared chart styling: recessive grid/axes, ink-coloured text, series colours
  * validated for colour-vision deficiency against the dark surface. */
@@ -89,4 +90,4 @@ export function Legend({ items }: { items: { label: string; color: string; value
 }
 
 export const timeLabel = (t: string | number) =>
-  new Date(Number(t)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  new Date(Number(t)).toLocaleTimeString(getLocale(), { hour: 'numeric', minute: '2-digit', second: '2-digit' });

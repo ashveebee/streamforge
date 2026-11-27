@@ -5,16 +5,17 @@ import { cn } from '@/lib/cn';
 import { ServerTag } from '@/components/ui/ServerTag';
 import type { Episode, MediaFile } from '@/hooks/useMedia';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { getLocale, t } from '@/i18n';
 
 /* Small pieces shared by the title page and its episode details. */
 
 export const episodeLabel = (e: Pick<Episode, 'season' | 'number'>) => [e.season !== undefined && `S${e.season}`, e.number !== undefined && `E${e.number}`].filter(Boolean).join(' ');
 export const bits = (bps?: number) => (bps ? bitrate(bps / 8) : undefined);
-export const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
+export const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
 export const langName = (code?: string) => {
   if (!code || code === 'und') return undefined;
   try {
-    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code;
+    return new Intl.DisplayNames(getLocale(), { type: 'language' }).of(code) ?? code;
   } catch {
     return code;
   }
@@ -56,7 +57,7 @@ export function MediaInfo({ files, subtitle }: { files: MediaFile[]; subtitle?: 
   const v = f.video;
   return (
     <Card>
-      <CardHeader icon={FileVideo} accent={`var(--color-${f.serverType ?? 'jellyfin'})`} title="Media info" subtitle={subtitle ?? (files.length > 1 ? `${files.length} versions` : f.container?.toUpperCase())} />
+      <CardHeader icon={FileVideo} accent={`var(--color-${f.serverType ?? 'jellyfin'})`} title={t('media.info.title')} subtitle={subtitle ?? (files.length > 1 ? t('media.info.versions', { count: files.length }) : f.container?.toUpperCase())} />
       <CardBody className="space-y-4">
         {files.length > 1 && (
           <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 no-scrollbar">
@@ -71,7 +72,7 @@ export function MediaInfo({ files, subtitle }: { files: MediaFile[]; subtitle?: 
                     : undefined
                 }
               >
-                {x.serverType ? <ServerTag type={x.serverType} name={x.name} /> : x.name || x.video?.resolution || `Version ${i + 1}`}
+                {x.serverType ? <ServerTag type={x.serverType} name={x.name} /> : x.name || x.video?.resolution || t('media.info.version', { n: i + 1 })}
               </button>
             ))}
           </div>
@@ -86,10 +87,10 @@ export function MediaInfo({ files, subtitle }: { files: MediaFile[]; subtitle?: 
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {[
-            ['Size', f.size ? bytes(f.size) : undefined],
-            ['Bitrate', bits(f.bitrate)],
-            ['Resolution', v?.width && v.height ? `${v.width}×${v.height}` : undefined],
-            ['Frame rate', v?.fps ? `${v.fps} fps` : undefined],
+            [t('media.info.size'), f.size ? bytes(f.size) : undefined],
+            [t('media.info.bitrate'), bits(f.bitrate)],
+            [t('widgets.devices.kind.res'), v?.width && v.height ? `${v.width}×${v.height}` : undefined],
+            [t('media.info.fps'), v?.fps ? `${v.fps} fps` : undefined],
           ]
             .filter(([, x]) => x)
             .map(([k, x]) => (
@@ -101,32 +102,32 @@ export function MediaInfo({ files, subtitle }: { files: MediaFile[]; subtitle?: 
         </dl>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="min-w-0">
-            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><AudioLines className="size-3.5" /> Audio · {f.audio.length}</h3>
+            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><AudioLines className="size-3.5" /> {t('widgets.devices.kind.acodec')} · {f.audio.length}</h3>
             {f.audio.length ? (
               <ul className="divide-y divide-line">
                 {f.audio.map((a, i) => (
-                  <Track key={i} title={langName(a.language) ?? a.title ?? `Track ${i + 1}`} sub={[a.codec, a.channels].filter(Boolean).join(' · ') || a.title} flags={a.isDefault ? ['Default'] : []} />
+                  <Track key={i} title={langName(a.language) ?? a.title ?? t('media.info.track', { n: i + 1 })} sub={[a.codec, a.channels].filter(Boolean).join(' · ') || a.title} flags={a.isDefault ? [t('media.info.default')] : []} />
                 ))}
               </ul>
             ) : (
-              <p className="text-[12px] text-ink-4">No audio tracks</p>
+              <p className="text-[12px] text-ink-4">{t('media.info.noAudio')}</p>
             )}
           </div>
           <div className="min-w-0">
-            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Captions className="size-3.5" /> Subtitles · {f.subtitles.length}</h3>
+            <h3 className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-3"><Captions className="size-3.5" /> {t('widgets.devices.kind.sub')} · {f.subtitles.length}</h3>
             {f.subtitles.length ? (
               <ul className="max-h-60 divide-y divide-line overflow-y-auto">
-                {f.subtitles.map((t, i) => (
+                {f.subtitles.map((s, i) => (
                   <Track
                     key={i}
-                    title={langName(t.language) ?? t.title ?? `Track ${i + 1}`}
-                    sub={t.codec}
-                    flags={[t.forced && 'Forced', t.sdh && 'SDH', t.external && 'External', t.isDefault && 'Default'].filter((x): x is string => !!x)}
+                    title={langName(s.language) ?? s.title ?? t('media.info.track', { n: i + 1 })}
+                    sub={s.codec}
+                    flags={[s.forced && t('media.info.forced'), s.sdh && 'SDH', s.external && t('media.info.external'), s.isDefault && t('media.info.default')].filter((x): x is string => !!x)}
                   />
                 ))}
               </ul>
             ) : (
-              <p className="text-[12px] text-ink-4">No subtitles</p>
+              <p className="text-[12px] text-ink-4">{t('media.info.noSubs')}</p>
             )}
           </div>
         </div>

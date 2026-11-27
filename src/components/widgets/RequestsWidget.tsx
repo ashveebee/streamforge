@@ -9,6 +9,7 @@ import { FadeImage } from '../ui/Image';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { EmptyState, QueryState, SkeletonRows } from '../ui/States';
 import { TitleLink } from '@/components/ui/TitleLink';
+import { t } from '@/i18n';
 
 export const REQUEST_TONE: Record<SeerrRequest['status'], string> = {
   pending: 'text-warn bg-warn/10 border-warn/25',
@@ -18,6 +19,14 @@ export const REQUEST_TONE: Record<SeerrRequest['status'], string> = {
   failed: 'text-bad bg-bad/10 border-bad/25',
   unknown: 'text-ink-3 bg-white/5 border-line',
 };
+
+const REQUEST_STATUS = ['pending', 'approved', 'declined', 'failed', 'completed', 'unknown', 'processing', 'available', 'deleted'] as const;
+
+/** A request's status in the active language; Seerr's "partially available" included. */
+export function requestStatusLabel(status: string) {
+  if (status === 'partially available') return t('ui.request.partial');
+  return (REQUEST_STATUS as readonly string[]).includes(status) ? t(`ui.request.${status as (typeof REQUEST_STATUS)[number]}`) : status;
+}
 
 /** Approve / decline buttons for a pending request (admins only). */
 export function RequestDecision({ r, compact }: { r: SeerrRequest; compact?: boolean }) {
@@ -37,45 +46,36 @@ export function RequestDecision({ r, compact }: { r: SeerrRequest; compact?: boo
             type="button"
             className={cn(btn, size, 'border-ok/30 bg-ok/10 text-ok hover:bg-ok/20')}
             onClick={() => decide.mutate({ id: r.id, decision: 'approve' })}
-            aria-label={`Approve ${r.title}`}
+            aria-label={t('widgets.requests.approveTitle', { title: r.title })}
           >
-            <Check className="size-3.5" />{!compact && 'Approve'}
+            <Check className="size-3.5" />{!compact && t('widgets.requests.approve')}
           </button>
           <button
             type="button"
             className={cn(btn, size, 'border-line-strong text-ink-3 hover:border-bad/30 hover:bg-bad/10 hover:text-bad')}
-            onClick={() => confirm(`Decline the request for ${r.title}?`) && decide.mutate({ id: r.id, decision: 'decline' })}
-            aria-label={`Decline ${r.title}`}
+            onClick={() => confirm(t('widgets.requests.confirmDecline', { title: r.title })) && decide.mutate({ id: r.id, decision: 'decline' })}
+            aria-label={t('widgets.requests.declineTitle', { title: r.title })}
           >
-            <X className="size-3.5" />{!compact && 'Decline'}
+            <X className="size-3.5" />{!compact && t('widgets.requests.decline')}
           </button>
         </>
       )}
-      {decide.isError && <span className="text-[11px] text-bad">Failed</span>}
+      {decide.isError && <span className="text-[11px] text-bad">{t('widgets.requests.failed')}</span>}
     </div>
   );
 }
 
-const PHASE: Record<string, string> = {
-  waiting: 'Approved',
-  queued: 'Queued',
-  downloading: 'Downloading',
-  paused: 'Paused',
-  stalled: 'Stalled',
-  importing: 'Importing',
-  import_blocked: 'Import blocked',
-  completed: 'Downloaded',
-  failed: 'Failed',
-};
+const PHASES = ['waiting', 'queued', 'downloading', 'paused', 'stalled', 'importing', 'import_blocked', 'completed', 'failed'] as const;
+const phaseLabel = (p: string) => ((PHASES as readonly string[]).includes(p) ? t(`widgets.requests.phase.${p as (typeof PHASES)[number]}`) : p);
 
 /** Silo requests: the request server it went to, download progress, or the problem. */
 function Delivery({ d }: { d: NonNullable<SeerrRequest['delivery']> }) {
   const bad = d.phase === 'failed' || d.phase === 'stalled' || d.phase === 'import_blocked';
   const parts = [
-    PHASE[d.phase] ?? d.phase,
+    phaseLabel(d.phase),
     d.percent !== undefined ? `${d.percent}%` : undefined,
-    d.eta && Date.parse(d.eta) > Date.now() ? `done ${relative(d.eta)}` : undefined,
-    d.server ? `via ${d.server}` : undefined,
+    d.eta && Date.parse(d.eta) > Date.now() ? t('widgets.requests.done', { when: relative(d.eta) }) : undefined,
+    d.server ? t('widgets.requests.via', { server: d.server }) : undefined,
   ].filter(Boolean);
   return (
     <div className={cn('mt-0.5 truncate text-[11px]', bad ? 'text-bad' : d.phase === 'waiting' ? 'text-warn' : 'text-ink-3')} title={d.message}>
@@ -102,7 +102,7 @@ export function RequestRow({ r }: { r: SeerrRequest }) {
           {r.title} {r.year && <span className="font-normal text-ink-4">({r.year})</span>}
         </TitleLink>
         <div className="truncate text-[11px] text-ink-3">
-          {r.type === 'tv' ? `Series${r.seasons.length ? ` · S${r.seasons.join(', S')}` : ''}` : 'Movie'}
+          {r.type === 'tv' ? `${t('me.series')}${r.seasons.length ? ` · S${r.seasons.join(', S')}` : ''}` : t('me.movie')}
           {r.is4k && ' · 4K'} · {r.requestedBy}
         </div>
         <div className="text-[11px] text-ink-4">{relative(r.createdAt)}</div>
@@ -112,7 +112,7 @@ export function RequestRow({ r }: { r: SeerrRequest }) {
         <RequestDecision r={r} compact />
       ) : (
         <span className={cn('shrink-0 rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold capitalize', REQUEST_TONE[r.status])}>
-          {r.status === 'approved' && r.mediaStatus === 'available' ? 'available' : r.status}
+          {requestStatusLabel(r.status === 'approved' && r.mediaStatus === 'available' ? 'available' : r.status)}
         </span>
       )}
     </li>
@@ -124,16 +124,16 @@ export function RequestsWidget() {
   const silo = useServiceConfig().data?.requests === 'silo';
   return (
     <Card className="h-full">
-      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title="Requests" subtitle={silo ? 'Silo' : 'Seerr'} />
+      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title={t('dashboard.widgets.requests')} subtitle={silo ? 'Silo' : 'Seerr'} />
       <CardBody>
         <QueryState query={q} skeleton={<SkeletonRows rows={4} />}>
           {(d) => (
             <>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: 'Pending', value: d.counts.pending, cls: 'text-warn' },
-                  { label: 'Approved', value: d.counts.approved, cls: 'text-ok' },
-                  { label: 'Available', value: d.counts.available, cls: 'text-ink' },
+                  { label: t('ui.request.pending'), value: d.counts.pending, cls: 'text-warn' },
+                  { label: t('ui.request.approved'), value: d.counts.approved, cls: 'text-ok' },
+                  { label: t('ui.request.available'), value: d.counts.available, cls: 'text-ink' },
                 ].map((s) => (
                   <div key={s.label} className="rounded-xl border border-line bg-white/[0.02] px-3 py-2.5">
                     <div className={cn('text-xl font-semibold tabular', s.cls)}><AnimatedNumber value={s.value} /></div>
@@ -146,7 +146,7 @@ export function RequestsWidget() {
                   {(d.pending.length ? d.pending : d.recent).slice(0, 4).map((r) => <RequestRow key={r.id} r={r} />)}
                 </ul>
               ) : (
-                <EmptyState icon={Inbox} title="No requests yet" className="py-6" />
+                <EmptyState icon={Inbox} title={t('me.noRequests')} className="py-6" />
               )}
             </>
           )}

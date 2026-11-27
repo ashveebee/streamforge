@@ -12,10 +12,11 @@ import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { MissingCard } from '@/components/widgets/MissingCard';
+import { t } from '@/i18n';
 
 const WORDS = {
-  lidarr: { creators: 'Artists', releases: 'Albums', files: 'Tracks on disk', icon: Music, release: Disc3 },
-  readarr: { creators: 'Authors', releases: 'Books', files: 'Book files', icon: BookOpen, release: BookOpen },
+  lidarr: { creators: 'svc.music.artists', releases: 'svc.music.albums', files: 'svc.music.tracks', icon: Music, release: Disc3 },
+  readarr: { creators: 'svc.music.authors', releases: 'svc.music.books', files: 'svc.music.bookFiles', icon: BookOpen, release: BookOpen },
 } as const;
 
 function Page({ kind }: { kind: MusicKind }) {
@@ -27,21 +28,21 @@ function Page({ kind }: { kind: MusicKind }) {
   return (
     <>
       <ServiceHeader id={kind} />
-      <QueryState query={q} skeleton={<PageLoader label="Loading your library" hint="Asking the app for its queue and releases…" />}>
+      <QueryState query={q} skeleton={<PageLoader label={t('svc.music.loading')} hint={t('svc.music.loadingHint')} />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label={w.creators} value={d.stats.creators} icon={Users} accent={color} hint={`${num(d.stats.monitored)} monitored`} />
-              <StatTile label={w.releases} value={d.stats.releases} icon={w.release} accent={color} />
-              <StatTile label={w.files} value={d.stats.files} icon={Library} accent={color} hint={d.stats.total ? `of ${num(d.stats.total)}` : undefined} />
-              <StatTile label="On disk" value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
+              <StatTile label={t(w.creators)} value={d.stats.creators} icon={Users} accent={color} hint={t('svc.monitored', { n: num(d.stats.monitored) })} />
+              <StatTile label={t(w.releases)} value={d.stats.releases} icon={w.release} accent={color} />
+              <StatTile label={t(w.files)} value={d.stats.files} icon={Library} accent={color} hint={d.stats.total ? t('watch.digest.of', { total: num(d.stats.total) }) : undefined} />
+              <StatTile label={t('svc.onDisk')} value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
             </div>
             <div className="grid items-start gap-5 xl:grid-cols-2">
               <Card>
-                <CardHeader icon={Download} accent={color} title="Queue" subtitle={`${d.queue.length} downloading`} />
+                <CardHeader icon={Download} accent={color} title={t('svc.queue')} subtitle={t('svc.downloading', { count: d.queue.length })} />
                 <CardBody>
                   {!d.queue.length ? (
-                    <EmptyState icon={Download} title="Nothing downloading" />
+                    <EmptyState icon={Download} title={t('widgets.downloads.emptyHint')} />
                   ) : (
                     <ul className="divide-y divide-line">
                       {d.queue.map((i) => (
@@ -49,7 +50,7 @@ function Page({ kind }: { kind: MusicKind }) {
                           <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-[13px] font-medium">{i.title}{i.subtitle ? <span className="font-normal text-ink-3"> · {i.subtitle}</span> : null}</div>
-                              <div className="truncate text-[11px] text-ink-4" title={i.releaseTitle}>{[i.quality, i.client, i.timeLeft ? `${i.timeLeft} left` : undefined].filter(Boolean).join(' · ')}</div>
+                              <div className="truncate text-[11px] text-ink-4" title={i.releaseTitle}>{[i.quality, i.client, i.timeLeft ? t('me.left', { time: i.timeLeft }) : undefined].filter(Boolean).join(' · ')}</div>
                             </div>
                             <Pill tone={i.errorMessage ? 'bad' : 'neutral'}>{i.status}</Pill>
                             {user?.isAdmin && (
@@ -57,10 +58,10 @@ function Page({ kind }: { kind: MusicKind }) {
                                 size="icon"
                                 variant="ghost"
                                 className="size-8"
-                                aria-label={`Remove ${i.title} and blocklist the release`}
-                                title="Remove and blocklist"
+                                aria-label={t('svc.music.removeTitle', { title: i.title })}
+                                title={t('svc.music.remove')}
                                 disabled={remove.isPending}
-                                onClick={() => confirm(`Remove “${i.releaseTitle}” from the queue and blocklist it?`) && remove.mutate({ id: i.id, blocklist: true })}
+                                onClick={() => confirm(t('svc.music.confirmRemove', { title: i.releaseTitle })) && remove.mutate({ id: i.id, blocklist: true })}
                               >
                                 {remove.isPending && remove.variables?.id === i.id ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
                               </Button>
@@ -76,10 +77,10 @@ function Page({ kind }: { kind: MusicKind }) {
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader icon={CalendarDays} accent={color} title="Coming up" subtitle="Releases in the next 60 days" />
+                <CardHeader icon={CalendarDays} accent={color} title={t('svc.music.coming')} subtitle={t('svc.music.comingHint')} />
                 <CardBody>
                   {!d.upcoming.length ? (
-                    <EmptyState icon={CalendarDays} title="Nothing scheduled" />
+                    <EmptyState icon={CalendarDays} title={t('widgets.upcoming.none')} />
                   ) : (
                     <ul className="divide-y divide-line">
                       {d.upcoming.map((u) => (

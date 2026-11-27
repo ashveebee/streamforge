@@ -11,6 +11,7 @@ import { Avatar, FadeImage } from '@/components/ui/Image';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState } from '@/components/ui/States';
+import { getLocale, t as translate, useT } from '@/i18n';
 
 interface HistoryRow {
   id: string;
@@ -42,11 +43,11 @@ interface HistoryResult {
 }
 
 const RANGES = [
-  { days: 7, label: '7 days' },
-  { days: 30, label: '30 days' },
-  { days: 90, label: '90 days' },
-  { days: 365, label: 'Year' },
-  { days: 0, label: 'All time' },
+  { days: 7, get label() { return translate('widgets.forecast.days', { count: 7 }); } },
+  { days: 30, get label() { return translate('widgets.forecast.days', { count: 30 }); } },
+  { days: 90, get label() { return translate('widgets.forecast.days', { count: 90 }); } },
+  { days: 365, get label() { return translate('watch.history.year'); } },
+  { days: 0, get label() { return translate('watch.history.allTime'); } },
 ];
 const SERVER_LABEL = { jellyfin: 'Jellyfin', plex: 'Plex' } as const;
 
@@ -73,6 +74,7 @@ function Stat({ value, label }: { value: React.ReactNode; label: string }) {
 
 export default function HistoryPage() {
   const [params, setParams] = useSearchParams();
+  const t = useT();
   const user = params.get('user') ?? '';
   const days = Number(params.get('days') ?? 30);
   const server = params.get('server') ?? '';
@@ -104,19 +106,22 @@ export default function HistoryPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Everyone’s activity"
-        title="Watch history"
+        eyebrow={t('watch.history.eyebrow')}
+        title={t('nav.watchHistory')}
         description={
           d?.recordingSince
-            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
-            : 'What each person on your server has watched.'
+            ? t(d.serverHistory ? 'watch.history.sinceOlder' : 'watch.history.since', {
+                date: new Date(d.recordingSince).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', year: 'numeric' }),
+                server: d.serverHistory ? SERVER_LABEL[d.serverHistory] : undefined,
+              })
+            : t('watch.history.description')
         }
       />
-      <QueryState query={query} skeleton={<PageLoader label="Loading watch history" />}>
+      <QueryState query={query} skeleton={<PageLoader label={t('watch.history.loading')} />}>
         {(data) => (
           <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
             <Card className="self-start">
-              <CardHeader icon={Users} title="People" subtitle={`${data.users.length} with history`} />
+              <CardHeader icon={Users} title={t('watch.history.people')} subtitle={t('watch.history.withHistory', { count: data.users.length })} />
               <CardBody className="pt-0">
                 <ul className="-mx-2 space-y-0.5">
                   {[{ name: '', plays: data.users.reduce((n, u) => n + u.plays, 0), lastAt: undefined as string | undefined, id: undefined as string | undefined, imageTag: undefined as string | undefined }, ...data.users].map((u) => {
@@ -131,8 +136,8 @@ export default function HistoryPage() {
                         >
                           {u.name ? <Avatar src={jfUserImage(u.id, u.imageTag, 64)} name={u.name} size={28} /> : <span className="grid size-7 place-items-center rounded-full bg-brand/15"><Users className="size-3.5 text-brand" /></span>}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-medium">{u.name || 'Everyone'}</span>
-                            <span className="block truncate text-[11px] text-ink-4">{u.name ? (u.lastAt ? `Last watched ${relative(u.lastAt)}` : 'Nothing watched') : 'All users'}</span>
+                            <span className="block truncate text-[13px] font-medium">{u.name || t('watch.history.everyone')}</span>
+                            <span className="block truncate text-[11px] text-ink-4">{u.name ? (u.lastAt ? t('watch.history.lastWatched', { when: relative(u.lastAt) }) : t('watch.history.nothingWatched')) : t('watch.history.allUsers')}</span>
                           </span>
                           <span className="text-[11px] tabular text-ink-3">{num(u.plays)}</span>
                         </button>
@@ -145,7 +150,7 @@ export default function HistoryPage() {
 
             <div className="min-w-0 space-y-5">
               <div className="flex flex-wrap items-center gap-2">
-                <div role="tablist" aria-label="Time range" className="flex flex-wrap gap-1">
+                <div role="tablist" aria-label={t('watch.history.range')} className="flex flex-wrap gap-1">
                   {RANGES.map((r) => (
                     <button
                       key={r.days}
@@ -165,42 +170,42 @@ export default function HistoryPage() {
                   <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder="Find a title"
-                    aria-label="Find a title"
+                    placeholder={t('watch.history.find')}
+                    aria-label={t('watch.history.find')}
                     className="h-8 w-56 rounded-xl border border-line bg-white/[0.02] pr-3 pl-8 text-xs outline-none placeholder:text-ink-4 focus:border-brand/50"
                   />
                 </label>
               </div>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Stat value={num(data.summary.plays)} label={`Plays · ${data.summary.movies} movies, ${data.summary.episodes} episodes`} />
-                <Stat value={data.summary.watchedMs ? duration(data.summary.watchedMs) : '—'} label="Time watched (recorded plays)" />
-                <Stat value={num(data.summary.titles)} label="Different titles" />
-                <Stat value={data.summary.transcodePct !== undefined ? `${data.summary.transcodePct}%` : '—'} label="Transcoded" />
+                <Stat value={num(data.summary.plays)} label={t('watch.history.playsSplit', { movies: data.summary.movies, episodes: data.summary.episodes })} />
+                <Stat value={data.summary.watchedMs ? duration(data.summary.watchedMs) : '—'} label={t('watch.history.time')} />
+                <Stat value={num(data.summary.titles)} label={t('watch.history.titles')} />
+                <Stat value={data.summary.transcodePct !== undefined ? `${data.summary.transcodePct}%` : '—'} label={t('me.transcoded')} />
               </div>
 
               {data.summary.top.length > 0 && (
                 <div className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-[13px]">
-                    <span className="text-xs text-ink-4">{selected ? `${selected.name} watches most` : 'Most watched'}</span>
-                    {data.summary.top.map((t) => (
-                      <span key={t.title} className="inline-flex items-center gap-1.5">
-                        {t.type === 'episode' ? <Tv className="size-3.5 text-ink-4" /> : <Clapperboard className="size-3.5 text-ink-4" />}
-                        {t.link ? <Link to={t.link} className="transition hover:text-brand">{t.title}</Link> : t.title} <span className="text-ink-4 tabular">×{t.plays}</span>
+                    <span className="text-xs text-ink-4">{selected ? t('watch.history.watchesMost', { name: selected.name }) : t('watch.stats.mostWatched')}</span>
+                    {data.summary.top.map((x) => (
+                      <span key={x.title} className="inline-flex items-center gap-1.5">
+                        {x.type === 'episode' ? <Tv className="size-3.5 text-ink-4" /> : <Clapperboard className="size-3.5 text-ink-4" />}
+                        {x.link ? <Link to={x.link} className="transition hover:text-brand">{x.title}</Link> : x.title} <span className="text-ink-4 tabular">×{x.plays}</span>
                       </span>
                     ))}
                     {data.summary.device && (
                       <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-ink-3">
-                        <MonitorPlay className="size-3.5" /> Usually on {data.summary.device}
+                        <MonitorPlay className="size-3.5" /> {t('watch.history.usually', { device: data.summary.device })}
                       </span>
                     )}
                 </div>
               )}
 
               <Card>
-                <CardHeader icon={HistoryIcon} title={selected ? `${selected.name}’s history` : 'Everyone’s history'} subtitle={data.total > data.rows.length ? `Newest ${data.rows.length} of ${num(data.total)}` : `${num(data.total)} play${data.total === 1 ? '' : 's'}`} />
+                <CardHeader icon={HistoryIcon} title={selected ? t('watch.history.whose', { name: selected.name }) : t('watch.history.everyones')} subtitle={data.total > data.rows.length ? t('watch.history.newest', { count: data.rows.length, total: num(data.total) }) : t('widgets.plays.plays', { count: data.total })} />
                 <CardBody className="pt-0">
                   {!data.rows.length ? (
-                    <EmptyState icon={HistoryIcon} title="Nothing watched in this range" description={q ? 'No titles match your search.' : 'Try a longer time range.'} />
+                    <EmptyState icon={HistoryIcon} title={t('watch.history.none')} description={q ? t('watch.history.noMatch') : t('watch.history.longer')} />
                   ) : (
                     <div className="space-y-4">
                       {groups.map((g) => (
@@ -226,17 +231,17 @@ export default function HistoryPage() {
                                   {r.subtitle && <div className="truncate text-[11px] text-ink-3">{r.subtitle}</div>}
                                   <div className="mt-0.5 flex min-w-0 items-center gap-x-2 text-[11px] text-ink-4">
                                     {!selected && <span className="truncate text-ink-3 sm:hidden">{r.user}</span>}
-                                    {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">Transcode</Pill>}
+                                    {r.method === 'Transcode' && <Pill tone="warn" className="shrink-0 !py-0 !text-[9.5px]">{t('ui.method.transcode')}</Pill>}
                                     <span className="hidden truncate md:inline">
                                       {r.source === 'recorded'
                                         ? [r.client, r.device].filter(Boolean).join(' · ')
                                         : r.serverType
                                           ? r.serverType === 'plex'
-                                            ? 'From Plex watch history'
+                                            ? t('watch.history.fromPlex')
                                             : r.serverType === 'silo'
-                                              ? `From Silo’s playback history${r.client ? ` · ${r.client}` : ''}`
-                                              : `From the ${r.serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log${r.client ? ` · ${r.client}` : ''}`
-                                          : 'From the server’s own history'}
+                                              ? `${t('watch.history.fromSilo')}${r.client ? ` · ${r.client}` : ''}`
+                                              : `${t('watch.history.fromLog', { server: r.serverType === 'emby' ? 'Emby' : 'Jellyfin' })}${r.client ? ` · ${r.client}` : ''}`
+                                          : t('watch.history.fromServer')}
                                     </span>
                                   </div>
                                 </div>

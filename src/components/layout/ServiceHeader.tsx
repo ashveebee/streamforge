@@ -5,6 +5,7 @@ import type { MediaServerType, ServiceId } from '@/lib/types';
 import { MEDIA_SERVERS, SERVICES, ServiceIcon } from '../ui/ServiceIcon';
 import { StatusBadge } from '../ui/Status';
 import { PageHeader } from './PageHeader';
+import { t } from '@/i18n';
 
 export function ServiceHeader({
   id,
@@ -41,7 +42,7 @@ export function ServiceHeader({
             {s?.latencyMs !== undefined && (
               <span className="inline-flex items-center gap-1"><Timer className="size-3.5" />{s.latencyMs} ms</span>
             )}
-            {s?.lastSuccess && <span className="text-ink-4">Last healthy check {relative(s.lastSuccess)}</span>}
+            {s?.lastSuccess && <span className="text-ink-4">{t('ui.lastHealthy', { when: relative(s.lastSuccess) })}</span>}
             {description && <span className="text-ink-4">{description}</span>}
           </span>
         }
@@ -51,12 +52,12 @@ export function ServiceHeader({
               {actions}
               {openService && (
                 <a href={openService} target="_blank" rel="noreferrer noopener" className={linkCls}>
-                  Open {meta.name} <ExternalLink className="size-3.5" />
+                  {t('ui.open', { name: meta.name })} <ExternalLink className="size-3.5" />
                 </a>
               )}
               {openMoonfin && (
                 <a href={openMoonfin} target="_blank" rel="noreferrer noopener" className={linkCls}>
-                  Open Moonfin <ExternalLink className="size-3.5" />
+                  {t('ui.open', { name: 'Moonfin' })} <ExternalLink className="size-3.5" />
                 </a>
               )}
             </>
@@ -79,7 +80,7 @@ export function ServiceHeader({
               </div>
               {i.wikiUrl && /^https:\/\//.test(i.wikiUrl) && (
                 <a href={i.wikiUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink">
-                  Docs <ExternalLink className="size-3" />
+                  {t('ui.docs')} <ExternalLink className="size-3" />
                 </a>
               )}
             </div>
@@ -88,7 +89,7 @@ export function ServiceHeader({
       )}
       {s && s.status === 'offline' && s.error && (
         <div className="mb-6 rounded-xl border border-bad/25 bg-bad/[0.06] px-4 py-3 text-sm text-bad">
-          <span className="font-medium">Unreachable:</span> <span className="text-ink-2">{s.error}</span>
+          <span className="font-medium">{t('ui.unreachable')}</span> <span className="text-ink-2">{s.error}</span>
         </div>
       )}
     </>

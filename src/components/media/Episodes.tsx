@@ -11,19 +11,27 @@ import { FadeImage } from '@/components/ui/Image';
 import { ProgressBar } from '@/components/ui/Progress';
 import { bits, Chip, langName, longDate } from './parts';
 import { WatchLink } from './WatchLink';
+import { t } from '@/i18n';
 
 const STATUS: Record<EpisodeStatus, { label: string; cls: string }> = {
-  available: { label: 'In library', cls: 'border-ok/30 bg-ok/10 text-ok' },
-  missing: { label: 'Missing', cls: 'border-bad/30 bg-bad/10 text-bad' },
-  unaired: { label: 'Upcoming', cls: 'border-line-strong bg-white/[0.04] text-ink-3' },
-  unmonitored: { label: 'Not monitored', cls: 'border-warn/30 bg-warn/10 text-warn' },
+  available: { get label() { return t('media.inLibrary'); }, cls: 'border-ok/30 bg-ok/10 text-ok' },
+  missing: { get label() { return t('palette.status.missing'); }, cls: 'border-bad/30 bg-bad/10 text-bad' },
+  unaired: { get label() { return t('dashboard.widgets.upcoming'); }, cls: 'border-line-strong bg-white/[0.04] text-ink-3' },
+  unmonitored: { get label() { return t('media.ep.notMonitored'); }, cls: 'border-warn/30 bg-warn/10 text-warn' },
 };
 
 type Filter = 'all' | 'have' | 'missing';
 
 /** "Plex · claudia: you watched it · also Reya, Dee" */
 function watchTitle(w: EpisodeWatch) {
-  const who = [w.me ? 'you watched it' : w.progress ? `you're ${w.progress}% in` : undefined, w.others ? (w.otherNames?.length ? `${w.me || w.progress ? 'also ' : 'watched by '}${w.otherNames.join(', ')}` : `${w.others} other${w.others === 1 ? '' : 's'}`) : undefined];
+  const who = [
+    w.me ? t('media.ep.youWatched') : w.progress ? t('media.ep.youreIn', { pct: w.progress }) : undefined,
+    w.others
+      ? w.otherNames?.length
+        ? t(w.me || w.progress ? 'media.ep.also' : 'media.ep.watchedBy', { names: w.otherNames.join(', ') })
+        : t('media.ep.others', { count: w.others })
+      : undefined,
+  ];
   return `${SERVER_NAME[w.type]} · ${w.name}: ${who.filter(Boolean).join(' · ')}`;
 }
 
@@ -71,15 +79,15 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
   const w = e.jellyfin?.watch;
   return (
     <div className="space-y-4 px-2 pt-1 pb-3">
-      {e.overview ? <p className="text-[13px] leading-relaxed text-ink-2">{e.overview}</p> : <p className="text-[12px] text-ink-4 italic">No summary yet.</p>}
+      {e.overview ? <p className="text-[13px] leading-relaxed text-ink-2">{e.overview}</p> : <p className="text-[12px] text-ink-4 italic">{t('media.ep.noSummary')}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
-        <Fact label={e.airDate && Date.parse(e.airDate) > Date.now() ? 'Airs' : 'Aired'}>{e.airDate ? `${longDate(e.airDate)} · ${relative(e.airDate)}` : undefined}</Fact>
-        <Fact label="Runtime">{e.runtimeMin ? `${e.runtimeMin} min` : undefined}</Fact>
-        <Fact label="Rating">{e.rating ? <><Star className="mr-1 inline size-3 fill-current text-warn" />{e.rating.toFixed(1)}</> : undefined}</Fact>
-        <Fact label="Status">{STATUS[e.status].label}{e.monitored === false && e.status !== 'unmonitored' ? ' · not monitored' : ''}</Fact>
+        <Fact label={e.airDate && Date.parse(e.airDate) > Date.now() ? t('widgets.upcoming.airs') : t('media.ep.aired')}>{e.airDate ? `${longDate(e.airDate)} · ${relative(e.airDate)}` : undefined}</Fact>
+        <Fact label={t('media.ep.runtime')}>{e.runtimeMin ? t('media.min', { n: e.runtimeMin }) : undefined}</Fact>
+        <Fact label={t('media.ep.rating')}>{e.rating ? <><Star className="mr-1 inline size-3 fill-current text-warn" />{e.rating.toFixed(1)}</> : undefined}</Fact>
+        <Fact label={t('library.system.status')}>{STATUS[e.status].label}{e.monitored === false && e.status !== 'unmonitored' ? ` · ${t('media.notMonitored')}` : ''}</Fact>
         {e.watched ? (
           <div className="col-span-2 min-w-0">
-            <dt className="text-[10.5px] tracking-wide text-ink-4 uppercase">Watched</dt>
+            <dt className="text-[10.5px] tracking-wide text-ink-4 uppercase">{t('media.watched')}</dt>
             <dd className="space-y-0.5 text-[13px] text-ink-2">
               {e.watched.length
                 ? e.watched.map((x) => (
@@ -88,16 +96,16 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
                       <span className="truncate">{watchTitle(x)}</span>
                     </div>
                   ))
-                : 'Not yet'}
+                : t('media.notYet')}
             </dd>
           </div>
         ) : (
-          <Fact label="Watched">{w ? (w.played ? `Yes${w.playCount > 1 ? ` · ${w.playCount} times` : ''}` : w.progress ? `${w.progress}% · ${w.remainingMin ?? '?'} min left` : 'Not yet') : undefined}</Fact>
+          <Fact label={t('media.watched')}>{w ? (w.played ? `${t('media.yes')}${w.playCount > 1 ? ` · ${t('media.ep.times', { count: w.playCount })}` : ''}` : w.progress ? `${w.progress}% · ${t('media.minLeft', { n: w.remainingMin ?? '?' })}` : t('media.notYet')) : undefined}</Fact>
         )}
-        <Fact label="Last played">{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Fact>
-        <Fact label="Quality">{e.quality ?? v?.resolution}</Fact>
-        <Fact label="Size">{e.size ? bytes(e.size) : undefined}</Fact>
-        <Fact label="Bitrate">{bits(f?.bitrate)}</Fact>
+        <Fact label={t('media.lastPlayed')}>{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Fact>
+        <Fact label={t('media.ep.quality')}>{e.quality ?? v?.resolution}</Fact>
+        <Fact label={t('media.info.size')}>{e.size ? bytes(e.size) : undefined}</Fact>
+        <Fact label={t('media.info.bitrate')}>{bits(f?.bitrate)}</Fact>
       </dl>
       {f && (
         <div className="space-y-3">
@@ -111,13 +119,13 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
           {(f.audio.length > 0 || f.subtitles.length > 0) && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="min-w-0 text-[12px]">
-                <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-3"><AudioLines className="size-3.5" /> Audio</div>
+                <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-3"><AudioLines className="size-3.5" /> {t('widgets.devices.kind.acodec')}</div>
                 <div className="text-ink-2">{f.audio.map((a) => [langName(a.language) ?? a.title, a.codec, a.channels].filter(Boolean).join(' ')).join(' · ') || '—'}</div>
               </div>
               <div className="min-w-0 text-[12px]">
-                <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-3"><Captions className="size-3.5" /> Subtitles</div>
+                <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-3"><Captions className="size-3.5" /> {t('widgets.devices.kind.sub')}</div>
                 <div className="text-ink-2">
-                  {f.subtitles.map((t) => [langName(t.language) ?? t.title, t.forced && '(forced)', t.sdh && '(SDH)'].filter(Boolean).join(' ')).join(' · ') || 'None'}
+                  {f.subtitles.map((s) => [langName(s.language) ?? s.title, s.forced && `(${t('media.info.forced').toLocaleLowerCase()})`, s.sdh && '(SDH)'].filter(Boolean).join(' ')).join(' · ') || t('media.ep.none')}
                 </div>
               </div>
             </div>
@@ -135,7 +143,7 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
           >
             {(app) => (
               <>
-                <Play className="size-3.5 fill-current" /> {w?.progress ? 'Resume' : 'Play'} in {app}
+                <Play className="size-3.5 fill-current" /> {t(w?.progress ? 'media.resumeIn' : 'media.playIn', { app })}
               </>
             )}
           </WatchLink>
@@ -148,7 +156,7 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
             onClick={() => search.mutate({ kind: 'sonarr', instance: e.sonarr!.instance, id: seriesId, episodeIds: [e.sonarr!.episodeId], title: `S${e.season}E${e.number}` })}
           >
             {search.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : search.isSuccess ? <Check className="size-3.5" /> : <Search className="size-3.5" />}
-            {search.isSuccess ? 'Searching in Sonarr' : e.status === 'available' ? 'Search for a better copy' : 'Search in Sonarr'}
+            {search.isSuccess ? t('media.ep.searchingSonarr') : e.status === 'available' ? t('media.ep.better') : t('media.ep.searchSonarr')}
           </Button>
         )}
       </div>
@@ -172,12 +180,12 @@ function EpisodeItem({ e, seriesId }: { e: SeasonEpisode; seriesId?: number }) {
             <WatchTicks list={e.watched} />
           ) : (
             w?.played && (
-              <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label="Watched">
+              <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label={t('media.watched')}>
                 <Check className="size-3" strokeWidth={3} />
               </span>
             )
           )}
-          {progress ? <ProgressBar value={progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label="Watched" /> : null}
+          {progress ? <ProgressBar value={progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label={t('media.watched')} /> : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
@@ -190,7 +198,7 @@ function EpisodeItem({ e, seriesId }: { e: SeasonEpisode; seriesId?: number }) {
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-4">
             {!have && <span className={cn('rounded border px-1.5 py-px text-[10px] font-medium', STATUS[e.status].cls)}>{STATUS[e.status].label}</span>}
             {e.airDate && <span>{longDate(e.airDate)}</span>}
-            {e.runtimeMin && <span>{e.runtimeMin} min</span>}
+            {e.runtimeMin && <span>{t('media.min', { n: e.runtimeMin })}</span>}
             {have && (e.quality ?? e.file?.video?.resolution) && <span>{e.quality ?? e.file?.video?.resolution}</span>}
           </div>
           {!open && e.overview && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-ink-3">{e.overview}</p>}
@@ -219,12 +227,12 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
   return (
     <div className="px-2 pt-1 pb-2">
       <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
-        <div className="flex gap-1" role="group" aria-label="Show episodes">
+        <div className="flex gap-1" role="group" aria-label={t('media.ep.show')}>
           {(
             [
-              ['all', `All ${episodes.length}`],
-              ['have', `Have ${have}`],
-              ['missing', `Missing ${episodes.length - have - upcoming}${upcoming ? ` + ${upcoming} upcoming` : ''}`],
+              ['all', t('media.ep.all', { n: episodes.length })],
+              ['have', t('media.ep.have', { n: have })],
+              ['missing', `${t('media.ep.missing', { n: episodes.length - have - upcoming })}${upcoming ? ` + ${t('media.ep.upcoming', { n: upcoming })}` : ''}`],
             ] as [Filter, string][]
           ).map(([k, label]) => (
             <button
@@ -239,9 +247,9 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
         </div>
         {episodes.some((e) => e.watched?.length) && (
           <div className="flex items-center gap-2.5 text-[11px] text-ink-4" aria-hidden>
-            <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full bg-ink-3 text-black"><Check className="size-2.5" strokeWidth={3} /></span>You</span>
-            {user?.isAdmin && <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full border-[1.5px] border-ink-3 text-ink-3"><Check className="size-2.5" strokeWidth={3} /></span>Someone else</span>}
-            <span>· in each server’s colour</span>
+            <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full bg-ink-3 text-black"><Check className="size-2.5" strokeWidth={3} /></span>{t('media.ep.you')}</span>
+            {user?.isAdmin && <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full border-[1.5px] border-ink-3 text-ink-3"><Check className="size-2.5" strokeWidth={3} /></span>{t('media.ep.someone')}</span>}
+            <span>· {t('media.ep.colour')}</span>
           </div>
         )}
         {user?.isAdmin && sonarr && missingIds.length > 0 && (
@@ -250,10 +258,10 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
             variant="ghost"
             className="ml-auto"
             disabled={search.isPending || search.isSuccess}
-            onClick={() => search.mutate({ kind: 'sonarr', instance: sonarr.instance, id: sonarr.seriesId, episodeIds: missingIds, title: `${missingIds.length} missing episodes` })}
+            onClick={() => search.mutate({ kind: 'sonarr', instance: sonarr.instance, id: sonarr.seriesId, episodeIds: missingIds, title: t('media.ep.missingEpisodes', { count: missingIds.length }) })}
           >
             {search.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : search.isSuccess ? <Check className="size-3.5 text-ok" /> : <Search className="size-3.5" />}
-            {search.isSuccess ? 'Searching' : `Search ${missingIds.length} missing`}
+            {search.isSuccess ? t('widgets.missing.searching') : t('media.ep.searchMissing', { n: missingIds.length })}
           </Button>
         )}
       </div>
@@ -267,7 +275,7 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
       ) : (
         <p className="flex items-center gap-2 px-1 py-3 text-[12px] text-ink-4">
           {filter === 'have' ? <CircleSlash className="size-3.5" /> : <Clock className="size-3.5" />}
-          {filter === 'have' ? 'None of this season is in your library yet.' : 'Nothing missing in this season.'}
+          {filter === 'have' ? t('media.ep.noneHave') : t('media.ep.noneMissing')}
         </p>
       )}
     </div>
@@ -276,7 +284,7 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
 
 const Loading = () => (
   <div className="flex items-center gap-2 px-3 py-4 text-[12px] text-ink-4">
-    <LoaderCircle className="size-3.5 animate-spin" /> Loading episodes…
+    <LoaderCircle className="size-3.5 animate-spin" /> {t('media.ep.loading')}
   </div>
 );
 
@@ -285,7 +293,7 @@ export function SeasonEpisodeList({ tmdbId, season }: { tmdbId: number; season: 
   const q = useSeasonEpisodes(tmdbId, season);
   if (q.isPending) return <Loading />;
   if (q.isError) return <p className="px-3 py-4 text-[12px] text-bad">{(q.error as Error).message}</p>;
-  if (!q.data.episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">No episode list for this season yet{q.data.sources.tmdb || q.data.sources.sonarr ? '' : '. Connect Seerr or Sonarr to see episodes you don’t have'}.</p>;
+  if (!q.data.episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">{q.data.sources.tmdb || q.data.sources.sonarr ? t('media.ep.noList') : t('media.ep.noListConnect')}</p>;
   return <EpisodeList episodes={q.data.episodes} sonarr={q.data.sonarr} />;
 }
 
@@ -309,6 +317,6 @@ export function JellyfinEpisodeList({ seriesId, seasonId }: { seriesId: string; 
     file: e.resolution ? { id: e.id, video: { resolution: e.resolution }, audio: [], subtitles: [] } : undefined,
     jellyfin: { id: e.id, url: e.url, watch: e.watch },
   }));
-  if (!episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">Jellyfin has no episodes for this season.</p>;
+  if (!episodes.length) return <p className="px-3 py-4 text-[12px] text-ink-4">{t('media.ep.noJellyfin')}</p>;
   return <EpisodeList episodes={episodes} />;
 }

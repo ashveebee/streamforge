@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router';
 import { useInstances, useJellyfinServers, useMainServer } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import type { ArrKind, MediaServerType } from '@/lib/types';
+import { t } from '@/i18n';
 
 /** The instance chosen via `?instance=`, falling back to the first one. */
 export function useSelectedInstance(kind: ArrKind) {
@@ -15,7 +16,7 @@ export function useSelectedInstance(kind: ArrKind) {
 export function InstanceTabs({ kind }: { kind: ArrKind }) {
   const list = useInstances(kind);
   const current = useSelectedInstance(kind);
-  return <Tabs list={list} current={current} label="Instance" />;
+  return <Tabs list={list} current={current} label={t('ui.instance')} />;
 }
 
 /** Media servers of one kind (Jellyfin includes the main server), first one first. */

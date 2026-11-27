@@ -1,12 +1,13 @@
 import { CircleCheck, CircleX, MinusCircle, TriangleAlert } from 'lucide-react';
 import type { ServiceStatus } from '@/lib/types';
 import { cn } from '@/lib/cn';
+import { t } from '@/i18n';
 
 export const STATUS_META: Record<ServiceStatus, { label: string; color: string; icon: typeof CircleCheck }> = {
-  healthy: { label: 'Healthy', color: 'var(--color-ok)', icon: CircleCheck },
-  degraded: { label: 'Degraded', color: 'var(--color-warn)', icon: TriangleAlert },
-  offline: { label: 'Offline', color: 'var(--color-bad)', icon: CircleX },
-  unconfigured: { label: 'Not configured', color: 'var(--color-idle)', icon: MinusCircle },
+  healthy: { get label() { return t('ui.status.healthy'); }, color: 'var(--color-ok)', icon: CircleCheck },
+  degraded: { get label() { return t('ui.status.degraded'); }, color: 'var(--color-warn)', icon: TriangleAlert },
+  offline: { get label() { return t('ui.status.offline'); }, color: 'var(--color-bad)', icon: CircleX },
+  unconfigured: { get label() { return t('ui.status.unconfigured'); }, color: 'var(--color-idle)', icon: MinusCircle },
 };
 
 export function StatusDot({ status, size = 8, pulse = true }: { status: ServiceStatus; size?: number; pulse?: boolean }) {

@@ -11,6 +11,7 @@ import { EmptyState } from '../ui/States';
 import { TitleLink } from '@/components/ui/TitleLink';
 import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
 import type { MediaServerType } from '@/lib/types';
+import { t } from '@/i18n';
 
 /** `server` picks an extra media server; the main one by default. */
 export function RecentlyAddedWidget({ server, serverType: given }: { server?: string; serverType?: MediaServerType } = {}) {
@@ -27,12 +28,12 @@ export function RecentlyAddedWidget({ server, serverType: given }: { server?: st
       <CardHeader
         icon={Sparkles}
         accent={MEDIA_SERVERS[serverType].color}
-        title="Recently added"
-        subtitle={`Fresh in your ${MEDIA_SERVERS[serverType].name} libraries`}
+        title={t('dashboard.widgets.recent')}
+        subtitle={t('widgets.recent.subtitle', { server: MEDIA_SERVERS[serverType].name })}
         action={
           <div className="flex gap-1">
-            <button onClick={() => scroll(-1)} className="grid size-8 place-items-center rounded-lg border border-line text-ink-3 transition hover:bg-white/5 hover:text-ink" aria-label="Scroll left"><ChevronLeft className="size-4" /></button>
-            <button onClick={() => scroll(1)} className="grid size-8 place-items-center rounded-lg border border-line text-ink-3 transition hover:bg-white/5 hover:text-ink" aria-label="Scroll right"><ChevronRight className="size-4" /></button>
+            <button onClick={() => scroll(-1)} className="grid size-8 place-items-center rounded-lg border border-line text-ink-3 transition hover:bg-white/5 hover:text-ink" aria-label={t('widgets.recent.left')}><ChevronLeft className="size-4" /></button>
+            <button onClick={() => scroll(1)} className="grid size-8 place-items-center rounded-lg border border-line text-ink-3 transition hover:bg-white/5 hover:text-ink" aria-label={t('widgets.recent.right')}><ChevronRight className="size-4" /></button>
           </div>
         }
       />
@@ -40,7 +41,7 @@ export function RecentlyAddedWidget({ server, serverType: given }: { server?: st
         query={q}
         className="px-5 pb-5"
         isEmpty={(d) => d.length === 0}
-        empty={<EmptyState icon={Sparkles} title="Nothing new yet" />}
+        empty={<EmptyState icon={Sparkles} title={t('widgets.recent.none')} />}
         skeleton={<div className="flex gap-4 overflow-hidden px-5 pb-5">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="aspect-[2/3] w-36 shrink-0 rounded-xl" />)}</div>}
       >
         {(items) => (

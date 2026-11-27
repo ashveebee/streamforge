@@ -6,12 +6,13 @@ import { Card, CardBody, CardHeader } from '../ui/Card';
 import { FadeImage } from '../ui/Image';
 import { EmptyState, SkeletonRows } from '../ui/States';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
+import { t, type MessageKey } from '@/i18n';
 
-const KIND_LABEL: Record<UpcomingItem['kind'], string> = {
-  episode: 'Airs',
-  cinema: 'In cinemas',
-  digital: 'Digital release',
-  physical: 'Physical release',
+const KIND_LABEL: Record<UpcomingItem['kind'], MessageKey> = {
+  episode: 'widgets.upcoming.airs',
+  cinema: 'widgets.upcoming.cinema',
+  digital: 'widgets.upcoming.digital',
+  physical: 'widgets.upcoming.physical',
 };
 
 export function groupByDay(items: UpcomingItem[]) {
@@ -29,7 +30,7 @@ export function UpcomingList({ items, limit }: { items: UpcomingItem[]; limit?: 
   startOfToday.setHours(0, 0, 0, 0);
   const visible = items.filter((i) => Date.parse(i.date) >= startOfToday.getTime()).slice(0, limit);
   if (!visible.length) {
-    return <EmptyState icon={CalendarDays} title="Nothing scheduled" description="No monitored releases in the coming weeks." />;
+    return <EmptyState icon={CalendarDays} title={t('widgets.upcoming.none')} description={t('widgets.upcoming.noneHint')} />;
   }
   return (
     <div className="space-y-4">
@@ -47,12 +48,12 @@ export function UpcomingList({ items, limit }: { items: UpcomingItem[]; limit?: 
                   </div>
                   <div className="truncate text-[11px] text-ink-3">{i.subtitle}</div>
                   <div className="truncate text-[11px] text-ink-4">
-                    {KIND_LABEL[i.kind]}
+                    {t(KIND_LABEL[i.kind])}
                     {i.kind === 'episode' ? ` ${timeOfDay(i.date)}` : ''}
                     {i.network ? ` · ${i.network}` : ''}
                   </div>
                 </div>
-                {i.hasFile && <CheckCircle2 className="size-4 shrink-0 text-ok" aria-label="Downloaded" />}
+                {i.hasFile && <CheckCircle2 className="size-4 shrink-0 text-ok" aria-label={t('palette.status.downloaded')} />}
               </li>
             ))}
           </ul>
@@ -79,10 +80,10 @@ export function UpcomingWidget() {
   const none = all.length === 0;
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader icon={CalendarDays} title="Upcoming" subtitle="Episodes & releases from Sonarr and Radarr" />
+      <CardHeader icon={CalendarDays} title={t('dashboard.widgets.upcoming')} subtitle={t('widgets.upcoming.subtitle')} />
       <CardBody className="max-h-[440px] flex-1 overflow-y-auto">
         {none ? (
-          <EmptyState icon={CalendarDays} title="Not connected" description="Connect Sonarr or Radarr to see upcoming releases." />
+          <EmptyState icon={CalendarDays} title={t('states.notConnected')} description={t('widgets.upcoming.connect')} />
         ) : loading && !items.length ? (
           <SkeletonRows rows={5} />
         ) : (

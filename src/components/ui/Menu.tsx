@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/i18n';
 
 export interface MenuItem {
   label: string;
@@ -17,7 +18,7 @@ export interface MenuItem {
  * clip it; opens upwards when there isn't room below. Closes on outside
  * click, Escape, scroll or selection.
  */
-export function Menu({ items, label = 'Actions', busy, trigger, buttonClassName }: { items: MenuItem[]; label?: string; busy?: boolean; trigger?: ReactNode; buttonClassName?: string }) {
+export function Menu({ items, label, busy, trigger, buttonClassName }: { items: MenuItem[]; label?: string; busy?: boolean; trigger?: ReactNode; buttonClassName?: string }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +60,7 @@ export function Menu({ items, label = 'Actions', busy, trigger, buttonClassName 
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-label={label}
+        aria-label={label ?? t('ui.actions')}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={busy}

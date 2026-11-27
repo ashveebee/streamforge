@@ -15,7 +15,6 @@ import { UpcomingWidget } from './UpcomingWidget';
 
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'full';
 export const SIZES: WidgetSize[] = ['sm', 'md', 'lg', 'full'];
-export const SIZE_LABEL: Record<WidgetSize, string> = { sm: '⅓', md: '½', lg: '⅔', full: 'Full' };
 
 /** Grid spans: 1 column on phones, 2 on tablets, 12-col grid on desktop. */
 export const SIZE_CLASS: Record<WidgetSize, string> = {
@@ -27,8 +26,8 @@ export const SIZE_CLASS: Record<WidgetSize, string> = {
 
 export interface WidgetDef {
   id: string;
+  /** English name; the dashboard shows the translated one (dashboard.widgets.<id>). */
   title: string;
-  description: string;
   component: ComponentType;
   defaultSize: WidgetSize;
   /** Widget is only offered when at least one of these services is configured. */
@@ -38,18 +37,18 @@ export interface WidgetDef {
 }
 
 export const WIDGETS: WidgetDef[] = [
-  { id: 'now-playing', title: 'Now playing', description: 'Live streams with artwork and progress', component: NowPlayingHero, defaultSize: 'full', area: 'now-playing' },
-  { id: 'services', title: 'Service status', description: 'Health of every integration', component: ServiceStatusGrid, defaultSize: 'full', area: 'system' },
-  { id: 'downloads', title: 'Download activity', description: 'Throughput and queue', component: DownloadsWidget, defaultSize: 'lg', requires: ['sonarr', 'radarr'], area: 'system' },
-  { id: 'storage', title: 'Storage', description: 'Drives and capacity', component: StorageWidget, defaultSize: 'sm', area: 'system' },
-  { id: 'resources', title: 'System resources', description: 'CPU, memory and network', component: () => <SystemResourcesWidget />, defaultSize: 'md', area: 'system' },
-  { id: 'plays', title: 'Playback activity', description: 'Plays per day', component: PlaysWidget, defaultSize: 'md', requires: ['jellyfin'] },
-  { id: 'upcoming', title: 'Upcoming', description: 'Calendar from Sonarr and Radarr', component: UpcomingWidget, defaultSize: 'sm', requires: ['sonarr', 'radarr'] },
-  { id: 'requests', title: 'Requests', description: 'Seerr request summary', component: RequestsWidget, defaultSize: 'sm', requires: ['seerr'] },
-  { id: 'library', title: 'Library', description: 'Media server library statistics', component: LibraryWidget, defaultSize: 'sm', requires: ['jellyfin'] },
-  { id: 'recent', title: 'Recently added', description: 'Latest additions', component: RecentlyAddedWidget, defaultSize: 'full', requires: ['jellyfin'] },
-  { id: 'indexers', title: 'Indexers', description: 'Prowlarr indexer health', component: IndexersWidget, defaultSize: 'md', requires: ['prowlarr'] },
-  { id: 'activity', title: 'Server activity', description: 'Media server activity', component: ActivityWidget, defaultSize: 'md', requires: ['jellyfin'] },
+  { id: 'now-playing', title: 'Now playing', component: NowPlayingHero, defaultSize: 'full', area: 'now-playing' },
+  { id: 'services', title: 'Service status', component: ServiceStatusGrid, defaultSize: 'full', area: 'system' },
+  { id: 'downloads', title: 'Download activity', component: DownloadsWidget, defaultSize: 'lg', requires: ['sonarr', 'radarr'], area: 'system' },
+  { id: 'storage', title: 'Storage', component: StorageWidget, defaultSize: 'sm', area: 'system' },
+  { id: 'resources', title: 'System resources', component: () => <SystemResourcesWidget />, defaultSize: 'md', area: 'system' },
+  { id: 'plays', title: 'Playback activity', component: PlaysWidget, defaultSize: 'md', requires: ['jellyfin'] },
+  { id: 'upcoming', title: 'Upcoming', component: UpcomingWidget, defaultSize: 'sm', requires: ['sonarr', 'radarr'] },
+  { id: 'requests', title: 'Requests', component: RequestsWidget, defaultSize: 'sm', requires: ['seerr'] },
+  { id: 'library', title: 'Library', component: LibraryWidget, defaultSize: 'sm', requires: ['jellyfin'] },
+  { id: 'recent', title: 'Recently added', component: RecentlyAddedWidget, defaultSize: 'full', requires: ['jellyfin'] },
+  { id: 'indexers', title: 'Indexers', component: IndexersWidget, defaultSize: 'md', requires: ['prowlarr'] },
+  { id: 'activity', title: 'Server activity', component: ActivityWidget, defaultSize: 'md', requires: ['jellyfin'] },
 ];
 
 export const WIDGET_MAP = new Map(WIDGETS.map((w) => [w.id, w]));

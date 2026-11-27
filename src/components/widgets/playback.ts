@@ -1,5 +1,6 @@
 import type { NowPlaying } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
+import { t } from '@/i18n';
 
 /** Position extrapolated from the last poll so progress moves every second. */
 export function livePosition(s: NowPlaying, fetchedAt: number, now: number) {
@@ -24,20 +25,19 @@ export function subtitleOf(s: NowPlaying) {
   return undefined;
 }
 
-export function methodLabel(s: NowPlaying) {
-  if (s.state.playMethod === 'Transcode') {
-    if (s.transcode?.isVideoDirect) return 'Direct Stream';
-    return 'Transcode';
-  }
-  return s.state.playMethod === 'DirectStream' ? 'Direct Stream' : 'Direct Play';
+/** Whether the video itself is being converted (not just remuxed or audio-only). */
+export function isTranscoding(s: NowPlaying) {
+  return s.state.playMethod === 'Transcode' && !s.transcode?.isVideoDirect;
 }
 
+export function methodLabel(s: NowPlaying) {
+  if (s.state.playMethod === 'Transcode') return t(s.transcode?.isVideoDirect ? 'ui.method.directStream' : 'ui.method.transcode');
+  return t(s.state.playMethod === 'DirectStream' ? 'ui.method.directStream' : 'ui.method.directPlay');
+}
+
+const KINDS = ['Episode', 'Movie', 'Audio', 'TvChannel', 'MusicVideo', 'Video', 'AudioBook'] as const;
 export function kindLabel(type: string) {
-  return (
-    { Episode: 'Episode', Movie: 'Movie', Audio: 'Music', TvChannel: 'Live TV', MusicVideo: 'Music video', Video: 'Video', AudioBook: 'Audiobook' }[
-      type
-    ] ?? type
-  );
+  return (KINDS as readonly string[]).includes(type) ? t(`ui.kind.${type as (typeof KINDS)[number]}`) : type;
 }
 
 export function deviceIcon(client = '', device = '') {

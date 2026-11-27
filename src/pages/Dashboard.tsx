@@ -24,13 +24,23 @@ import {
   DEFAULT_LAYOUT,
   normaliseLayout,
   SIZE_CLASS,
-  SIZE_LABEL,
   SIZES,
   WIDGET_MAP,
   WIDGETS,
   type Layout,
   type WidgetSize,
 } from '@/components/widgets/registry';
+import { getLocale, useT, type MessageKey } from '@/i18n';
+
+/** A widget's name in the active language, or its English name if a new widget has no translation yet. */
+function useWidgetTitle() {
+  const t = useT();
+  return (id: string) => {
+    const key = `dashboard.widgets.${id}`;
+    const s = t(key as MessageKey);
+    return s === key ? (WIDGET_MAP.get(id)?.title ?? id) : s;
+  };
+}
 
 function SortableWidget({
   id,
@@ -45,7 +55,9 @@ function SortableWidget({
   onHide: () => void;
   onResize: () => void;
 }) {
+  const t = useT();
   const def = WIDGET_MAP.get(id)!;
+  const title = useWidgetTitle()(id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !editing });
   const Component = def.component;
   return (
@@ -80,17 +92,17 @@ function SortableWidget({
               {...attributes}
               {...listeners}
               className="flex h-8 cursor-grab items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-ink active:cursor-grabbing"
-              aria-label={`Move ${def.title}`}
+              aria-label={t('dashboard.move', { widget: title })}
             >
               <GripVertical className="size-4 text-ink-3" />
-              {def.title}
+              {title}
             </button>
             <span className="mx-0.5 h-5 w-px bg-line-strong" />
-            <button onClick={onResize} className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-ink-2 hover:bg-white/10" title="Change width">
+            <button onClick={onResize} className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-ink-2 hover:bg-white/10" title={t('dashboard.changeWidth')}>
               <Scaling className="size-3.5" />
-              <span className="tabular">{SIZE_LABEL[size]}</span>
+              <span className="tabular">{size === 'full' ? t('dashboard.full') : SIZE_FRACTION[size]}</span>
             </button>
-            <button onClick={onHide} className="grid size-8 place-items-center rounded-lg text-ink-2 hover:bg-white/10 hover:text-bad" title="Hide widget">
+            <button onClick={onHide} className="grid size-8 place-items-center rounded-lg text-ink-2 hover:bg-white/10 hover:text-bad" title={t('dashboard.hide')}>
               <EyeOff className="size-3.5" />
             </button>
           </motion.div>
@@ -100,29 +112,33 @@ function SortableWidget({
   );
 }
 
+const SIZE_FRACTION: Record<Exclude<WidgetSize, 'full'>, string> = { sm: '⅓', md: '½', lg: '⅔' };
+
 function Summary() {
+  const t = useT();
   const health = useHealth();
   const playing = useNowPlaying();
   const s = health.data?.summary;
-  if (!s) return <span className="text-ink-4">Checking services…</span>;
+  if (!s) return <span className="text-ink-4">{t('dashboard.checking')}</span>;
   const configured = s.healthy + s.degraded + s.offline;
   const status = s.offline ? 'offline' : s.degraded ? 'degraded' : 'healthy';
+  // Plural by the total ("1 of 3 services") in English; each language picks its own form.
   const text = s.offline
-    ? `${s.offline} of ${configured} services offline`
+    ? t('dashboard.offline', { count: s.offline, total: configured })
     : s.degraded
-      ? `${s.degraded} of ${configured} services degraded`
-      : `All ${configured} services healthy`;
+      ? t('dashboard.degraded', { count: s.degraded, total: configured })
+      : t('dashboard.healthy', { count: configured });
   const streams = playing.data?.length ?? 0;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       <StatusDot status={status} size={7} />
       <span className="text-ink-2">{text}</span>
       <span className="text-ink-4">·</span>
-      <span>{streams ? `${streams} active ${streams === 1 ? 'stream' : 'streams'}` : 'No active streams'}</span>
+      <span>{streams ? t('dashboard.streams', { count: streams }) : t('dashboard.noStreams')}</span>
       {health.data?.checkedAt && (
         <>
           <span className="text-ink-4">·</span>
-          <span className="text-ink-4">checked {relative(health.data.checkedAt)}</span>
+          <span className="text-ink-4">{t('dashboard.checked', { when: relative(health.data.checkedAt) })}</span>
         </>
       )}
     </span>
@@ -131,6 +147,8 @@ function Summary() {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const t = useT();
+  const widgetTitle = useWidgetTitle();
   const config = useServiceConfig();
   const canSee = useCanSee();
   const recheck = useRecheck();
@@ -169,7 +187,7 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader
-        eyebrow={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+        eyebrow={new Date().toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric' })}
         title={
           <>
             {greeting()}, <span className="text-gradient">{user?.name}</span>
@@ -180,17 +198,17 @@ export default function Dashboard() {
           <>
             {editing && (
               <Button variant="ghost" size="sm" onClick={() => setStored(DEFAULT_LAYOUT)}>
-                <RotateCcw className="size-3.5" /> Reset
+                <RotateCcw className="size-3.5" /> {t('common.reset')}
               </Button>
             )}
             {!editing && (
               <Button variant="outline" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>
-                <RefreshCw className={cn('size-3.5', recheck.isPending && 'animate-spin')} /> Refresh
+                <RefreshCw className={cn('size-3.5', recheck.isPending && 'animate-spin')} /> {t('common.refresh')}
               </Button>
             )}
             <Button variant={editing ? 'primary' : 'outline'} size="sm" onClick={() => setEditing((e) => !e)}>
               {editing ? <Check className="size-3.5" /> : <LayoutGrid className="size-3.5" />}
-              {editing ? 'Done' : 'Customise'}
+              {editing ? t('common.done') : t('dashboard.customise')}
             </Button>
           </>
         }
@@ -207,7 +225,7 @@ export default function Dashboard() {
             <div className="card mb-6 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="mr-2 text-xs text-ink-3">
-                  Drag widgets to reorder, resize or hide them. {hidden.length ? 'Hidden widgets:' : 'All widgets are visible.'}
+                  {t('dashboard.editHint')} {hidden.length ? t('dashboard.hiddenWidgets') : t('dashboard.allVisible')}
                 </span>
                 {hidden.map((id) => (
                   <button
@@ -215,7 +233,7 @@ export default function Dashboard() {
                     onClick={() => setStored({ ...layout, hidden: layout.hidden.filter((h) => h !== id) })}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-2.5 py-1.5 text-xs text-ink-2 transition hover:border-brand/50 hover:bg-brand/5 hover:text-ink"
                   >
-                    <Plus className="size-3.5" /> {WIDGET_MAP.get(id)?.title}
+                    <Plus className="size-3.5" /> {widgetTitle(id)}
                   </button>
                 ))}
               </div>
@@ -245,10 +263,10 @@ export default function Dashboard() {
 
       {visible.length === 0 && (
         <div className="card grid place-items-center p-12 text-center text-sm text-ink-3">
-          All widgets are hidden. Use Customise to add some back.
+          {t('dashboard.allHidden')}
         </div>
       )}
-      <p className="mt-10 text-center text-[11px] text-ink-4">{WIDGETS.length} widgets available · layout saved on this device</p>
+      <p className="mt-10 text-center text-[11px] text-ink-4">{t('dashboard.footer', { count: WIDGETS.length })}</p>
     </>
   );
 }

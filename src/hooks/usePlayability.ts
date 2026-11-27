@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { t } from '@/i18n';
 
 export type Verdict = 'direct' | 'remux' | 'audio' | 'video';
 export type FeatureKind = 'container' | 'vcodec' | 'range' | 'bitdepth' | 'res' | 'acodec' | 'channels' | 'sub';
@@ -53,10 +54,10 @@ export interface TitlePlayability {
 }
 
 export const VERDICT: Record<Verdict, { label: string; tone: 'ok' | 'neutral' | 'warn' | 'bad'; hint: string }> = {
-  direct: { label: 'Plays directly', tone: 'ok', hint: 'No work for the server' },
-  remux: { label: 'Repackaged', tone: 'neutral', hint: 'Jellyfin changes the file type on the fly: light work' },
-  audio: { label: 'Audio converts', tone: 'warn', hint: 'Jellyfin converts the sound: some CPU, picture untouched' },
-  video: { label: 'Video converts', tone: 'bad', hint: 'Jellyfin converts the picture: heavy work, can cause buffering' },
+  direct: { get label() { return t('widgets.verdict.direct'); }, tone: 'ok', get hint() { return t('widgets.verdict.directHint'); } },
+  remux: { get label() { return t('widgets.verdict.remux'); }, tone: 'neutral', get hint() { return t('widgets.verdict.remuxHint'); } },
+  audio: { get label() { return t('widgets.verdict.audio'); }, tone: 'warn', get hint() { return t('widgets.verdict.audioHint'); } },
+  video: { get label() { return t('widgets.verdict.video'); }, tone: 'bad', get hint() { return t('widgets.verdict.videoHint'); } },
 };
 
 export function usePlayability(enabled = true) {

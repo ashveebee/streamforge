@@ -18,12 +18,13 @@ import { QueueRow } from '@/components/widgets/DownloadsWidget';
 import { VolumeRow } from '@/components/widgets/StorageWidget';
 import { UpcomingList } from '@/components/widgets/UpcomingWidget';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
+import { t } from '@/i18n';
 
 function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number; accent: string }) {
   const dl = useDownloads();
   return (
     <Card className="h-full">
-      <CardHeader icon={Download} accent={accent} title="Queue" subtitle={`${total} items · ${bytes(items.reduce((a, i) => a + i.sizeLeft, 0))} remaining`} />
+      <CardHeader icon={Download} accent={accent} title={t('svc.queue')} subtitle={t('svc.queueSub', { count: total, remaining: bytes(items.reduce((a, i) => a + i.sizeLeft, 0)) })} />
       <CardBody>
         {items.length ? (
           <ul className="divide-y divide-line">
@@ -32,7 +33,7 @@ function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number
             ))}
           </ul>
         ) : (
-          <EmptyState icon={Download} title="Queue is empty" description="Nothing downloading right now." />
+          <EmptyState icon={Download} title={t('widgets.downloads.empty')} description={t('widgets.downloads.emptyHint')} />
         )}
       </CardBody>
     </Card>
@@ -42,7 +43,7 @@ function QueueCard({ items, total, accent }: { items: QueueItem[]; total: number
 function DisksCard({ disks }: { disks: DiskInfo[] }) {
   return (
     <Card className="h-full">
-      <CardHeader icon={HardDrive} title="Disk space" subtitle="As reported by the service" />
+      <CardHeader icon={HardDrive} title={t('svc.disk')} subtitle={t('svc.diskHint')} />
       <CardBody>
         {disks.length ? (
           <ul className="divide-y divide-line">
@@ -51,7 +52,7 @@ function DisksCard({ disks }: { disks: DiskInfo[] }) {
             ))}
           </ul>
         ) : (
-          <EmptyState icon={HardDrive} title="No disks reported" />
+          <EmptyState icon={HardDrive} title={t('svc.noDisks')} />
         )}
       </CardBody>
     </Card>
@@ -73,7 +74,7 @@ function PosterStrip({ items, kind }: { kind: 'sonarr' | 'radarr'; items: { id: 
   );
 }
 
-const pageSkeleton = <PageLoader label="Loading" hint="Fetching the queue, calendar and library…" />;
+const PageSkeleton = () => <PageLoader label={t('common.loading')} hint={t('svc.loadingHint')} />;
 
 export function SonarrPage() {
   const instance = useSelectedInstance('sonarr');
@@ -82,19 +83,19 @@ export function SonarrPage() {
     <>
       <ServiceHeader id="sonarr" instance={instance} />
       <InstanceTabs kind="sonarr" />
-      <QueryState query={q} skeleton={pageSkeleton}>
+      <QueryState query={q} skeleton={<PageSkeleton />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Series" value={d.stats.series} icon={Tv} accent="var(--color-sonarr)" hint={`${d.stats.monitored} monitored · ${d.stats.continuing} continuing`} />
-              <StatTile label="Episodes on disk" value={d.stats.episodeFiles} icon={CheckCircle2} accent="var(--color-ok)" format={(n) => compact(Math.round(n))} hint={`of ${compact(d.stats.episodes)} aired`} />
-              <StatTile label="Missing" value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint="Monitored, not downloaded" />
-              <StatTile label="Size on disk" value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
+              <StatTile label={t('widgets.library.series')} value={d.stats.series} icon={Tv} accent="var(--color-sonarr)" hint={t('svc.seriesHint', { monitored: d.stats.monitored, continuing: d.stats.continuing })} />
+              <StatTile label={t('svc.episodesOnDisk')} value={d.stats.episodeFiles} icon={CheckCircle2} accent="var(--color-ok)" format={(n) => compact(Math.round(n))} hint={t('svc.ofAired', { n: compact(d.stats.episodes) })} />
+              <StatTile label={t('widgets.missing.title')} value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint={t('widgets.missing.about')} />
+              <StatTile label={t('svc.size')} value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
             </div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <div className="xl:col-span-2"><QueueCard items={d.queue.items} total={d.queue.total} accent="var(--color-sonarr)" /></div>
               <Card className="h-full">
-                <CardHeader icon={CalendarDays} accent="var(--color-sonarr)" title="Airing soon" subtitle="Next 14 days" />
+                <CardHeader icon={CalendarDays} accent="var(--color-sonarr)" title={t('svc.airing')} subtitle={t('svc.nextDays', { n: 14 })} />
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
@@ -103,7 +104,7 @@ export function SonarrPage() {
               <MissingCard kind="sonarr" instance={instance} />
             </div>
             <Card>
-              <CardHeader icon={Layers} title="Recently added series" />
+              <CardHeader icon={Layers} title={t('svc.recentSeries')} />
               <PosterStrip kind="sonarr" items={d.recent.map((r) => ({ ...r, caption: r.network ?? String(r.year ?? '') }))} />
             </Card>
             <DisksCard disks={d.disks} />
@@ -121,29 +122,29 @@ export function RadarrPage() {
     <>
       <ServiceHeader id="radarr" instance={instance} />
       <InstanceTabs kind="radarr" />
-      <QueryState query={q} skeleton={pageSkeleton}>
+      <QueryState query={q} skeleton={<PageSkeleton />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Movies" value={d.stats.movies} icon={Film} accent="var(--color-radarr)" hint={`${d.stats.monitored} monitored`} />
-              <StatTile label="Downloaded" value={d.stats.downloaded} icon={CheckCircle2} accent="var(--color-ok)" hint={d.stats.movies ? `${Math.round((d.stats.downloaded / d.stats.movies) * 100)}% of library` : undefined} />
-              <StatTile label="Missing" value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint={`${d.stats.unreleased} not yet released`} />
-              <StatTile label="Size on disk" value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
+              <StatTile label={t('widgets.library.movies')} value={d.stats.movies} icon={Film} accent="var(--color-radarr)" hint={t('svc.monitored', { n: d.stats.monitored })} />
+              <StatTile label={t('palette.status.downloaded')} value={d.stats.downloaded} icon={CheckCircle2} accent="var(--color-ok)" hint={d.stats.movies ? t('svc.ofLibrary', { pct: Math.round((d.stats.downloaded / d.stats.movies) * 100) }) : undefined} />
+              <StatTile label={t('widgets.missing.title')} value={d.stats.missing} icon={SearchX} accent="var(--color-bad)" hint={t('svc.unreleased', { n: d.stats.unreleased })} />
+              <StatTile label={t('svc.size')} value={d.stats.sizeOnDisk} icon={HardDrive} accent="var(--color-infinidisk)" format={(n) => bytes(n)} />
             </div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <div className="xl:col-span-2"><QueueCard items={d.queue.items} total={d.queue.total} accent="var(--color-radarr)" /></div>
               <Card className="h-full">
-                <CardHeader icon={CalendarDays} accent="var(--color-radarr)" title="Upcoming releases" subtitle="Next 30 days" />
+                <CardHeader icon={CalendarDays} accent="var(--color-radarr)" title={t('svc.upcoming')} subtitle={t('svc.nextDays', { n: 30 })} />
                 <CardBody className="max-h-[520px] overflow-y-auto"><UpcomingList items={d.upcoming} /></CardBody>
               </Card>
             </div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 [&>*]:min-w-0">
               <Card className="xl:col-span-2">
-                <CardHeader icon={Layers} title="Recently added movies" />
-                <PosterStrip kind="radarr" items={d.recent.map((r) => ({ ...r, caption: r.hasFile ? `${r.year ?? ''} · On disk` : `${r.year ?? ''} · Missing` }))} />
+                <CardHeader icon={Layers} title={t('svc.recentMovies')} />
+                <PosterStrip kind="radarr" items={d.recent.map((r) => ({ ...r, caption: `${r.year ?? ''} · ${r.hasFile ? t('svc.onDisk') : t('palette.status.missing')}` }))} />
               </Card>
               <Card>
-                <CardHeader icon={ListChecks} title="Quality breakdown" subtitle="Downloaded movies by quality" />
+                <CardHeader icon={ListChecks} title={t('svc.quality')} subtitle={t('svc.qualityHint')} />
                 <CardBody>
                   {d.qualities.length ? (
                     <div style={{ height: Math.max(120, d.qualities.length * 30) }}>
@@ -152,15 +153,15 @@ export function RadarrPage() {
                           <CartesianGrid {...gridProps} horizontal={false} vertical />
                           <XAxis type="number" {...axisProps} allowDecimals={false} />
                           <YAxis type="category" dataKey="name" {...axisProps} width={96} tick={{ fill: 'var(--color-ink-3)', fontSize: 11 }} />
-                          <Tooltip cursor={{ fill: 'rgb(255 255 255 / 0.04)' }} content={<ChartTooltip formatValue={(v) => `${v} movies`} />} />
-                          <Bar dataKey="count" name="Movies" radius={[0, 4, 4, 0]}>
+                          <Tooltip cursor={{ fill: 'rgb(255 255 255 / 0.04)' }} content={<ChartTooltip formatValue={(v) => t('media.add.movies', { count: v })} />} />
+                          <Bar dataKey="count" name={t('widgets.library.movies')} radius={[0, 4, 4, 0]}>
                             {d.qualities.map((q) => <Cell key={q.name} fill="#d97706" />)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <EmptyState icon={ListChecks} title="No files yet" />
+                    <EmptyState icon={ListChecks} title={t('svc.noFiles')} />
                   )}
                 </CardBody>
               </Card>

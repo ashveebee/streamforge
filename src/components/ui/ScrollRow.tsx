@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/i18n';
 
 /**
  * A row that scrolls sideways (posters, cast). Touch and trackpads swipe as
@@ -39,7 +40,7 @@ export function ScrollRow({ children, label, className }: { children: ReactNode;
     <button
       type="button"
       onClick={() => page(dir)}
-      aria-label={dir === 1 ? `Scroll ${label} right` : `Scroll ${label} left`}
+      aria-label={t(dir === 1 ? 'ui.scrollRight' : 'ui.scrollLeft', { label })}
       className={cn(
         'absolute top-[calc(50%-1.25rem)] z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-line-strong bg-surface/90 text-ink shadow-lg shadow-black/40 backdrop-blur transition hover:bg-surface-3',
         dir === 1 ? '-right-2' : '-left-2',

@@ -11,12 +11,13 @@ import { Menu } from '../ui/Menu';
 import { Pill } from '../ui/Status';
 import { EmptyState, ErrorState, SkeletonRows } from '../ui/States';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
+import { t } from '@/i18n';
 
 const PERIODS = [
-  { days: 90, label: '3 months' },
-  { days: 180, label: '6 months' },
-  { days: 365, label: '1 year' },
-  { days: 730, label: '2 years' },
+  { days: 90, get label() { return t('widgets.reclaim.months', { count: 3 }); } },
+  { days: 180, get label() { return t('widgets.reclaim.months', { count: 6 }); } },
+  { days: 365, get label() { return t('widgets.reclaim.years', { count: 1 }); } },
+  { days: 730, get label() { return t('widgets.reclaim.years', { count: 2 }); } },
 ];
 
 function Row({ i }: { i: ReclaimItem }) {
@@ -29,7 +30,7 @@ function Row({ i }: { i: ReclaimItem }) {
       <div className="min-w-0 flex-1">
         <TitleLink to={arrTitlePath(i.kind === 'series' ? 'sonarr' : 'radarr', i.tmdbId)} className="block truncate text-[13px] font-medium">{i.title} {i.year ? <span className="font-normal text-ink-4">({i.year})</span> : null}</TitleLink>
         <div className="truncate text-[11px] text-ink-3">
-          {[i.kind === 'series' ? (i.ended ? 'Ended series' : 'Series') : 'Movie', i.instanceName, i.lastWatched ? `last watched ${relative(i.lastWatched)}` : 'never watched', i.added ? `added ${relative(i.added)}` : undefined].filter(Boolean).join(' · ')}
+          {[i.kind === 'series' ? (i.ended ? t('widgets.reclaim.ended') : t('me.series')) : t('me.movie'), i.instanceName, i.lastWatched ? t('widgets.reclaim.lastWatched', { when: relative(i.lastWatched) }) : t('widgets.reclaim.never'), i.added ? t('widgets.reclaim.added', { when: relative(i.added) }) : undefined].filter(Boolean).join(' · ')}
         </div>
       </div>
       <span className="shrink-0 text-[13px] font-semibold tabular">{bytes(i.size)}</span>
@@ -41,17 +42,17 @@ function Row({ i }: { i: ReclaimItem }) {
             <Check className="m-1.5 size-4 text-ok" />
           ) : (
             <Menu
-              label={`Actions for ${i.title}`}
+              label={t('ui.actionsFor', { title: i.title })}
               trigger={act.isError ? <CircleAlert className="size-4 text-bad" /> : undefined}
               items={[
-                { label: 'Keep', icon: BookmarkCheck, hint: 'Never suggest this again', onSelect: () => run('keep') },
-                { label: 'Stop monitoring', icon: EyeOff, hint: 'Keep the files, stop upgrades and new episodes', onSelect: () => run('unmonitor') },
+                { label: t('widgets.reclaim.keep'), icon: BookmarkCheck, hint: t('widgets.reclaim.keepHint'), onSelect: () => run('keep') },
+                { label: t('widgets.reclaim.unmonitor'), icon: EyeOff, hint: t('widgets.reclaim.unmonitorHint'), onSelect: () => run('unmonitor') },
                 {
-                  label: 'Delete files & remove',
+                  label: t('widgets.reclaim.delete'),
                   icon: Trash2,
                   danger: true,
-                  hint: `Frees ${bytes(i.size)}`,
-                  onSelect: () => confirm(`Delete “${i.title}” and its files (${bytes(i.size)}) from disk? This can’t be undone.`) && run('delete'),
+                  hint: t('widgets.reclaim.frees', { size: bytes(i.size) }),
+                  onSelect: () => confirm(t('widgets.reclaim.confirmDelete', { title: i.title, size: bytes(i.size) })) && run('delete'),
                 },
               ]}
             />
@@ -71,12 +72,12 @@ export function ReclaimCard() {
       <CardHeader
         icon={Recycle}
         accent="var(--color-ok)"
-        title="Cleanup suggestions"
-        subtitle={q.data ? `${q.data.total} title${q.data.total === 1 ? '' : 's'} nobody has watched in ${PERIODS.find((p) => p.days === days)?.label} · ${bytes(q.data.reclaimable)} could be freed` : 'Big titles nobody watches'}
+        title={t('widgets.reclaim.title')}
+        subtitle={q.data ? `${t('widgets.reclaim.unwatched', { count: q.data.total, period: PERIODS.find((p) => p.days === days)?.label })} · ${t('widgets.reclaim.couldFree', { size: bytes(q.data.reclaimable) })}` : t('widgets.reclaim.about')}
       />
       <CardBody>
-        <div className="mb-3 flex flex-wrap items-center gap-1" role="tablist" aria-label="Unwatched for">
-          <span className="mr-1 text-xs text-ink-4">Unwatched for</span>
+        <div className="mb-3 flex flex-wrap items-center gap-1" role="tablist" aria-label={t('widgets.reclaim.for')}>
+          <span className="mr-1 text-xs text-ink-4">{t('widgets.reclaim.for')}</span>
           {PERIODS.map((p) => (
             <button
               key={p.days}
@@ -95,15 +96,15 @@ export function ReclaimCard() {
         ) : !q.data ? (
           <SkeletonRows rows={5} />
         ) : !q.data.items.length ? (
-          <EmptyState icon={Check} title="Nothing to clean up" description="Everything has been watched recently or was added recently." />
+          <EmptyState icon={Check} title={t('widgets.reclaim.none')} description={t('widgets.reclaim.noneHint')} />
         ) : (
           <>
             <ul className="max-h-[520px] divide-y divide-line overflow-y-auto">{q.data.items.map((i) => <Row key={i.key} i={i} />)}</ul>
             <p className="mt-2 text-[11px] text-ink-4">
-              'Based on plays on every media server, plus each server’s own watch history where it has one.' Titles added in this period are skipped.{q.data.kept ? ` ${q.data.kept} kept title${q.data.kept === 1 ? '' : 's'} hidden.` : ''}
-              {q.data.total > q.data.items.length && <> Showing the largest {q.data.items.length}.</>}
+              {t('widgets.reclaim.basis')}{q.data.kept ? ` ${t('widgets.reclaim.kept', { count: q.data.kept })}` : ''}
+              {q.data.total > q.data.items.length && <> {t('widgets.reclaim.largest', { count: q.data.items.length })}</>}
             </p>
-            {q.data.items.length > 0 && <Pill className="mt-2">Checked {relative(q.data.checkedAt)}</Pill>}
+            {q.data.items.length > 0 && <Pill className="mt-2">{t('widgets.reclaim.checked', { when: relative(q.data.checkedAt) })}</Pill>}
           </>
         )}
       </CardBody>

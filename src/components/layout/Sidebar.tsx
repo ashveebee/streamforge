@@ -11,6 +11,7 @@ import { Avatar } from '../ui/Image';
 import { MEDIA_SERVERS, SERVICES } from '../ui/ServiceIcon';
 import { StatusDot } from '../ui/Status';
 import { LogoMark } from './Logo';
+import { useT } from '@/i18n';
 
 const SERVICE_ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
@@ -82,6 +83,7 @@ export function Sidebar({
   mobile?: boolean;
 }) {
   const { user, logout } = useAuth();
+  const t = useT();
   const health = useHealth();
   const playing = useNowPlaying();
   const config = useServiceConfig();
@@ -117,7 +119,7 @@ export function Sidebar({
     >
       <div className={cn('flex h-11 items-center gap-2.5 px-1.5', collapsed && 'justify-center px-0')}>
         {collapsed && newVersion ? (
-          <NavLink to="/settings/system" onClick={onNavigate} className="relative" title={`StreamForge ${newVersion} is available`} aria-label={`StreamForge ${newVersion} is available`}>
+          <NavLink to="/settings/system" onClick={onNavigate} className="relative" title={t('nav.updateAvailable', { version: newVersion })} aria-label={t('nav.updateAvailable', { version: newVersion })}>
             <LogoMark size={30} />
             <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface bg-brand" />
           </NavLink>
@@ -128,11 +130,11 @@ export function Sidebar({
           <div className="min-w-0 leading-tight">
             <div className="text-[15px] font-semibold tracking-tight">StreamForge</div>
             {newVersion ? (
-              <NavLink to="/settings/system" onClick={onNavigate} className="text-[11px] font-medium text-brand hover:underline" title="See what’s new and how to update">
-                v{__APP_VERSION__} · {newVersion} available
+              <NavLink to="/settings/system" onClick={onNavigate} className="text-[11px] font-medium text-brand hover:underline" title={t('nav.seeWhatsNew')}>
+                v{__APP_VERSION__} · {t('nav.versionAvailable', { version: newVersion })}
               </NavLink>
             ) : (
-              <div className="text-[11px] text-ink-4">Control centre · v{__APP_VERSION__}</div>
+              <div className="text-[11px] text-ink-4">{t('nav.controlCentre')} · v{__APP_VERSION__}</div>
             )}
           </div>
         )}
@@ -144,26 +146,26 @@ export function Sidebar({
             onNavigate?.();
             onSearch();
           }}
-          title={collapsed ? 'Search (⌘K)' : undefined}
-          aria-label="Search"
+          title={collapsed ? t('nav.searchShortcut') : undefined}
+          aria-label={t('nav.search')}
           className={cn('mt-4 flex h-9 items-center gap-2.5 rounded-xl border border-line bg-white/[0.02] px-2.5 text-[13px] text-ink-4 transition hover:bg-white/[0.05] hover:text-ink-2', collapsed && 'justify-center px-0')}
         >
           <Search className="size-4 shrink-0" />
           {!collapsed && (
             <>
-              <span className="flex-1 text-left">Search</span>
+              <span className="flex-1 text-left">{t('nav.search')}</span>
               <kbd className="rounded border border-line px-1 text-[10px]">⌘K</kbd>
             </>
           )}
         </button>
       )}
 
-      <nav className="mt-5 flex flex-1 flex-col gap-0.5 overflow-y-auto no-scrollbar" aria-label="Main">
-        <NavItem to="/" icon={LayoutDashboard} label="Overview" collapsed={collapsed} onNavigate={onNavigate} />
+      <nav className="mt-5 flex flex-1 flex-col gap-0.5 overflow-y-auto no-scrollbar" aria-label={t('nav.main')}>
+        <NavItem to="/" icon={LayoutDashboard} label={t('nav.overview')} collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('now-playing') && <NavItem
           to="/now-playing"
           icon={PlayCircle}
-          label="Now Playing"
+          label={t('nav.nowPlaying')}
           collapsed={collapsed}
           onNavigate={onNavigate}
           trailing={
@@ -176,14 +178,14 @@ export function Sidebar({
             ) : undefined
           }
         />}
-        <NavItem to="/digest" icon={Newspaper} label="This week" collapsed={collapsed} onNavigate={onNavigate} />
-        {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
-        {user?.isAdmin && <NavItem to="/history" icon={History} label="Watch history" collapsed={collapsed} onNavigate={onNavigate} />}
+        <NavItem to="/digest" icon={Newspaper} label={t('nav.thisWeek')} collapsed={collapsed} onNavigate={onNavigate} />
+        {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label={t('nav.stats')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/history" icon={History} label={t('nav.watchHistory')} collapsed={collapsed} onNavigate={onNavigate} />}
         {siloRequests && canSee('seerr') && (
           <NavItem
             to="/requests"
             icon={Inbox}
-            label="Requests"
+            label={t('nav.requests')}
             collapsed={collapsed}
             onNavigate={onNavigate}
             trailing={
@@ -191,21 +193,21 @@ export function Sidebar({
                 collapsed ? (
                   <span className="block size-2 rounded-full bg-warn" />
                 ) : (
-                  <span className="rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold text-warn tabular" title={`${waiting} waiting for approval`}>{waiting}</span>
+                  <span className="rounded-full bg-warn/15 px-1.5 py-px text-[10px] font-semibold text-warn tabular" title={t('nav.waitingApproval', { count: waiting })}>{waiting}</span>
                 )
               ) : undefined
             }
           />
         )}
-        {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
-        {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
-        {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
-        {user?.isAdmin && <NavItem to="/settings" icon={Settings} label="Settings" collapsed={collapsed} onNavigate={onNavigate} />}
-        {user?.isAdmin && <NavItem to="/rules" icon={Sparkles} label="Rules" collapsed={collapsed} onNavigate={onNavigate} />}
-        {user?.isAdmin && <NavItem to="/audit" icon={ScrollText} label="Audit log" collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('library') && <NavItem to="/library" icon={Stethoscope} label={t('nav.libraryHealth')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label={t('nav.downloads')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {canSee('system') && <NavItem to="/system" icon={Activity} label={t('nav.systemStatus')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/settings" icon={Settings} label={t('nav.settings')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/rules" icon={Sparkles} label={t('nav.rules')} collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/audit" icon={ScrollText} label={t('nav.auditLog')} collapsed={collapsed} onNavigate={onNavigate} />}
 
         <div className={cn('mt-5 mb-1.5 px-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-ink-4 uppercase', collapsed && 'sr-only')}>
-          Services
+          {t('nav.services')}
         </div>
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
         {shown.flatMap((id) => {
@@ -252,20 +254,20 @@ export function Sidebar({
       <div className="mt-3 border-t border-line pt-3">
         {user && (
           <div className={cn('flex items-center gap-2.5 rounded-xl p-1.5', collapsed && 'flex-col')}>
-            <NavLink to="/me" onClick={onNavigate} title="Your activity and account" className={cn('flex min-w-0 items-center gap-2.5 rounded-lg transition hover:opacity-80', !collapsed && 'flex-1')}>
+            <NavLink to="/me" onClick={onNavigate} title={t('nav.account')} className={cn('flex min-w-0 items-center gap-2.5 rounded-lg transition hover:opacity-80', !collapsed && 'flex-1')}>
               <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={32} />
               {!collapsed && (
                 <div className="min-w-0 flex-1 leading-tight">
                   <div className="truncate text-[13px] font-medium">{user.name}</div>
-                  <div className="text-[11px] text-ink-4">{user.isAdmin ? 'Administrator' : 'Member'}</div>
+                  <div className="text-[11px] text-ink-4">{user.isAdmin ? t('nav.administrator') : t('nav.member')}</div>
                 </div>
               )}
             </NavLink>
             <button
               onClick={() => void logout()}
               className="grid size-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white/[0.06] hover:text-ink"
-              title="Sign out"
-              aria-label="Sign out"
+              title={t('common.signOut')}
+              aria-label={t('common.signOut')}
             >
               <LogOut className="size-4" />
             </button>
@@ -278,10 +280,10 @@ export function Sidebar({
               'mt-1 flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-xs text-ink-4 transition hover:bg-white/[0.04] hover:text-ink-2',
               collapsed && 'justify-center px-0',
             )}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
           >
             {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-            <AnimatePresence>{!collapsed && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }}>Collapse</motion.span>}</AnimatePresence>
+            <AnimatePresence>{!collapsed && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{t('nav.collapseShort')}</motion.span>}</AnimatePresence>
           </button>
         )}
       </div>

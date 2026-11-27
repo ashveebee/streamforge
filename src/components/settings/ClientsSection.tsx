@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
+import { t } from '@/i18n';
 
 const PORT: Record<ClientType, string> = { qbittorrent: '8080', transmission: '9091', sabnzbd: '8080', nzbget: '6789' };
 
@@ -17,7 +18,7 @@ function ClientRow({ c, types, onDone }: { c?: ClientSettingsView; types: { id: 
   const save = useSaveClient();
   const remove = useRemoveClient();
   useEffect(() => setForm((f) => ({ ...f, name: c?.name ?? '', url: c?.url ?? '', username: c?.username ?? '' })), [c?.name, c?.url, c?.username]);
-  const fields = types.find((t) => t.id === form.type)?.fields ?? [];
+  const fields = types.find((x) => x.id === form.type)?.fields ?? [];
   const err = save.error instanceof ApiError ? save.error : undefined;
   const busy = test.isPending || save.isPending || remove.isPending;
   const dirty = (Object.keys(blank) as (keyof typeof blank)[]).some((k) => form[k] !== blank[k]);
@@ -44,19 +45,19 @@ function ClientRow({ c, types, onDone }: { c?: ClientSettingsView; types: { id: 
   return (
     <form onSubmit={onSubmit} noValidate className={cn('space-y-3 px-5 py-4', c && !c.enabled && 'opacity-70')}>
       <div className="grid gap-3 md:grid-cols-[150px_minmax(120px,0.7fr)_minmax(180px,1.3fr)]">
-        <Select aria-label="Client type" className="h-9" value={form.type} disabled={!!c} onChange={(e) => set('type', e.target.value)}>
-          {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        <Select aria-label={t('sec.clients.type')} className="h-9" value={form.type} disabled={!!c} onChange={(e) => set('type', e.target.value)}>
+          {types.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </Select>
-        <Input className="h-9" aria-label="Name" placeholder="Name, e.g. Seedbox" value={form.name} aria-invalid={err?.field === 'name'} onChange={(e) => set('name', e.target.value)} />
-        <Input className="h-9" aria-label="Server address" type="url" inputMode="url" spellCheck={false} autoComplete="off" placeholder={`http://192.168.1.10:${PORT[form.type]}`} value={form.url} aria-invalid={err?.field === 'url'} onChange={(e) => set('url', e.target.value)} />
+        <Input className="h-9" aria-label={t('kometa.form.name')} placeholder={t('sec.clients.namePh')} value={form.name} aria-invalid={err?.field === 'name'} onChange={(e) => set('name', e.target.value)} />
+        <Input className="h-9" aria-label={t('settings.service.address')} type="url" inputMode="url" spellCheck={false} autoComplete="off" placeholder={`http://192.168.1.10:${PORT[form.type]}`} value={form.url} aria-invalid={err?.field === 'url'} onChange={(e) => set('url', e.target.value)} />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        {fields.includes('username') && <Input className="h-9" aria-label="Username" autoComplete="off" placeholder="Username" value={form.username} onChange={(e) => set('username', e.target.value)} />}
+        {fields.includes('username') && <Input className="h-9" aria-label={t('common.username')} autoComplete="off" placeholder={t('common.username')} value={form.username} onChange={(e) => set('username', e.target.value)} />}
         {fields.includes('password') && (
-          <Input className="h-9" aria-label="Password" type="password" autoComplete="new-password" placeholder={c?.passwordSet ? 'Saved — blank keeps it' : 'Password'} value={form.password} aria-invalid={err?.field === 'password'} onChange={(e) => set('password', e.target.value)} />
+          <Input className="h-9" aria-label={t('common.password')} type="password" autoComplete="new-password" placeholder={c?.passwordSet ? t('sec.savedBlank') : t('common.password')} value={form.password} aria-invalid={err?.field === 'password'} onChange={(e) => set('password', e.target.value)} />
         )}
         {fields.includes('apiKey') && (
-          <Input className="h-9 font-mono text-[13px]" aria-label="API key" type="password" autoComplete="new-password" placeholder={c?.apiKeySet ? `Saved ${c.apiKeyHint ?? '••••'} — blank keeps it` : 'API key (Config → General)'} value={form.apiKey} aria-invalid={err?.field === 'apiKey'} onChange={(e) => set('apiKey', e.target.value)} />
+          <Input className="h-9 font-mono text-[13px]" aria-label={t('settings.service.apiKey')} type="password" autoComplete="new-password" placeholder={c?.apiKeySet ? t('sec.savedHint', { hint: c.apiKeyHint ?? '••••' }) : t('sec.clients.keyPh')} value={form.apiKey} aria-invalid={err?.field === 'apiKey'} onChange={(e) => set('apiKey', e.target.value)} />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -65,29 +66,29 @@ function ClientRow({ c, types, onDone }: { c?: ClientSettingsView; types: { id: 
             <span className="text-bad" role="alert">{err.message}</span>
           ) : test.data ? (
             test.data.ok ? (
-              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> Connected{test.data.version ? ` · v${test.data.version}` : ''}</span>
+              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> {t('settings.service.connected')}{test.data.version ? ` · v${test.data.version}` : ''}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-bad"><CircleX className="size-3.5" /> {test.data.message}</span>
             )
           ) : c ? (
-            <span className="text-ink-4">{c.enabled ? 'Active' : 'Switched off'}</span>
+            <span className="text-ink-4">{c.enabled ? t('sec.active') : t('sec.switchedOff')}</span>
           ) : null}
         </div>
         {c ? (
           <>
-            <Switch checked={c.enabled} disabled={busy} onChange={(v) => save.mutate({ id: c.id, enabled: v })} label={c.enabled ? `Switch off ${c.name}` : `Switch on ${c.name}`} />
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => confirm(`Remove the download client "${c.name}"?`) && remove.mutate(c.id)}>
-              <Trash2 className="size-3.5" /> Remove
+            <Switch checked={c.enabled} disabled={busy} onChange={(v) => save.mutate({ id: c.id, enabled: v })} label={c.enabled ? t('sec.switchOff', { name: c.name }) : t('sec.switchOn', { name: c.name })} />
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => confirm(t('sec.clients.confirmRemove', { name: c.name })) && remove.mutate(c.id)}>
+              <Trash2 className="size-3.5" /> {t('library.dl.remove')}
             </Button>
           </>
         ) : (
-          <Button type="button" variant="ghost" size="sm" onClick={onDone}>Cancel</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onDone}>{t('media.cancel')}</Button>
         )}
         <Button type="button" size="sm" disabled={busy || !form.url.trim()} onClick={() => test.mutate(input())}>
-          {test.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />} Test
+          {test.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />} {t('sec.sso.test')}
         </Button>
         <Button type="submit" variant="primary" size="sm" disabled={busy || !dirty}>
-          {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />} {c ? 'Save' : 'Add'}
+          {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />} {c ? t('common.save') : t('admin.setup.add')}
         </Button>
       </div>
     </form>
@@ -101,12 +102,12 @@ export function ClientsSection() {
   if (!q.data) return null;
   return (
     <section className="mt-8" aria-labelledby="clients-h">
-      <h2 id="clients-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight"><Download className="size-4 text-brand" /> Download clients</h2>
-      <p className="mb-3 text-xs text-ink-3">Connect your torrent and usenet clients for real transfer speeds, pausing, removing and speed limits.</p>
+      <h2 id="clients-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight"><Download className="size-4 text-brand" /> {t('settings.tabs.downloads.label')}</h2>
+      <p className="mb-3 text-xs text-ink-3">{t('sec.clients.intro')}</p>
       <Card>
         <header className="flex items-center gap-3 px-5 py-3">
-          <p className="min-w-0 flex-1 text-[11px] text-ink-4">Passwords and API keys stay on the StreamForge server.</p>
-          {!adding && <Button size="sm" onClick={() => setAdding(true)}><Plus className="size-3.5" /> Add client</Button>}
+          <p className="min-w-0 flex-1 text-[11px] text-ink-4">{t('sec.clients.stay')}</p>
+          {!adding && <Button size="sm" onClick={() => setAdding(true)}><Plus className="size-3.5" /> {t('sec.clients.add')}</Button>}
         </header>
         {(q.data.clients.length > 0 || adding) && (
           <div className="divide-y divide-line border-t border-line">

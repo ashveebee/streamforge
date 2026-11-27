@@ -10,12 +10,13 @@ import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
+import { t } from '@/i18n';
 
 function SearchButton({ label, onClick, busy, done }: { label: string; onClick: () => void; busy: boolean; done: boolean }) {
   return (
     <Button size="sm" variant="ghost" disabled={busy || done} onClick={onClick} aria-label={label}>
       {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : done ? <Check className="size-3.5 text-ok" /> : <Search className="size-3.5" />}
-      {done ? 'Searching' : 'Search'}
+      {done ? t('widgets.missing.searching') : t('nav.search')}
     </Button>
   );
 }
@@ -31,14 +32,14 @@ export default function BazarrPage() {
   return (
     <>
       <ServiceHeader id="bazarr" />
-      <QueryState query={q} skeleton={<PageLoader label="Loading subtitles" hint="Asking Bazarr what’s missing…" />}>
+      <QueryState query={q} skeleton={<PageLoader label={t('svc.bazarr.loading')} hint={t('svc.bazarr.loadingHint')} />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Episodes missing subtitles" value={d.counts.episodes} icon={Tv} accent="var(--color-sonarr)" />
-              <StatTile label="Movies missing subtitles" value={d.counts.movies} icon={Film} accent="var(--color-radarr)" />
-              <StatTile label="Providers throttled" value={d.counts.providerIssues} icon={Captions} accent="var(--color-warn)" />
-              <StatTile label="Health issues" value={d.counts.healthIssues} icon={Captions} accent="var(--color-bad)" />
+              <StatTile label={t('svc.bazarr.episodes')} value={d.counts.episodes} icon={Tv} accent="var(--color-sonarr)" />
+              <StatTile label={t('svc.bazarr.movies')} value={d.counts.movies} icon={Film} accent="var(--color-radarr)" />
+              <StatTile label={t('svc.bazarr.throttled')} value={d.counts.providerIssues} icon={Captions} accent="var(--color-warn)" />
+              <StatTile label={t('svc.bazarr.health')} value={d.counts.healthIssues} icon={Captions} accent="var(--color-bad)" />
             </div>
             {search.error && <p className="text-xs text-bad" role="alert">{(search.error as Error).message}</p>}
             <div className="grid items-start gap-5 xl:grid-cols-2">
@@ -50,19 +51,19 @@ export default function BazarrPage() {
                     <CardHeader
                       icon={kind === 'episodes' ? Tv : Film}
                       accent={kind === 'episodes' ? 'var(--color-sonarr)' : 'var(--color-radarr)'}
-                      title={kind === 'episodes' ? 'Episodes' : 'Movies'}
-                      subtitle={`${list.total} missing subtitles`}
+                      title={kind === 'episodes' ? t('svc.bazarr.episodesTitle') : t('widgets.library.movies')}
+                      subtitle={t('svc.bazarr.missing', { count: list.total })}
                       action={
                         user?.isAdmin && list.total > 0 ? (
                           <Button size="sm" disabled={search.isPending || done.has(allKey)} onClick={() => run(allKey, { all: kind })}>
-                            {done.has(allKey) ? <Check className="size-3.5" /> : <Search className="size-3.5" />} {done.has(allKey) ? 'Search started' : 'Search all'}
+                            {done.has(allKey) ? <Check className="size-3.5" /> : <Search className="size-3.5" />} {done.has(allKey) ? t('widgets.missing.started') : t('widgets.missing.searchAll')}
                           </Button>
                         ) : undefined
                       }
                     />
                     <CardBody>
                       {!list.items.length ? (
-                        <EmptyState icon={Check} title="All subtitled" description="Every monitored item has the subtitles your profiles ask for." />
+                        <EmptyState icon={Check} title={t('svc.bazarr.all')} description={t('svc.bazarr.allHint')} />
                       ) : (
                         <ul className="max-h-[520px] divide-y divide-line overflow-y-auto">
                           {list.items.map((i) => {
@@ -75,7 +76,7 @@ export default function BazarrPage() {
                                   {'subtitle' in i && i.subtitle && <div className="truncate text-[11px] text-ink-3">{i.subtitle}</div>}
                                   <div className="mt-1 flex flex-wrap gap-1">{i.missing.map((m) => <Pill key={m}>{m}</Pill>)}</div>
                                 </div>
-                                {user?.isAdmin && <SearchButton label={`Search subtitles for ${i.title}`} busy={busy(key)} done={done.has(key)} onClick={() => run(key, body)} />}
+                                {user?.isAdmin && <SearchButton label={t('svc.bazarr.searchFor', { title: i.title })} busy={busy(key)} done={done.has(key)} onClick={() => run(key, body)} />}
                               </li>
                             );
                           })}
@@ -87,10 +88,10 @@ export default function BazarrPage() {
               })}
             </div>
             <Card>
-              <CardHeader icon={History} accent="var(--color-bazarr)" title="Recent activity" subtitle="Subtitles downloaded, upgraded or removed" />
+              <CardHeader icon={History} accent="var(--color-bazarr)" title={t('widgets.cleanup.recent')} subtitle={t('svc.bazarr.activityHint')} />
               <CardBody>
                 {!d.history.length ? (
-                  <EmptyState icon={History} title="No activity yet" />
+                  <EmptyState icon={History} title={t('svc.bazarr.noActivity')} />
                 ) : (
                   <ul className="divide-y divide-line">
                     {d.history.map((h, n) => (
