@@ -26,6 +26,7 @@ export type Locale = (typeof LOCALES)[number]['code'];
 /** A message that changes with a count: `{ one: '1 stream', other: '{count} streams' }`. */
 export type Plural = { zero?: string; one?: string; two?: string; few?: string; many?: string; other: string };
 type Leaf = string | Plural;
+// Note: a group of messages must never have a key named `other`, or it reads as a plural.
 
 /** Every dotted key in the English messages, e.g. `nav.overview`. */
 type Paths<T> = {

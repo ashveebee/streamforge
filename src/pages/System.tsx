@@ -20,12 +20,14 @@ import { DownloadsWidget } from '@/components/widgets/DownloadsWidget';
 import { KometaCard } from '@/components/widgets/KometaCard';
 import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
+import { useT } from '@/i18n';
 
 function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
   const meta = healthMeta(s);
   const data = s.history.map((h) => ({ t: h.t, ms: h.ms }));
   const errors = s.issues.filter((i) => i.level === 'error').length;
   const warnings = s.issues.filter((i) => i.level === 'warning').length;
+  const t = useT();
   return (
     <motion.li
       initial={{ opacity: 0, y: 6 }}
@@ -44,24 +46,24 @@ function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
         <StatusBadge status={s.status} />
         {(errors > 0 || warnings > 0) && (
           <div className="mt-1 text-[11px] text-ink-4">
-            {errors > 0 && <span className="text-bad">{errors} error{errors > 1 ? 's' : ''}</span>}
+            {errors > 0 && <span className="text-bad">{t('widgets.kometa.errors', { count: errors })}</span>}
             {errors > 0 && warnings > 0 && ' · '}
-            {warnings > 0 && <span className="text-warn">{warnings} warning{warnings > 1 ? 's' : ''}</span>}
+            {warnings > 0 && <span className="text-warn">{t('library.system.warnings', { count: warnings })}</span>}
           </div>
         )}
       </div>
       <div className="col-span-3 grid grid-cols-3 gap-4 md:contents">
         <div>
-          <div className="text-[11px] text-ink-4 md:hidden">Response</div>
+          <div className="text-[11px] text-ink-4 md:hidden">{t('library.system.response')}</div>
           <div className="text-sm font-medium tabular">{s.latencyMs !== undefined ? `${s.latencyMs} ms` : '—'}</div>
         </div>
         <div>
-          <div className="text-[11px] text-ink-4 md:hidden">Uptime</div>
+          <div className="text-[11px] text-ink-4 md:hidden">{t('library.system.uptime')}</div>
           <div className="text-sm font-medium tabular">{s.uptime !== undefined ? pct(s.uptime, s.uptime < 1 ? 1 : 0) : '—'}</div>
         </div>
         <div>
-          <div className="text-[11px] text-ink-4 md:hidden">Last healthy</div>
-          <div className="text-sm text-ink-2" title={s.lastSuccess}>{s.lastSuccess ? relative(s.lastSuccess) : s.configured ? 'Never' : '—'}</div>
+          <div className="text-[11px] text-ink-4 md:hidden">{t('library.system.lastHealthy')}</div>
+          <div className="text-sm text-ink-2" title={s.lastSuccess}>{s.lastSuccess ? relative(s.lastSuccess) : s.configured ? t('library.system.never') : '—'}</div>
         </div>
       </div>
       <div className="col-span-3 h-10 md:col-span-1">
@@ -70,12 +72,12 @@ function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
             <LineChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 4 }}>
               <YAxis hide domain={[0, 'dataMax']} />
               <XAxis dataKey="t" hide />
-              <Tooltip content={<ChartTooltip formatLabel={timeLabel} formatValue={(v) => (Number.isFinite(v) ? `${v} ms` : 'failed')} />} cursor={{ stroke: 'rgb(255 255 255 / 0.15)' }} />
-              <Line type="monotone" dataKey="ms" name="Response" stroke={meta.color} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+              <Tooltip content={<ChartTooltip formatLabel={timeLabel} formatValue={(v) => (Number.isFinite(v) ? `${v} ms` : t('library.system.failed'))} />} cursor={{ stroke: 'rgb(255 255 255 / 0.15)' }} />
+              <Line type="monotone" dataKey="ms" name={t('library.system.response')} stroke={meta.color} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center text-xs text-ink-4">Not configured</div>
+          <div className="flex h-full items-center text-xs text-ink-4">{t('ui.status.unconfigured')}</div>
         )}
       </div>
       {s.status !== 'healthy' && s.reason && (
@@ -89,22 +91,23 @@ export default function SystemPage() {
   const q = useHealth();
   const host = useHost();
   const recheck = useRecheck();
+  const t = useT();
   const s = q.data?.summary;
   const overall = !s ? undefined : s.offline ? 'offline' : s.degraded ? 'degraded' : 'healthy';
 
   return (
     <>
       <PageHeader
-        eyebrow="Infrastructure"
-        title="System Status"
+        eyebrow={t('library.system.eyebrow')}
+        title={t('nav.systemStatus')}
         description={
           q.data?.checkedAt
-            ? `Health checks every ${Math.round(q.data.intervalMs / 1000)}s · last run ${relative(q.data.checkedAt)}`
-            : 'Running first health check…'
+            ? t('library.system.every', { n: Math.round(q.data.intervalMs / 1000), when: relative(q.data.checkedAt) })
+            : t('library.system.first')
         }
         actions={
           <Button variant="outline" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>
-            <RefreshCw className={cn('size-3.5', recheck.isPending && 'animate-spin')} /> Run checks now
+            <RefreshCw className={cn('size-3.5', recheck.isPending && 'animate-spin')} /> {t('library.system.runNow')}
           </Button>
         }
       />
@@ -121,21 +124,21 @@ export default function SystemPage() {
           </div>
           <div>
             <div className="text-lg font-semibold">
-              {overall === 'healthy' ? 'All systems operational' : overall === 'degraded' ? 'Some services are degraded' : 'Service disruption detected'}
+              {overall === 'healthy' ? t('library.system.allOk') : overall === 'degraded' ? t('library.system.someDegraded') : t('library.system.disruption')}
             </div>
             <div className="text-sm text-ink-3">
-              {s!.healthy} healthy · {s!.degraded} degraded · {s!.offline} offline{s!.unconfigured ? ` · ${s!.unconfigured} not configured` : ''}
+              {t('library.system.counts', { healthy: s!.healthy, degraded: s!.degraded, offline: s!.offline })}{s!.unconfigured ? ` · ${t('library.system.notConfigured', { count: s!.unconfigured })}` : ''}
             </div>
           </div>
         </motion.div>
       )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Healthy" value={s?.healthy} icon={CircleCheck} accent="var(--color-ok)" />
-        <StatTile label="Degraded" value={s?.degraded} icon={TriangleAlert} accent="var(--color-warn)" />
-        <StatTile label="Offline" value={s?.offline} icon={CircleX} accent="var(--color-bad)" />
+        <StatTile label={t('ui.status.healthy')} value={s?.healthy} icon={CircleCheck} accent="var(--color-ok)" />
+        <StatTile label={t('ui.status.degraded')} value={s?.degraded} icon={TriangleAlert} accent="var(--color-warn)" />
+        <StatTile label={t('ui.status.offline')} value={s?.offline} icon={CircleX} accent="var(--color-bad)" />
         <StatTile
-          label="Avg response"
+          label={t('library.system.avg')}
           value={(() => {
             const l = q.data?.services.filter((x) => x.latencyMs !== undefined).map((x) => x.latencyMs!) ?? [];
             return l.length ? l.reduce((a, b) => a + b, 0) / l.length : undefined;
@@ -147,14 +150,14 @@ export default function SystemPage() {
       </div>
 
       <Card className="mb-5">
-        <CardHeader icon={Activity} title="Service health" subtitle="API connectivity, response time and availability over the last checks" />
+        <CardHeader icon={Activity} title={t('library.system.health')} subtitle={t('library.system.healthHint')} />
         <div className="hidden grid-cols-[minmax(200px,1.2fr)_minmax(110px,0.8fr)_repeat(3,minmax(80px,0.6fr))_minmax(160px,1.2fr)] gap-x-4 border-y border-line px-5 py-2 text-[11px] font-medium tracking-wide text-ink-4 uppercase md:grid">
-          <span>Service</span>
-          <span>Status</span>
-          <span>Response</span>
-          <span>Uptime</span>
-          <span className="flex items-center gap-1"><Clock className="size-3" /> Last healthy</span>
-          <span>Response history</span>
+          <span>{t('library.system.service')}</span>
+          <span>{t('library.system.status')}</span>
+          <span>{t('library.system.response')}</span>
+          <span>{t('library.system.uptime')}</span>
+          <span className="flex items-center gap-1"><Clock className="size-3" /> {t('library.system.lastHealthy')}</span>
+          <span>{t('library.system.history')}</span>
         </div>
         {q.data ? (
           <ul className="divide-y divide-line">
@@ -168,7 +171,7 @@ export default function SystemPage() {
             const Icon = k === 'unconfigured' ? MinusCircle : STATUS_META[k].icon;
             return <span key={k} className="inline-flex items-center gap-1"><Icon className="size-3" style={{ color: STATUS_META[k].color }} />{STATUS_META[k].label}</span>;
           })}
-          <span className="ml-auto hidden sm:inline">Degraded = errors reported by the service or response slower than threshold</span>
+          <span className="ml-auto hidden sm:inline">{t('library.system.legend')}</span>
         </div>
       </Card>
 
@@ -192,7 +195,7 @@ export default function SystemPage() {
 
       {host.data?.filesystems && host.data.filesystems.length > 0 && (
         <Card className="mt-5">
-          <CardHeader icon={HardDrive} title="Host filesystems" subtitle={host.data.info ? `${host.data.info.distro ?? host.data.info.platform} · ${host.data.info.cpuModel}` : undefined} />
+          <CardHeader icon={HardDrive} title={t('widgets.storage.host')} subtitle={host.data.info ? `${host.data.info.distro ?? host.data.info.platform} · ${host.data.info.cpuModel}` : undefined} />
           <CardBody>
             {host.data.filesystems.length ? (
               <ul className="grid gap-x-8 md:grid-cols-2 [&>li]:border-b [&>li]:border-line">
@@ -201,7 +204,7 @@ export default function SystemPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState icon={HardDrive} title="No filesystems" />
+              <EmptyState icon={HardDrive} title={t('library.system.noFs')} />
             )}
           </CardBody>
         </Card>

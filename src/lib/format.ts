@@ -111,3 +111,13 @@ export function episodeCode(season?: number, episode?: number) {
   if (season === undefined && episode === undefined) return undefined;
   return `S${String(season ?? 0).padStart(2, '0')}E${String(episode ?? 0).padStart(2, '0')}`;
 }
+
+/** Weekday names in the active language, capitalised; index 0 is Sunday. */
+export function weekdays(style: 'long' | 'short' = 'long') {
+  const f = new Intl.DateTimeFormat(getLocale(), { weekday: style });
+  // 7 January 2024 was a Sunday.
+  return Array.from({ length: 7 }, (_, i) => {
+    const s = f.format(new Date(2024, 0, 7 + i));
+    return s.charAt(0).toLocaleUpperCase(getLocale()) + s.slice(1);
+  });
+}

@@ -63,14 +63,16 @@ import { ErrorState } from '@/components/ui/States';
 import { MEDIA_SERVERS, SERVICES } from '@/components/ui/ServiceIcon';
 import { ServerTag } from '@/components/ui/ServerTag';
 import { Avatar } from '@/components/ui/Image';
+import { t } from '@/i18n';
+import { requestStatusLabel } from '@/components/widgets/RequestsWidget';
 
 const AVAILABILITY: Record<Availability, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
-  available: { label: 'Available', tone: 'ok' },
-  partial: { label: 'Partly available', tone: 'brand' },
-  processing: { label: 'Downloading', tone: 'brand' },
-  requested: { label: 'Requested', tone: 'brand' },
-  missing: { label: 'Missing', tone: 'warn' },
-  none: { label: 'Not in your library', tone: 'neutral' },
+  available: { get label() { return t('palette.status.available'); }, tone: 'ok' },
+  partial: { get label() { return t('palette.status.partial'); }, tone: 'brand' },
+  processing: { get label() { return t('widgets.requests.phase.downloading'); }, tone: 'brand' },
+  requested: { get label() { return t('palette.status.requested'); }, tone: 'brand' },
+  missing: { get label() { return t('palette.status.missing'); }, tone: 'warn' },
+  none: { get label() { return t('media.notInLibrary'); }, tone: 'neutral' },
 };
 
 const REQUEST_TONE: Record<string, 'neutral' | 'brand' | 'ok' | 'warn' | 'bad'> = { pending: 'warn', approved: 'brand', completed: 'ok', declined: 'bad', failed: 'bad' };
@@ -79,7 +81,7 @@ function Back() {
   const navigate = useNavigate();
   return (
     <button onClick={() => (history.length > 1 ? navigate(-1) : navigate('/'))} className="mb-4 inline-flex items-center gap-1.5 text-xs text-ink-3 transition hover:text-ink">
-      <ArrowLeft className="size-3.5" /> Back
+      <ArrowLeft className="size-3.5" /> {t('media.back')}
     </button>
   );
 }
@@ -117,9 +119,9 @@ function Hero({ title, year, tagline, poster, backdrop, facts, servers, children
 }
 
 const SIMILAR_BADGE: Record<SimilarTitle['status'], { label: string; cls: string } | undefined> = {
-  available: { label: 'In library', cls: 'bg-ok text-black' },
-  partial: { label: 'Partly in library', cls: 'bg-ok/80 text-black' },
-  requested: { label: 'Requested', cls: 'bg-warn text-black' },
+  available: { get label() { return t('media.inLibrary'); }, cls: 'bg-ok text-black' },
+  partial: { get label() { return t('media.partlyInLibrary'); }, cls: 'bg-ok/80 text-black' },
+  requested: { get label() { return t('palette.status.requested'); }, cls: 'bg-warn text-black' },
   none: undefined,
 };
 
@@ -128,9 +130,9 @@ function MoreLikeThis({ items }: { items: SimilarTitle[] }) {
   if (!items.length) return null;
   return (
     <Card>
-      <CardHeader icon={Sparkles} accent="var(--color-brand)" title="More like this" subtitle={`${items.filter((x) => x.status === 'available' || x.status === 'partial').length} in your library`} />
+      <CardHeader icon={Sparkles} accent="var(--color-brand)" title={t('media.more')} subtitle={t('media.inYourLibrary', { count: items.filter((x) => x.status === 'available' || x.status === 'partial').length })} />
       <CardBody>
-        <ScrollRow label="similar titles">
+        <ScrollRow label={t('media.similar')}>
           {items.map((x) => {
             const badge = SIMILAR_BADGE[x.status];
             return (
@@ -145,7 +147,7 @@ function MoreLikeThis({ items }: { items: SimilarTitle[] }) {
                   {badge && <span className={cn('absolute top-1.5 left-1.5 rounded px-1.5 py-px text-[9.5px] font-semibold', badge.cls)}>{badge.label}</span>}
                 </div>
                 <div className="mt-1.5 truncate text-[12px] font-medium transition group-hover:text-brand" title={x.title}>{x.title}</div>
-                <div className="text-[11px] text-ink-4">{[x.year, x.type === 'tv' ? 'Series' : 'Movie'].filter(Boolean).join(' · ')}</div>
+                <div className="text-[11px] text-ink-4">{[x.year, x.type === 'tv' ? t('me.series') : t('me.movie')].filter(Boolean).join(' · ')}</div>
               </Link>
             );
           })}
@@ -159,9 +161,9 @@ function Cast({ cast }: { cast: CastMember[] }) {
   if (!cast.length) return null;
   return (
     <Card>
-      <CardHeader icon={Users} accent="var(--color-seerr)" title="Cast" />
+      <CardHeader icon={Users} accent="var(--color-seerr)" title={t('media.cast')} />
       <CardBody>
-        <ScrollRow label="cast">
+        <ScrollRow label={t('media.castLabel')}>
           {cast.map((c, i) => (
             <div key={`${c.name}-${i}`} className="w-24 shrink-0 snap-start text-center">
               <FadeImage src={c.image} alt="" className="mx-auto aspect-[2/3] w-24 rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3 text-lg font-semibold text-ink-4">{c.name.charAt(0)}</div>} />
@@ -179,12 +181,12 @@ function Cast({ cast }: { cast: CastMember[] }) {
 function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runtimeMin?: number; several: boolean }) {
   return (
     <Card>
-      <CardHeader icon={HistoryIcon} title="Who’s watched it" subtitle={several ? 'Across every server' : `${list.length} ${list.length === 1 ? 'person' : 'people'}`} />
+      <CardHeader icon={HistoryIcon} title={t('media.whoWatched')} subtitle={several ? t('media.everyServer') : t('media.people', { count: list.length })} />
       <CardBody>
         <ul className="-mx-2">
           {list.map((w) => {
             const pctWatched = w.watchedMs && runtimeMin ? Math.min(100, Math.round((w.watchedMs / (runtimeMin * 60_000)) * 100)) : undefined;
-            const state = w.source === 'server' || (pctWatched !== undefined && pctWatched >= 90) ? 'Finished' : pctWatched ? `${pctWatched}%` : 'Watched';
+            const state = w.source === 'server' || (pctWatched !== undefined && pctWatched >= 90) ? t('media.finished') : pctWatched ? `${pctWatched}%` : t('media.watched');
             return (
               <li key={w.user}>
                 <Link
@@ -196,7 +198,7 @@ function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runti
                     <div className="truncate text-[13px] font-medium transition group-hover:text-brand">{w.user}</div>
                     <div className="truncate text-[11px] text-ink-4">
                       {state} · {relative(w.at)}
-                      {w.plays > 1 ? ` · ${w.plays} plays` : ''}
+                      {w.plays > 1 ? ` · ${t('widgets.plays.plays', { count: w.plays })}` : ''}
                     </div>
                   </div>
                   <div className="hidden min-w-0 items-center gap-2 text-[11px] text-ink-3 sm:flex">
@@ -236,21 +238,21 @@ function Actions({ d }: { d: Details }) {
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
           {request.isSuccess ? (
-            'Requested'
+            t('palette.requested')
           ) : partial ? (
             <>
-              <span className="sm:hidden">Request the rest</span>
-              <span className="max-sm:hidden">Request missing seasons</span>
+              <span className="sm:hidden">{t('palette.requestRest')}</span>
+              <span className="max-sm:hidden">{t('media.requestMissing')}</span>
             </>
           ) : (
-            'Request'
+            t('palette.request')
           )}
         </Button>
       )}
       {d.can.add && (
         <Button disabled={added} onClick={() => setAdding(true)}>
           {added ? <Check className="size-4" /> : <Plus className="size-4" />}
-          {added ? 'Added' : `Add to ${d.type === 'tv' ? 'Sonarr' : 'Radarr'}…`}
+          {added ? t('media.added') : t('media.addTo', { app: d.type === 'tv' ? 'Sonarr' : 'Radarr' })}
         </Button>
       )}
       {adding && (
@@ -266,7 +268,7 @@ function Actions({ d }: { d: Details }) {
       )}
       {d.trailer && (
         <a href={d.trailer} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-4 text-sm font-medium text-white transition hover:bg-white/[0.12]">
-          <Play className="size-4" /> Trailer
+          <Play className="size-4" /> {t('media.trailer')}
         </a>
       )}
       {err && <p role="alert" className="basis-full text-xs text-bad">{err.message}</p>}
@@ -286,7 +288,7 @@ function PlayOnServer({ d }: { d: Details }) {
       className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
       style={{ background: MEDIA_SERVERS[a.type].color }}
     >
-      <Play className="size-4 fill-current" /> Play on {MEDIA_SERVERS[a.type].name}
+      <Play className="size-4 fill-current" /> {t('media.playOn', { server: MEDIA_SERVERS[a.type].name })}
     </a>
   );
 }
@@ -304,7 +306,7 @@ function PlayButton({ itemId, url, library }: { itemId: string; url?: string; li
     >
       {(app) => (
         <>
-          <Play className="size-4 fill-current" /> {next ? `${next.watch?.progress ? 'Resume' : 'Play'} ${episodeLabel(next)}` : resume ? 'Resume' : `Play in ${app}`}
+          <Play className="size-4 fill-current" /> {next ? `${next.watch?.progress ? t('widgets.controls.resume') : t('media.play')} ${episodeLabel(next)}` : resume ? t('widgets.controls.resume') : t('media.playIn', { app })}
         </>
       )}
     </WatchLink>
@@ -314,9 +316,9 @@ function PlayButton({ itemId, url, library }: { itemId: string; url?: string; li
 /** "Watched", "34% watched", "3 unwatched"… for the hero. */
 function watchLabel(w: WatchState | undefined, tv: boolean) {
   if (!w) return undefined;
-  if (w.progress) return `${w.progress}% watched${w.remainingMin ? ` · ${w.remainingMin} min left` : ''}`;
-  if (tv && w.unplayed) return `${w.unplayed} unwatched episode${w.unplayed === 1 ? '' : 's'}`;
-  if (w.played) return 'Watched';
+  if (w.progress) return `${t('media.pctWatched', { pct: w.progress })}${w.remainingMin ? ` · ${t('media.minLeft', { n: w.remainingMin })}` : ''}`;
+  if (tv && w.unplayed) return t('media.unwatchedEpisodes', { count: w.unplayed });
+  if (w.played) return t('media.watched');
   return undefined;
 }
 
@@ -330,37 +332,37 @@ function YourLibrary({ lib }: { lib: LibraryInfo }) {
       <CardHeader
         icon={Library}
         accent="var(--color-jellyfin)"
-        title="In your library"
+        title={t('palette.sections.library')}
         subtitle="Jellyfin"
-        action={w?.favorite ? <Heart className="size-4 fill-current text-pink-400" aria-label="Favourite" /> : undefined}
+        action={w?.favorite ? <Heart className="size-4 fill-current text-pink-400" aria-label={t('media.favourite')} /> : undefined}
       />
       <CardBody>
         {tv && lib.episodeCount ? (
           <div className="mb-3">
             <div className="mb-1.5 flex justify-between text-[12px]">
-              <span className="text-ink-2">{watched ?? 0} of {lib.episodeCount} episodes watched</span>
-              <span className="text-ink-4">{lib.seasonCount} season{lib.seasonCount === 1 ? '' : 's'}</span>
+              <span className="text-ink-2">{t('media.episodesWatched', { n: watched ?? 0, count: lib.episodeCount })}</span>
+              <span className="text-ink-4">{t('media.seasons', { count: lib.seasonCount ?? 0 })}</span>
             </div>
-            <ProgressBar value={(watched ?? 0) / lib.episodeCount} glow={false} label="Episodes watched" />
+            <ProgressBar value={(watched ?? 0) / lib.episodeCount} glow={false} label={t('media.episodesWatchedLabel')} />
           </div>
         ) : w?.progress ? (
           <div className="mb-3">
             <div className="mb-1.5 flex justify-between text-[12px]">
-              <span className="text-ink-2">{w.progress}% watched</span>
-              {w.remainingMin && <span className="text-ink-4">{w.remainingMin} min left</span>}
+              <span className="text-ink-2">{t('media.pctWatched', { pct: w.progress })}</span>
+              {w.remainingMin && <span className="text-ink-4">{t('media.minLeft', { n: w.remainingMin })}</span>}
             </div>
-            <ProgressBar value={w.progress / 100} glow={false} label="Watched" />
+            <ProgressBar value={w.progress / 100} glow={false} label={t('media.watched')} />
           </div>
         ) : null}
         <dl className="divide-y divide-line">
-          {!tv && <Row label="Watched">{w?.played ? <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> Yes</span> : 'Not yet'}</Row>}
-          <Row label="Plays">{w?.playCount ? `${w.playCount}` : undefined}</Row>
-          <Row label="Last played">{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Row>
-          <Row label="Added">{lib.added ? `${longDate(lib.added)} · ${relative(lib.added)}` : undefined}</Row>
-          <Row label={tv ? 'First aired' : 'Released'}>{longDate(lib.premiered)}</Row>
-          <Row label="Ended">{longDate(lib.ended)}</Row>
-          <Row label="Status">{lib.seriesStatus}</Row>
-          <Row label="Ratings">
+          {!tv && <Row label={t('media.watched')}>{w?.played ? <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> {t('media.yes')}</span> : t('media.notYet')}</Row>}
+          <Row label={t('widgets.plays.label')}>{w?.playCount ? `${w.playCount}` : undefined}</Row>
+          <Row label={t('media.lastPlayed')}>{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Row>
+          <Row label={t('media.addedLabel')}>{lib.added ? `${longDate(lib.added)} · ${relative(lib.added)}` : undefined}</Row>
+          <Row label={tv ? t('media.firstAired') : t('media.released')}>{longDate(lib.premiered)}</Row>
+          <Row label={t('media.ended')}>{longDate(lib.ended)}</Row>
+          <Row label={t('library.system.status')}>{lib.seriesStatus}</Row>
+          <Row label={t('media.ratings')}>
             {lib.communityRating || lib.criticRating ? (
               <span className="inline-flex flex-wrap gap-x-3">
                 {lib.communityRating ? <span><Star className="mr-1 inline size-3 fill-current text-warn" />{lib.communityRating.toFixed(1)}</span> : null}
@@ -368,7 +370,7 @@ function YourLibrary({ lib }: { lib: LibraryInfo }) {
               </span>
             ) : undefined}
           </Row>
-          <Row label="Location">{lib.path ? <span className="font-mono text-[11px] text-ink-3">{lib.path}</span> : undefined}</Row>
+          <Row label={t('media.location')}>{lib.path ? <span className="font-mono text-[11px] text-ink-3">{lib.path}</span> : undefined}</Row>
         </dl>
       </CardBody>
     </Card>
@@ -385,25 +387,25 @@ function TitleInfo({ lib }: { lib: LibraryInfo }) {
   if (!any) return null;
   return (
     <Card>
-      <CardHeader icon={Info} accent="var(--color-jellyfin)" title="Details" />
+      <CardHeader icon={Info} accent="var(--color-jellyfin)" title={t('media.details')} />
       <CardBody>
         <dl className="divide-y divide-line">
-          <Row label="Original title">{lib.originalTitle}</Row>
-          <People label={lib.directors.length > 1 ? 'Directors' : 'Director'} names={lib.directors} />
-          <People label={lib.writers.length > 1 ? 'Writers' : 'Writer'} names={lib.writers} />
-          <People label={lib.producers.length > 1 ? 'Producers' : 'Producer'} names={lib.producers} />
-          <People label={lib.studios.length > 1 ? 'Studios' : 'Studio'} names={lib.studios} />
+          <Row label={t('media.originalTitle')}>{lib.originalTitle}</Row>
+          <People label={t('media.directors', { count: lib.directors.length })} names={lib.directors} />
+          <People label={t('media.writers', { count: lib.writers.length })} names={lib.writers} />
+          <People label={t('media.producers', { count: lib.producers.length })} names={lib.producers} />
+          <People label={t('media.studios', { count: lib.studios.length })} names={lib.studios} />
           {lib.tags.length > 0 && (
-            <Row label="Tags">
+            <Row label={t('media.tags')}>
               <span className="flex flex-wrap gap-1">
-                {lib.tags.map((t) => (
-                  <span key={t} className="rounded-md border border-line bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-ink-3">{t}</span>
+                {lib.tags.map((tag) => (
+                  <span key={tag} className="rounded-md border border-line bg-white/[0.03] px-1.5 py-0.5 text-[11px] text-ink-3">{tag}</span>
                 ))}
               </span>
             </Row>
           )}
           {lib.links.length > 0 && (
-            <Row label="Links">
+            <Row label={t('media.links')}>
               <span className="flex flex-wrap gap-x-3 gap-y-1">
                 {lib.links.map((l) => (
                   <a key={l.label} href={l.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-brand hover:underline">
@@ -426,18 +428,18 @@ function EpisodeRow({ e }: { e: Episode }) {
       <div className="relative w-28 shrink-0 sm:w-36">
         <FadeImage src={e.still} alt="" className="aspect-video rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3"><Play className="size-4 text-ink-4" /></div>} />
         {w?.played && (
-          <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label="Watched">
+          <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label={t('media.watched')}>
             <Check className="size-3" strokeWidth={3} />
           </span>
         )}
-        {w?.progress ? <ProgressBar value={w.progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label="Watched" /> : null}
+        {w?.progress ? <ProgressBar value={w.progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label={t('media.watched')} /> : null}
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium">
           {e.number !== undefined && <span className="text-ink-4">{e.number}. </span>}
           {e.name}
         </div>
-        <div className="truncate text-[11px] text-ink-4">{[e.airDate && longDate(e.airDate), e.runtimeMin && `${e.runtimeMin} min`, e.resolution, e.size && bytes(e.size)].filter(Boolean).join(' · ')}</div>
+        <div className="truncate text-[11px] text-ink-4">{[e.airDate && longDate(e.airDate), e.runtimeMin && t('media.min', { n: e.runtimeMin }), e.resolution, e.size && bytes(e.size)].filter(Boolean).join(' · ')}</div>
         {e.overview && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-ink-3">{e.overview}</p>}
       </div>
     </>
@@ -455,7 +457,7 @@ function EpisodeRow({ e }: { e: Episode }) {
 function UpNext({ e }: { e: Episode }) {
   return (
     <Card>
-      <CardHeader icon={Play} accent="var(--color-jellyfin)" title={e.watch?.progress ? 'Continue watching' : 'Up next'} subtitle={episodeLabel(e)} />
+      <CardHeader icon={Play} accent="var(--color-jellyfin)" title={e.watch?.progress ? t('me.continueWatching') : t('me.upNext')} subtitle={episodeLabel(e)} />
       <CardBody>
         <ul>
           <EpisodeRow e={e} />
@@ -470,7 +472,7 @@ function InYourApps({ d }: { d: Details }) {
   if (!d.arr.length) return null;
   return (
     <Card>
-      <CardHeader icon={HardDrive} accent={d.type === 'tv' ? 'var(--color-sonarr)' : 'var(--color-radarr)'} title="In your apps" subtitle={d.type === 'tv' ? 'Sonarr' : 'Radarr'} />
+      <CardHeader icon={HardDrive} accent={d.type === 'tv' ? 'var(--color-sonarr)' : 'var(--color-radarr)'} title={t('media.inApps')} subtitle={d.type === 'tv' ? 'Sonarr' : 'Radarr'} />
       <CardBody>
         <ul className="divide-y divide-line">
           {d.arr.map((a) => (
@@ -480,10 +482,10 @@ function InYourApps({ d }: { d: Details }) {
                 <div className="text-[13px] font-medium">{a.instanceName}</div>
                 <div className="truncate text-[11px] text-ink-3">
                   {[
-                    a.kind === 'sonarr' ? `${a.files ?? 0} of ${a.total ?? 0} episodes` : a.downloaded ? 'Downloaded' : 'Not downloaded',
+                    a.kind === 'sonarr' ? t('media.episodesOf', { n: a.files ?? 0, count: a.total ?? 0 }) : a.downloaded ? t('palette.status.downloaded') : t('media.notDownloaded'),
                     a.quality,
                     a.sizeOnDisk ? bytes(a.sizeOnDisk) : undefined,
-                    a.monitored ? 'monitored' : 'not monitored',
+                    a.monitored ? t('media.monitored') : t('media.notMonitored'),
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -498,10 +500,10 @@ function InYourApps({ d }: { d: Details }) {
                   onClick={() => search.mutate({ kind: a.kind, instance: a.instance, id: a.id, title: d.title })}
                 >
                   {search.isPending && search.variables?.instance === a.instance ? <LoaderCircle className="size-3.5 animate-spin" /> : search.isSuccess && search.variables?.instance === a.instance ? <Check className="size-3.5 text-ok" /> : <Search className="size-3.5" />}
-                  {search.isSuccess && search.variables?.instance === a.instance ? 'Searching' : 'Search now'}
+                  {search.isSuccess && search.variables?.instance === a.instance ? t('widgets.missing.searching') : t('media.searchNow')}
                 </Button>
               )}
-              <Link to={`/${a.kind}${a.primary ? '' : `?instance=${encodeURIComponent(a.instance)}`}`} className="text-[11px] text-ink-4 hover:text-ink-2">Open {SERVICES[a.kind].name}</Link>
+              <Link to={`/${a.kind}${a.primary ? '' : `?instance=${encodeURIComponent(a.instance)}`}`} className="text-[11px] text-ink-4 hover:text-ink-2">{t('ui.open', { name: SERVICES[a.kind].name })}</Link>
             </li>
           ))}
         </ul>
@@ -518,7 +520,7 @@ function Requests({ d }: { d: Details }) {
   if (!d.requests.length) return null;
   return (
     <Card>
-      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title="Requests" subtitle={silo ? 'From Silo' : 'From Seerr'} />
+      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title={t('nav.requests')} subtitle={t('media.from', { server: silo ? 'Silo' : 'Seerr' })} />
       <CardBody>
         <ul className="divide-y divide-line">
           {d.requests.map((r) => (
@@ -527,18 +529,18 @@ function Requests({ d }: { d: Details }) {
                 <div className="text-[13px] font-medium">{r.requestedBy}</div>
                 <div className="text-[11px] text-ink-4">
                   {relative(r.createdAt)}
-                  {r.seasons.length ? ` · season${r.seasons.length > 1 ? 's' : ''} ${r.seasons.join(', ')}` : ''}
+                  {r.seasons.length ? ` · ${t('media.seasonList', { count: r.seasons.length, list: r.seasons.join(', ') })}` : ''}
                   {r.is4k ? ' · 4K' : ''}
                 </div>
               </div>
-              <Pill tone={REQUEST_TONE[r.status] ?? 'neutral'}>{r.status}</Pill>
+              <Pill tone={REQUEST_TONE[r.status] ?? 'neutral'}>{requestStatusLabel(r.status)}</Pill>
               {d.can.approve && r.status === 'pending' && (
                 <div className="flex gap-1.5">
                   <Button size="sm" variant="primary" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, decision: 'approve' }, { onSuccess: () => refresh(d.type, d.tmdbId) })}>
-                    <Check className="size-3.5" /> Approve
+                    <Check className="size-3.5" /> {t('widgets.requests.approve')}
                   </Button>
                   <Button size="sm" variant="ghost" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, decision: 'decline' }, { onSuccess: () => refresh(d.type, d.tmdbId) })}>
-                    <X className="size-3.5" /> Decline
+                    <X className="size-3.5" /> {t('widgets.requests.decline')}
                   </Button>
                 </div>
               )}
@@ -573,16 +575,22 @@ function SeasonRow({ s, tmdbId, seriesId }: { s: Season; tmdbId?: number; series
         <div className="truncate text-[13px] font-medium">{s.name}</div>
         <div className="truncate text-[11px] text-ink-4">
           {[
-            s.episodes !== undefined ? (s.files !== undefined ? `${s.files}/${s.episodes} episodes` : `${s.episodes} episodes`) : s.files !== undefined ? `${s.files} episodes` : undefined,
-            missing ? `${missing} not in library` : undefined,
+            s.episodes !== undefined
+              ? s.files !== undefined
+                ? t('media.episodesFrac', { n: s.files, count: s.episodes })
+                : t('media.episodes', { count: s.episodes })
+              : s.files !== undefined
+                ? t('media.episodes', { count: s.files })
+                : undefined,
+            missing ? t('media.notInLibraryCount', { count: missing }) : undefined,
             s.airDate ? dayLabel(s.airDate) : undefined,
-            jf && (watched ? 'watched' : jf.unplayed ? `${jf.unplayed} unwatched` : undefined),
+            jf && (watched ? t('media.watchedLower') : jf.unplayed ? t('media.unwatched', { count: jf.unplayed }) : undefined),
           ]
             .filter(Boolean)
             .join(' · ')}
         </div>
       </div>
-      {watched ? <CircleCheck className="size-4 shrink-0 text-ok" aria-label="Watched" /> : <span className="shrink-0 text-[11px] text-ink-3">{AVAILABILITY[s.status].label}</span>}
+      {watched ? <CircleCheck className="size-4 shrink-0 text-ok" aria-label={t('media.watched')} /> : <span className="shrink-0 text-[11px] text-ink-3">{AVAILABILITY[s.status].label}</span>}
     </>
   );
   return (
@@ -610,8 +618,8 @@ function Seasons({ seasons, tmdbId, seriesId }: { seasons?: Season[]; tmdbId?: n
       <CardHeader
         icon={Clapperboard}
         accent="var(--color-sonarr)"
-        title="Seasons"
-        subtitle={`${seasons.length} season${seasons.length === 1 ? '' : 's'}${browsable ? ' · open one for every episode' : ''}`}
+        title={t('media.seasonsTitle')}
+        subtitle={`${t('media.seasons', { count: seasons.length })}${browsable ? ` · ${t('media.openOne')}` : ''}`}
       />
       <CardBody className="max-sm:px-3">
         <ul className="space-y-2">
@@ -650,7 +658,7 @@ function DetailsView({ d }: { d: Details }) {
           <Facts
             items={[
               <Pill key="a" tone={a.tone}>{a.label}</Pill>,
-              <span key="t">{d.type === 'tv' ? 'Series' : 'Movie'}</span>,
+              <span key="t">{d.type === 'tv' ? t('me.series') : t('me.movie')}</span>,
               watchLabel(d.library?.watch, d.type === 'tv') && (
                 <span key="w" className="text-white">
                   {d.library?.watch?.played && <CircleCheck className="mr-1 inline size-3 text-ok" />}
@@ -659,7 +667,7 @@ function DetailsView({ d }: { d: Details }) {
               ),
               d.library?.files[0]?.video?.resolution && <span key="q" className="rounded border border-white/25 px-1 text-[10px]">{[d.library.files[0].video.resolution, d.library.files[0].video.range].filter(Boolean).join(' ')}</span>,
               d.certification && <span key="c" className="rounded border border-white/25 px-1 text-[10px]">{d.certification}</span>,
-              d.runtimeMin && <span key="r"><Clock className="mr-1 inline size-3" />{d.runtimeMin} min</span>,
+              d.runtimeMin && <span key="r"><Clock className="mr-1 inline size-3" />{t('media.min', { n: d.runtimeMin })}</span>,
               d.rating && <span key="s"><Star className="mr-1 inline size-3 fill-current text-warn" />{d.rating.toFixed(1)}</span>,
               d.network,
               d.status,
@@ -699,7 +707,7 @@ function DetailsView({ d }: { d: Details }) {
           <Requests d={d} />
           {!d.sources.seerr && (
             <p className="flex items-start gap-1.5 text-[11px] text-ink-4">
-              <CircleAlert className="mt-0.5 size-3 shrink-0" /> Connect Seerr in Settings for cast, trailers, seasons and requests.
+              <CircleAlert className="mt-0.5 size-3 shrink-0" /> {t('media.connectSeerr')}
             </p>
           )}
         </div>
@@ -721,7 +729,7 @@ export function MediaPage() {
       ) : q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
       ) : (
-        <PageLoader label="Loading title details" hint="Gathering details from Seerr, Jellyfin and your apps…" />
+        <PageLoader label={t('media.loading')} hint={t('media.loadingHint')} />
       )}
     </>
   );
@@ -747,7 +755,7 @@ export function JellyfinMediaPage() {
             tagline={j.tagline}
             poster={j.poster}
             backdrop={j.backdrop}
-            facts={<Facts items={[<Pill key="a" tone="ok">In Jellyfin</Pill>, j.kind, watchLabel(j.library.watch, j.kind === 'Series'), j.certification, j.runtimeMin && `${j.runtimeMin} min`, j.rating && `★ ${j.rating.toFixed(1)}`, j.genres.slice(0, 4).join(', ')]} />}
+            facts={<Facts items={[<Pill key="a" tone="ok">{t('media.inJellyfin')}</Pill>, j.kind === 'Series' ? t('me.series') : j.kind === 'Movie' ? t('me.movie') : j.kind, watchLabel(j.library.watch, j.kind === 'Series'), j.certification, j.runtimeMin && t('media.min', { n: j.runtimeMin }), j.rating && `★ ${j.rating.toFixed(1)}`, j.genres.slice(0, 4).join(', ')]} />}
           >
             <PlayButton itemId={j.itemId} url={j.url} library={j.library} />
           </Hero>
@@ -769,7 +777,7 @@ export function JellyfinMediaPage() {
       ) : q.isError ? (
         <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>
       ) : (
-        <PageLoader label="Loading title details" hint="Looking it up in Jellyfin…" />
+        <PageLoader label={t('media.loading')} hint={t('media.lookingUp')} />
       )}
     </>
   );
