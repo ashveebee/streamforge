@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StreamForge — one dashboard for your Plex, Jellyfin or Emby media stack</title>
+  <title>StreamForge — one dashboard for your Plex, Jellyfin, Emby or Silo media stack</title>
   <meta name="description" content="A self-hosted control centre for Jellyfin (plus extra Emby and Plex servers), Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="StreamForge — one dashboard for your Plex, Jellyfin or Emby media stack">
+  <meta property="og:title" content="StreamForge — one dashboard for your Plex, Jellyfin, Emby or Silo media stack">
   <meta property="og:description" content="Live streams, service health, downloads, requests, search and automation for Jellyfin and the *arr stack, in one self-hosted dashboard.">
   <meta property="og:image" content="https://ashveebee.github.io/streamforge/screenshots/dashboard.jpg">
   <meta name="twitter:card" content="summary_large_image">
@@ -357,7 +357,7 @@
       <div class="wrap">
         <span class="pill"><span class="dot"></span> Self-hosted · Free and open source</span>
         <h1>Your whole media stack, <span class="grad-text">one dashboard.</span></h1>
-        <p class="lede">StreamForge brings Plex, Jellyfin or Emby, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
+        <p class="lede">StreamForge brings Plex, Jellyfin, Emby or Silo, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
         <div class="cta">
           <a class="btn btn-primary" href="#install">Get started <svg class="i"><use href="#i-arrow"/></svg></a>
           <a class="btn btn-ghost" href="https://github.com/ashveebee/streamforge"><svg class="i"><use href="#i-github"/></svg> View on GitHub</a>
@@ -395,7 +395,7 @@
           <article class="card reveal" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Now Playing, live</h3>
-            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, on your Jellyfin, Plex or Emby server. Pause, message or stop a stream when you need to.</p>
+            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, on your Jellyfin, Plex, Emby or Silo server. Pause, message or stop a stream when you need to.</p>
           </article>
           <article class="card reveal" style="--c:var(--ok)">
             <div class="ico"><svg class="i"><use href="#i-activity"/></svg></div>
@@ -503,7 +503,7 @@
         <div class="center">
           <div class="eyebrow">Every viewer, every title</div>
           <h2>Know <span class="grad-text">who watched what, and how</span></h2>
-          <p class="section-lede">StreamForge records every play on your Jellyfin, Plex or Emby server, brings each title's details together in one page, and builds Kometa collections for you.</p>
+          <p class="section-lede">StreamForge records every play on your Jellyfin, Plex, Emby or Silo server, brings each title's details together in one page, and builds Kometa collections for you.</p>
         </div>
 
         <div class="show reveal">
@@ -615,7 +615,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop a stream</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/now-playing.jpg" width="2880" height="1800" loading="lazy" alt="Now Playing page with active streams from Jellyfin, Emby and Plex, with artwork and playback details"></div>
+          <div class="shot"><img src="screenshots/now-playing.jpg" width="2880" height="1800" loading="lazy" alt="Now Playing page with active streams, with artwork and playback details"></div>
         </div>
 
         <div class="show flip reveal">
@@ -641,9 +641,8 @@
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Changes apply immediately, with no restart</li>
               <li><svg class="i"><use href="#i-check"/></svg>Environment variables still work as a fallback</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Find Jellyfin, Emby and Plex servers on your network instead of typing an address</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Find your media server and apps on your network instead of typing addresses</li>
               <li><svg class="i"><use href="#i-check"/></svg>Add a second Sonarr or Radarr, such as a 4K library</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Monitor as many extra Jellyfin, Emby and Plex servers as you run</li>
               <li><svg class="i"><use href="#i-check"/></svg>Switch off services you don't use</li>
             </ul>
           </div>
@@ -933,7 +932,7 @@
       <div class="wrap">
         <div class="eyebrow">Install</div>
         <h2>Up and running in a minute</h2>
-        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Plex, Jellyfin or Emby server.</p>
+        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Plex, Jellyfin, Emby or Silo server.</p>
 
         <div class="code reveal">
           <header><span>docker-compose.yml</span><button class="copy" type="button" data-copy="compose"><svg class="i"><use href="#i-copy"/></svg><span>Copy</span></button></header>
@@ -958,7 +957,7 @@
           </div>
           <div class="card step reveal">
             <h3>Choose your media server</h3>
-            <p>Open <code>http://your-server:4000</code> and pick Plex, Jellyfin or Emby. Plex: click Sign in with Plex and choose your server. Jellyfin or Emby: enter its address, or find it on your network, and sign in as an administrator.</p>
+            <p>Open <code>http://your-server:4000</code> and pick Plex, Jellyfin, Emby or Silo. Plex: click Sign in with Plex and choose your server. Jellyfin, Emby or Silo: enter its address, or find it on your network, and sign in as an administrator.</p>
           </div>
           <div class="card step reveal">
             <h3>Set up your apps</h3>
@@ -968,7 +967,7 @@
 
         <div class="setup-shots reveal">
           <figure>
-            <a href="screenshots/setup.jpg"><img src="screenshots/setup.jpg" width="2880" height="1800" loading="lazy" alt="First run, step 1: choose Plex, Jellyfin or Emby"></a>
+            <a href="screenshots/setup.jpg"><img src="screenshots/setup.jpg" width="2880" height="1800" loading="lazy" alt="First run, step 1: choose Plex, Jellyfin, Emby or Silo"></a>
             <figcaption>Step 1: choose your media server.</figcaption>
           </figure>
           <figure>
@@ -994,7 +993,7 @@
           <a class="card reveal guide" href="guides/media-servers.html" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-film"/></svg></div>
             <h3>Media servers</h3>
-            <p>Choosing Jellyfin, Plex or Emby, running more than one, finding a Plex token, and what works on each.</p>
+            <p>Choosing Jellyfin, Plex, Emby or Silo, running more than one, finding a Plex token, and what works on each.</p>
           </a>
           <a class="card reveal guide" href="guides/kometa.html" style="--c:#f59e0b">
             <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
@@ -1026,7 +1025,7 @@
         <h2>Your keys never leave the server</h2>
         <div class="trust">
           <div class="card reveal"><div class="ico" style="--c:var(--ok)"><svg class="i"><use href="#i-key"/></svg></div><h3>Server-side credentials</h3><p>API keys and Jellyfin tokens stay on the server. The browser only gets an opaque, HttpOnly session cookie.</p></div>
-          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Plex, Jellyfin or Emby sign-in</h3><p>Sign in with your existing Plex, Jellyfin or Emby account. Only the server's owner or administrators get in by default; you choose which pages the rest of the household sees.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Plex, Jellyfin, Emby or Silo sign-in</h3><p>Sign in with your existing Plex, Jellyfin, Emby or Silo account. Only the server's owner or administrators get in by default; you choose which pages the rest of the household sees.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Hardened by default</h3><p>CSRF protection, rate-limited login, a strict content security policy and artwork proxied through validated routes.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--radarr)"><svg class="i"><use href="#i-box"/></svg></div><h3>Signed images</h3><p>Every release image ships with an SBOM and build provenance you can verify with <code>gh attestation verify</code>.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--seerr)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Single sign-on and two-factor</h3><p>Sign in through Authentik, Authelia, Keycloak or any OpenID Connect provider, and protect password sign-ins with authenticator-app codes.</p></div>

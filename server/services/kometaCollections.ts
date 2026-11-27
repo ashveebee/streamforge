@@ -105,7 +105,7 @@ export type SourceType = 'tmdb_list' | 'imdb_list' | 'trakt_list' | 'tmdb_trendi
 export interface Collection {
   id: string;
   name: string;
-  library: { server: string; serverType: 'jellyfin' | 'plex' | 'emby'; serverName: string; id: string; name: string; kind: 'movie' | 'show' };
+  library: { server: string; serverType: 'jellyfin' | 'plex' | 'emby' | 'silo'; serverName: string; id: string; name: string; kind: 'movie' | 'show' };
   source: { type: SourceType; value?: string; ids?: number[]; limit?: number };
   /** "always", or a month-day range Kometa runs it in, e.g. 12/01-12/31. */
   schedule: { from: string; to: string } | 'always';
@@ -262,7 +262,7 @@ export function deleteCollection(id: string) {
 /* ------------------------------ servers & libraries ------------------------------ */
 
 /** A server target for reading collections: extra servers, or the main Jellyfin server with its API key. */
-function target(serverId: string): (jellyfin.JfServerTarget & { type: 'jellyfin' | 'plex' | 'emby' }) | undefined {
+function target(serverId: string): (jellyfin.JfServerTarget & { type: 'jellyfin' | 'plex' | 'emby' | 'silo' }) | undefined {
   if (serverId === 'jellyfin') {
     const s = resolve('jellyfin').settings;
     return s.url && s.apiKey ? { id: 'jellyfin', name: 'Jellyfin', url: s.url, apiKey: s.apiKey, type: 'jellyfin' } : undefined;
@@ -273,10 +273,11 @@ function target(serverId: string): (jellyfin.JfServerTarget & { type: 'jellyfin'
 /** Movie and TV libraries on every media server. */
 export async function libraries(ctx: jellyfin.JfCtx) {
   return cache.get('kometa:col:libraries', 60_000, async () => {
-    const servers: { id: string; type: 'jellyfin' | 'plex' | 'emby'; name: string }[] = [];
+    const servers: { id: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo'; name: string }[] = [];
     const main = target('jellyfin');
     if (main) servers.push({ id: 'jellyfin', type: 'jellyfin', name: (await jellyfin.publicInfo().catch(() => undefined))?.ServerName ?? 'Jellyfin' });
-    for (const s of mediaServers()) servers.push({ id: s.id, type: s.type, name: s.name });
+    // Kometa works with Plex, Jellyfin and Emby; Silo isn't one of its targets.
+    for (const s of mediaServers()) if (s.type !== 'silo') servers.push({ id: s.id, type: s.type, name: s.name });
     const lists = await Promise.all(
       servers.map(async (srv) => {
         const t = target(srv.id);

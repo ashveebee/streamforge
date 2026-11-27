@@ -10,10 +10,10 @@ import { Pill } from '@/components/ui/Status';
 import { ServiceIcon } from '@/components/ui/ServiceIcon';
 import { inputCls } from '@/components/ui/Input';
 
-export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' };
+export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex', silo: 'Silo' };
 
 /** Per-type wording: default port, key name and where to find it. */
-const TYPE_HELP: Record<'plex' | 'emby', { placeholder: string; key: string; hint: string; intro: string }> = {
+const TYPE_HELP: Record<'plex' | 'emby' | 'silo', { placeholder: string; key: string; hint: string; intro: string }> = {
   emby: {
     placeholder: 'http://192.168.1.20:8096',
     key: 'API key',
@@ -26,10 +26,16 @@ const TYPE_HELP: Record<'plex' | 'emby', { placeholder: string; key: string; hin
     hint: 'The server owner’s Plex token (Plex’s “Finding an authentication token” help article shows how).',
     intro: 'People sign in with their Plex account on this server. Plex streams can be stopped, not paused or messaged.',
   },
+  silo: {
+    placeholder: 'http://192.168.1.20:8090',
+    key: 'API key',
+    hint: 'An admin API key (Settings → API Keys in Silo). Setup created one for StreamForge.',
+    intro: 'People sign in with their Silo account on this server. Silo is pre-release; StreamForge uses its /api/v2.',
+  },
 };
 
 function ServerForm({ srv }: { srv: MediaServerView }) {
-  const type = srv.type === 'emby' ? 'emby' : 'plex';
+  const type = srv.type === 'emby' || srv.type === 'silo' ? srv.type : 'plex';
   const help = TYPE_HELP[type];
   const blank = { name: srv.name, url: srv.url, publicUrl: srv.publicUrl ?? '', apiKey: '' };
   const [form, setForm] = useState(blank);
@@ -138,7 +144,7 @@ export function MediaServerNote({ type }: { type: MediaServerType }) {
 }
 
 /** The Plex or Emby server chosen at setup: its address and token can change, the server type can't. */
-export function MainServerSection({ type }: { type: 'plex' | 'emby' }) {
+export function MainServerSection({ type }: { type: 'plex' | 'emby' | 'silo' }) {
   const q = useMediaServerSettings();
   const srv = q.data?.servers[0];
   return (

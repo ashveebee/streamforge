@@ -1,4 +1,4 @@
-import { BookOpen, Captions, Clapperboard, Film, HardDrive, Inbox, MonitorPlay, Music, Radar, Tv, Projector } from 'lucide-react';
+import { BookOpen, Captions, Clapperboard, Cylinder, Film, HardDrive, Inbox, MonitorPlay, Music, Radar, Tv, Projector } from 'lucide-react';
 import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -24,14 +24,15 @@ export const MEDIA_SERVERS: Record<MediaServerType, Meta> = {
   jellyfin: SERVICES.jellyfin,
   emby: { name: 'Emby', color: 'var(--color-emby)', icon: MonitorPlay, tagline: 'Media server', path: '/emby' },
   plex: { name: 'Plex', color: 'var(--color-plex)', icon: Projector, tagline: 'Media server', path: '/plex' },
+  silo: { name: 'Silo', color: 'var(--color-silo)', icon: Cylinder, tagline: 'Media server', path: '/silo' },
 };
 
-export type IconId = ServiceId | 'emby' | 'plex';
-const metaOf = (id: IconId): Meta => (id === 'emby' || id === 'plex' ? MEDIA_SERVERS[id] : SERVICES[id]);
+export type IconId = ServiceId | 'emby' | 'plex' | 'silo';
+const metaOf = (id: IconId): Meta => (id === 'emby' || id === 'plex' || id === 'silo' ? MEDIA_SERVERS[id] : SERVICES[id]);
 
 /** Display details for a health entry: an Emby or Plex server uses its own. */
 export function healthMeta(s: Pick<ServiceHealth, 'kind' | 'serverType'>): Meta & { iconId: IconId } {
-  const id: IconId = s.serverType === 'emby' || s.serverType === 'plex' ? s.serverType : s.kind;
+  const id: IconId = s.serverType === 'emby' || s.serverType === 'plex' || s.serverType === 'silo' ? s.serverType : s.kind;
   return { ...metaOf(id), iconId: id };
 }
 

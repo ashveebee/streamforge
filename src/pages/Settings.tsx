@@ -542,7 +542,7 @@ function ServicesTab() {
                 <Fragment key={id}>
                   {/* The media server chosen at setup; it can be edited but not swapped. */}
                   {id === 'jellyfin' && main.other ? (
-                    <MainServerSection type={main.plex ? 'plex' : 'emby'} />
+                    <MainServerSection type={main.type === 'jellyfin' ? 'plex' : main.type} />
                   ) : id === 'jellyfin' ? (
                     <>
                       <ServiceCard s={s} index={i} />

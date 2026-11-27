@@ -1,8 +1,9 @@
 import { cache } from '../lib/cache.js';
 import { db } from '../lib/db.js';
 import { jf, remotePlaybackEntries, serverToken, type JfCtx, type JfServerTarget } from './jellyfin.js';
-import { allLibraryItems, mainEmby, mainExtra, mainPlex, type LibraryEntry, type LibraryServer } from './mainServer.js';
+import { allLibraryItems, mainEmby, mainExtra, mainPlex, mainSilo, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 import { parsePlaybackName, splitSeries } from './playStats.js';
 
 /*
@@ -34,7 +35,7 @@ export interface HistoryRow {
   device?: string;
   /** Which media server it was played on. */
   serverId?: string;
-  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverType?: 'jellyfin' | 'plex' | 'emby' | 'silo';
   serverName?: string;
   /** The movie or series poster, served through StreamForge's image proxy. */
   poster?: { itemId: string; server?: string };
@@ -143,6 +144,15 @@ async function plexHistory(srv: JfServerTarget, since: number) {
   });
 }
 
+/** A Silo server's playback history, with watch time, client and how it played. */
+async function siloHistory(srv: JfServerTarget, since: number) {
+  const plays = await silo.playsSince(srv, since).catch(() => []);
+  return plays.map((x, n): HistoryRow => {
+    const ep = x.group !== x.title ? x.title.slice(x.group.length).replace(/^\s*-\s*/, '').replace(/\s-\s/, ' · ') : undefined;
+    return { id: `silo:${srv.id}:${x.userId}:${x.at}:${n}`, user: x.user, at: new Date(x.at).toISOString(), title: x.group, subtitle: ep || undefined, type: ep ? 'episode' : 'movie', serverId: srv.id, source: 'server', client: x.client, method: x.method, watchedMs: x.watchedMs };
+  });
+}
+
 /** A Jellyfin or Emby server's activity log ("Alex is playing Show - S01E02 - Pilot on TV"). */
 async function activityHistory(srv: JfServerTarget, since: number) {
   const entries = await remotePlaybackEntries(srv, new Date(since)).catch(() => []);
@@ -216,10 +226,11 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   const first = firstRecorded();
   const p = mainPlex();
   const e = mainEmby();
-  const jfMain = !p && !e;
+  const si = mainSilo();
+  const jfMain = !p && !e && !si;
   const [jfData, mainRows] = await Promise.all([
     jfMain ? jellyfinHistory(ctx).catch(() => undefined) : undefined,
-    p ? plexHistory(p, since) : e ? activityHistory(e, since) : [],
+    p ? plexHistory(p, since) : si ? siloHistory(si, since) : e ? activityHistory(e, since) : [],
   ]);
   const serverRows = jfData?.rows ?? mainRows;
   // Only the server's history from before StreamForge recorded that user, so nothing is listed twice.
@@ -229,7 +240,7 @@ export async function watchHistory(ctx: JfCtx, opts: { days: number; user?: stri
   // Name each row's server and find its poster on that server (series poster for episodes).
   const idx = await libraryIndex(ctx).catch(() => undefined);
   const servers = new Map((idx?.servers ?? []).map((x) => [x.id, x]));
-  const seen = new Map<string, { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }>();
+  const seen = new Map<string, { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo'; plays: number }>();
   for (const r of merged) {
     // "Show - Episode" from an activity log without S01E02: split it when the show is in a library.
     if (r.source === 'server' && !r.subtitle && r.title.includes(' - ')) {

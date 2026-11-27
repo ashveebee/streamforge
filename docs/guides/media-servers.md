@@ -1,6 +1,6 @@
-# Media servers: Jellyfin, Plex and Emby
+# Media servers: Jellyfin, Plex, Emby and Silo
 
-StreamForge works with Jellyfin, Plex or Emby. Each install watches **one**
+StreamForge works with Jellyfin, Plex, Emby or Silo. Each install watches **one**
 media server, the one you choose on first run, and sticks with it.
 
 - [Choosing your media server](#choosing-your-media-server)
@@ -21,6 +21,9 @@ On first run, StreamForge asks which media server you use:
   copy.
 - **Emby:** enter its address and an Emby administrator's username and
   password.
+- **Silo:** enter its web address (port 8090 by default) and a Silo admin's
+  username and password. StreamForge creates its own admin API key on Silo.
+  Silo is pre-release, so its API can still change before 1.0.
 
 People then sign in to StreamForge with their account on that server, and its
 admins are StreamForge admins. Everything in StreamForge reads it: Now
@@ -68,21 +71,22 @@ Keep it private, because it gives full access to your Plex account.
 
 ## What works on each server
 
-| | Jellyfin | Emby | Plex |
-| --- | --- | --- | --- |
-| Health checks and alerts | ✓ | ✓ | ✓ |
-| Now Playing | ✓ | ✓ | ✓ |
-| Stop a stream | ✓ | ✓ | ✓ (needs Plex Pass) |
-| Pause or message a stream | ✓ | ✓ | — |
-| Libraries, users, recently added | ✓ | ✓ | ✓ |
-| Activity log | ✓ | ✓ | Watch history instead |
-| Library scans | ✓ | ✓ | ✓ |
-| Copies on title pages (quality, size, tracks) | ✓ | ✓ | ✓ |
-| Older plays filled into Watch history | ✓ | ✓ | ✓ |
-| Watched ticks on episodes (you and others) | ✓ | ✓ | ✓ |
-| Watched by everyone (Library health) | ✓ | — | — |
-| Single sign-on | ✓ | — | — |
-| Kometa collections | develop build | develop build | ✓ |
+| | Jellyfin | Emby | Plex | Silo |
+| --- | --- | --- | --- | --- |
+| Health checks and alerts | ✓ | ✓ | ✓ | ✓ |
+| Now Playing | ✓ | ✓ | ✓ | ✓ |
+| Stop a stream | ✓ | ✓ | ✓ (needs Plex Pass) | ✓ |
+| Pause or message a stream | ✓ | ✓ | — | ✓ |
+| Libraries, users, recently added | ✓ | ✓ | ✓ | ✓ |
+| Activity log | ✓ | ✓ | Watch history instead | Playback history instead |
+| Library scans | ✓ | ✓ | ✓ | ✓ |
+| Copies on title pages (quality, size, tracks) | ✓ | ✓ | ✓ | Quality and size |
+| Older plays filled into Watch history | ✓ | ✓ | ✓ | ✓ (with watch time) |
+| Watched ticks on episodes (you and others) | ✓ | ✓ | ✓ | ✓ (finished plays) |
+| Continue watching on your page | ✓ | ✓ | ✓ | — |
+| Watched by everyone (Library health) | ✓ | — | — | — |
+| Single sign-on | ✓ | — | — | — |
+| Kometa collections | develop build | develop build | ✓ | — |
 
 ## How titles are matched with your apps
 
@@ -95,6 +99,9 @@ Emby: **Identify**; Plex: **Fix Match**).
 
 ## Troubleshooting
 
+- **Silo says the key was refused:** StreamForge needs an admin API key.
+  Setup creates one; if it was deleted in Silo, create one under Settings →
+  API Keys (no scopes) and paste it in Settings → Services.
 - **Find on network doesn't find your server:** in Plex, turn on **Enable
   local network discovery (GDM)** (Settings → Network); in Jellyfin, **Enable
   auto discovery** (Dashboard → Networking). In Docker, discovery needs

@@ -141,6 +141,7 @@ const router = createBrowserRouter([
       { path: '/jellyfin', element: page(<MediaServer type="jellyfin" />, 'jellyfin') },
       { path: '/emby', element: page(<MediaServer type="emby" />, 'jellyfin') },
       { path: '/plex', element: page(<MediaServer type="plex" />, 'jellyfin') },
+      { path: '/silo', element: page(<MediaServer type="silo" />, 'jellyfin') },
       { path: '/kometa', element: page(<Kometa />, 'system') },
       { path: '/kometa/:id', element: page(<KometaCollection />, 'system') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },

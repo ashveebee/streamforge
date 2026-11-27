@@ -64,7 +64,7 @@ export const useServiceConfig = () =>
         instances: ArrInstanceRef[];
         jellyfinServers?: JellyfinServerRef[];
         /** The server people sign in with. */
-        mainServer?: 'jellyfin' | 'plex' | 'emby';
+        mainServer?: 'jellyfin' | 'plex' | 'emby' | 'silo';
         kometa?: boolean;
         access: Area[] | null;
         downloadClients?: boolean;
@@ -77,9 +77,9 @@ export const useServiceConfig = () =>
 export function useMainServer() {
   const { data } = useServiceConfig();
   const type = data?.mainServer ?? 'jellyfin';
-  const name = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[type];
-  /** `other`: the sign-in server is Plex or Emby, so Jellyfin-only features are off. */
-  return { type, name, plex: type === 'plex', emby: type === 'emby', other: type !== 'jellyfin' };
+  const name = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby', silo: 'Silo' }[type];
+  /** `other`: the sign-in server is Plex, Emby or Silo, so Jellyfin-only features are off. */
+  return { type, name, plex: type === 'plex', emby: type === 'emby', silo: type === 'silo', other: type !== 'jellyfin' };
 }
 
 export function useConfigured(id: ServiceId) {

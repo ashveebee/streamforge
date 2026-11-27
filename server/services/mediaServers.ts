@@ -15,9 +15,9 @@ import { keyHint, resolve } from '../settings.js';
  * Ids carry the type: `emby-office`, `plex-loft`.
  */
 
-export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
-export const MEDIA_SERVER_TYPES: MediaServerType[] = ['jellyfin', 'emby', 'plex'];
-export const MEDIA_SERVER_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex' };
+export type MediaServerType = 'jellyfin' | 'emby' | 'plex' | 'silo';
+export const MEDIA_SERVER_TYPES: MediaServerType[] = ['jellyfin', 'emby', 'plex', 'silo'];
+export const MEDIA_SERVER_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex', silo: 'Silo' };
 
 export interface MediaServer {
   id: string;
@@ -40,7 +40,7 @@ let stored: MediaServer[] = readPref<Partial<MediaServer>[]>(PREF, [])
   .map((s) => ({ ...s, type: MEDIA_SERVER_TYPES.includes(s.type as MediaServerType) ? s.type : 'jellyfin' }));
 const listeners = new Set<() => void>();
 
-export const SERVER_ID_RE = /^(jellyfin|emby|plex)-[a-z0-9-]{1,40}$/;
+export const SERVER_ID_RE = /^(jellyfin|emby|plex|silo)-[a-z0-9-]{1,40}$/;
 
 /** The Plex or Emby server StreamForge uses, set by mainServer.ts. */
 let activeId: string | undefined;

@@ -4,6 +4,7 @@ import { jf, remote, serverToken, type JfCtx } from './jellyfin.js';
 import { allLibraryItems, idKeys, type LibraryServer } from './mainServer.js';
 import { mediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 
 /*
  * Who's watched each episode on the media server: you (the account you
@@ -35,14 +36,14 @@ export async function serverUsers(ctx: JfCtx, serverId: string): Promise<Viewer[
     if (serverId === 'jellyfin') return isConfigured('jellyfin') ? live(await jf<U[]>('/Users', serverToken(ctx), ctx.deviceId)) : [];
     const srv = mediaServer(serverId);
     if (!srv) return [];
-    return srv.type === 'plex' ? plex.accountList(srv) : live(await remote<U[]>(srv, '/Users'));
+    return srv.type === 'plex' ? plex.accountList(srv) : srv.type === 'silo' ? silo.accountList(srv) : live(await remote<U[]>(srv, '/Users'));
   });
 }
 
 /** One server's watch state for one episode. */
 export interface EpisodeWatch {
   server: string;
-  type: 'jellyfin' | 'plex' | 'emby';
+  type: 'jellyfin' | 'plex' | 'emby' | 'silo';
   name: string;
   /** You've watched it on this server. */
   me: boolean;
@@ -74,10 +75,11 @@ export async function seasonWatch(ctx: JfCtx, me: Me, ids: { tmdb: number; tvdb?
       if (server.type === 'plex') names.set('1', names.get('1') ?? 'Owner');
       // episode → who watched it, and your progress
       let perEpisode: Map<number, { watched: Set<string>; progress?: number }>;
-      if (server.type === 'plex') {
+      if (server.type === 'plex' || server.type === 'silo') {
+        // Plex and Silo: who watched each episode comes from the server's watch history.
         const srv = mediaServer(server.id);
         if (!srv) return;
-        const w = await plex.seasonWatch(srv, copy.id, season);
+        const w = await (server.type === 'plex' ? plex.seasonWatch(srv, copy.id, season) : silo.seasonWatch(srv, copy.id, season));
         perEpisode = new Map([...w].map(([n, x]) => [n, { watched: x.accounts, progress: mine.has('1') ? x.ownerProgress : undefined }]));
       } else {
         // Jellyfin and Emby keep watched state per user: ask for each person who should count.

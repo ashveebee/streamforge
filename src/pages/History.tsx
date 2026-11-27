@@ -22,7 +22,7 @@ interface HistoryRow {
   client?: string;
   device?: string;
   serverId?: string;
-  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverType?: 'jellyfin' | 'plex' | 'emby' | 'silo';
   serverName?: string;
   poster?: { itemId: string; server?: string };
   link?: string;
@@ -32,7 +32,7 @@ interface HistoryRow {
 }
 interface HistoryResult {
   days: number;
-  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
+  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo'; plays: number }[];
   users: { name: string; plays: number; watchedMs: number; lastAt?: string; id?: string; imageTag?: string }[];
   summary: { plays: number; watchedMs: number; titles: number; movies: number; episodes: number; transcodePct?: number; top: { title: string; plays: number; type: string; link?: string }[]; device?: string };
   rows: HistoryRow[];
@@ -233,7 +233,9 @@ export default function HistoryPage() {
                                         : r.serverType
                                           ? r.serverType === 'plex'
                                             ? 'From Plex watch history'
-                                            : `From the ${r.serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log${r.client ? ` · ${r.client}` : ''}`
+                                            : r.serverType === 'silo'
+                                              ? `From Silo’s playback history${r.client ? ` · ${r.client}` : ''}`
+                                              : `From the ${r.serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log${r.client ? ` · ${r.client}` : ''}`
                                           : 'From the server’s own history'}
                                     </span>
                                   </div>

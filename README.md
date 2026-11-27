@@ -1,6 +1,6 @@
 # StreamForge
 
-A modern control centre for a **Jellyfin, Plex or Emby** media server and the
+A modern control centre for a **Jellyfin, Plex, Emby or Silo** media server and the
 services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
 Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
 NZBGet). Each install watches one media server, chosen on first run; then
@@ -67,7 +67,7 @@ server.
 
 ## Features
 
-- **Jellyfin, Plex or Emby sign-in.** Users sign in with their account on your
+- **Jellyfin, Plex, Emby or Silo sign-in.** Users sign in with their account on your
   media server: a Jellyfin or Emby username and password, or **Sign in with
   Plex**. The server keeps the token, and the browser only holds an opaque
   HttpOnly session cookie. The user's profile and avatar come from that server.
@@ -271,7 +271,7 @@ server.
 ## Installation
 
 StreamForge runs as a single Docker container (images for `amd64` and `arm64`).
-All you need is Docker and a Jellyfin, Plex or Emby server it can reach.
+All you need is Docker and a Jellyfin, Plex, Emby or Silo server it can reach.
 
 > **Guides:** the [install and configure guide](docs/guides/install.md) walks
 > through everything below in more detail, including reverse proxies and
@@ -337,11 +337,15 @@ server you use. People sign in to StreamForge with their account on it.
   sign in with an **Emby administrator** account. StreamForge creates its own
   API key on the server for background features, and everyone else signs in
   with their Emby account.
+- **Silo:** enter your Silo server's web address (port 8090 by default) and
+  sign in with a **Silo admin** account. StreamForge creates its own admin API
+  key on Silo for background features, and everyone else signs in with their
+  Silo account. Silo is pre-release; StreamForge uses its native `/api/v2`.
 
 Each install watches the one media server you choose. Running two? Run a
 StreamForge for each.
 
-<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin or Emby"></a>
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin, Emby or Silo"></a>
 <a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="32%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
 <a href="docs/screenshots/setup-emby.jpg"><img src="docs/screenshots/setup-emby.jpg" width="32%" alt="Emby setup: the server address, servers found on the network, and an administrator sign-in"></a>
 

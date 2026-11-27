@@ -3,10 +3,11 @@ import { cache } from '../lib/cache.js';
 import { isConfigured } from '../settings.js';
 import { emit } from './notify.js';
 import { jf, serverApiKey } from './jellyfin.js';
-import { canWatchInBackground, mainEmby, mainExtra, mainPlex, mediaReady } from './mainServer.js';
+import { canWatchInBackground, mainExtra, mediaReady } from './mainServer.js';
 import { mediaServers, type MediaServer } from './mediaServers.js';
 import { remote } from './jellyfin.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 import { storageForecast } from './storage.js';
 
 /*
@@ -98,6 +99,7 @@ async function addedVia(get: (q: Record<string, string | number | boolean | unde
 /** What one extra (or main Plex/Emby) server added. */
 function addedOn(srv: MediaServer, since: number) {
   if (srv.type === 'plex') return plex.addedSince(srv, since);
+  if (srv.type === 'silo') return silo.addedSince(srv, since);
   return addedVia((q) => remote<{ Items: JfItem[] }>(srv, '/Items', q), since, `&server=${encodeURIComponent(srv.id)}`);
 }
 
@@ -190,7 +192,7 @@ export function digestText(d: Awaited<ReturnType<typeof buildDigest>>) {
 
 export async function sendDigest() {
   const key = serverApiKey();
-  if (!key && !mainPlex() && !mainEmby()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
+  if (!key && !mainExtra()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
   cache.delete('jf:digest:server');
   const d = await buildDigest({ token: key ?? '', deviceId: 'streamforge-server' });
   const count = d.added.movies.length + d.added.shows.length + d.added.other.length;

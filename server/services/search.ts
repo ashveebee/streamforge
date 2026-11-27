@@ -4,10 +4,11 @@ import { isConfigured } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, type JfCtx } from './jellyfin.js';
-import { mainEmby, mainPlex } from './mainServer.js';
+import { mainEmby, mainPlex, mainSilo } from './mainServer.js';
 import { mediaServers } from './mediaServers.js';
 import { remote, type JfServerTarget } from './jellyfin.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 import { creatorName, musicLibrary } from './music.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
@@ -23,7 +24,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g
 
 export interface SearchHit {
   key: string;
-  source: 'jellyfin' | 'plex' | 'emby' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
+  source: 'jellyfin' | 'plex' | 'emby' | 'silo' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
   title: string;
   subtitle?: string;
   year?: number;
@@ -226,14 +227,16 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
   const jobs: Record<string, Promise<SearchHit[]>> = {};
   const main = mainPlex();
   const emby = mainEmby();
+  const si = mainSilo();
   // The sign-in server first, then every other media server, each labelled with where it is.
   const library: Promise<SearchHit[]>[] = [];
   if (main) library.push(settle('Plex')(plex.search(main, q, PER_SOURCE * 2)));
+  else if (si) library.push(settle('Silo')(silo.search(si, q, PER_SOURCE * 2)));
   else if (emby) library.push(settle('Emby')(jellyfinHits(ctx, q, emby)));
   else if (isConfigured('jellyfin')) library.push(settle('Jellyfin')(jellyfinHits(ctx, q)));
-  const others = mediaServers().filter((s) => s.id !== (main ?? emby)?.id);
+  const others = mediaServers().filter((s) => s.id !== (main ?? si ?? emby)?.id);
   for (const srv of others) {
-    const hits = srv.type === 'plex' ? plex.search(srv, q, PER_SOURCE) : jellyfinHits(ctx, q, srv, true);
+    const hits = srv.type === 'plex' ? plex.search(srv, q, PER_SOURCE) : srv.type === 'silo' ? silo.search(srv, q, PER_SOURCE) : jellyfinHits(ctx, q, srv, true);
     library.push(settle(srv.name)(hits.then((list) => list.slice(0, PER_SOURCE).map((h) => ({ ...h, subtitle: [h.subtitle, srv.name].filter(Boolean).join(' · ') })))));
   }
   if (library.length) jobs.library = Promise.all(library).then((l) => l.flat().slice(0, PER_SOURCE * 3));

@@ -18,9 +18,10 @@ import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
 import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
 import * as plex from './services/plex.js';
+import * as silo from './services/silo.js';
 import { kometaSettings, kometaStatus } from './services/kometa.js';
 import { collectionDetail, collectionList, collectionSettings, createCollection, deleteCollection, updateCollection } from './services/kometaCollections.js';
-import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
+import { mainEmby, mainExtra, mainPlex, mainSilo, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
 import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
 import { excludedUsers, keepItem, reclaim, reclaimSuggestions, setExcludedUsers, UNWATCHED_DAYS, watchedByEveryone } from './services/reclaim.js';
@@ -280,11 +281,11 @@ function needJellyfin() {
   if (notJellyfinMain() && !isConfigured('jellyfin')) throw new HttpError(404, 'This needs a Jellyfin server.', 'not_configured');
 }
 
-/* Calls for an extra server, by type. Emby speaks Jellyfin's API. */
-const remoteNowPlaying = (srv: MediaServer) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv));
-const remoteOverview = (srv: MediaServer) => (srv.type === 'plex' ? plex.overview(srv) : jellyfin.remoteOverview(srv));
-const remoteLatest = (srv: MediaServer) => (srv.type === 'plex' ? plex.latest(srv) : jellyfin.remoteLatest(srv));
-const remoteActivity = (srv: MediaServer) => (srv.type === 'plex' ? plex.activity(srv) : jellyfin.remoteActivity(srv));
+/* Calls for a Plex, Emby or Silo server, by type. Emby speaks Jellyfin's API. */
+const remoteNowPlaying = (srv: MediaServer) => (srv.type === 'plex' ? plex.nowPlaying(srv) : srv.type === 'silo' ? silo.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv));
+const remoteOverview = (srv: MediaServer) => (srv.type === 'plex' ? plex.overview(srv) : srv.type === 'silo' ? silo.overview(srv) : jellyfin.remoteOverview(srv));
+const remoteLatest = (srv: MediaServer) => (srv.type === 'plex' ? plex.latest(srv) : srv.type === 'silo' ? silo.latest(srv) : jellyfin.remoteLatest(srv));
+const remoteActivity = (srv: MediaServer) => (srv.type === 'plex' ? plex.activity(srv) : srv.type === 'silo' ? silo.activity(srv) : jellyfin.remoteActivity(srv));
 
 /* Streams from the main server and every extra one. An extra server that's down doesn't hide the rest. */
 api.get(
@@ -329,7 +330,8 @@ api.get(
   handle('jellyfin', (req) => {
     const p = mainPlex();
     const e = mainEmby();
-    return p ? plex.playsPerDay(p) : e ? jellyfin.remotePlaybackHistory(e) : jellyfin.playbackHistory(ctxOf(req.session!));
+    const si = mainSilo();
+    return p ? plex.playsPerDay(p) : si ? silo.playsPerDay(si) : e ? jellyfin.remotePlaybackHistory(e) : jellyfin.playbackHistory(ctxOf(req.session!));
   }),
 );
 api.get(
@@ -363,6 +365,9 @@ api.post(
       // Plex can only end streams from the server; the reason is shown to the viewer.
       if (b.data.command !== 'stop') throw new HttpError(400, 'Plex can only stop streams, not pause them or send messages.');
       await plex.stopSession(srv, id, b.data.text);
+    } else if (srv?.type === 'silo') {
+      // Silo carries a stop's reason with the command itself.
+      await silo.controlSession(srv, id, b.data.command === 'unpause' ? 'resume' : b.data.command, b.data.text);
     } else {
       const send = (command: jellyfin.SessionCommand, text?: string) =>
         srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
@@ -430,6 +435,7 @@ api.post(
     if (!b.success) throw new HttpError(400, 'Invalid request');
     const srv = extraServer(req);
     if (srv?.type === 'plex') await plex.scan(srv, b.data.library, !!b.data.full);
+    else if (srv?.type === 'silo') await silo.scan(srv, b.data.library);
     else if (srv) await jellyfin.remoteScan(srv, b.data.library, !!b.data.full);
     else {
       if (b.data.library && !jellyfin.isValidId(b.data.library)) throw new HttpError(400, 'Invalid request');
@@ -462,7 +468,7 @@ api.get('/jellyfin/image/items/:id/:type', (req, res) => {
   const type = String(req.params.type);
   const srv = imageServer(req, res);
   if (srv === null) return;
-  const validId = !srv ? jellyfin.isValidId(id) : srv.type === 'plex' ? plex.isValidId(id) : jellyfin.isValidRemoteId(id);
+  const validId = !srv ? jellyfin.isValidId(id) : srv.type === 'plex' ? plex.isValidId(id) : srv.type === 'silo' ? silo.isValidId(id) : jellyfin.isValidRemoteId(id);
   if (!validId || !jellyfin.isValidImageType(type)) {
     res.status(400).end();
     return;
@@ -474,7 +480,10 @@ api.get('/jellyfin/image/items/:id/:type', (req, res) => {
       ? jellyfin.image(ctxOf(req.session!), 'Items', id, type, opts)
       : srv.type === 'plex'
         ? plex.image(srv, id, type, opts)
-        : jellyfin.remoteImage(srv, 'Items', id, type, opts),
+        : srv.type === 'silo'
+          ? // Silo's artwork paths are longer than a tag; silo.image checks them.
+            silo.image(srv, id, type, { tag: typeof req.query.tag === 'string' ? req.query.tag : undefined })
+          : jellyfin.remoteImage(srv, 'Items', id, type, opts),
   );
 });
 
@@ -483,6 +492,11 @@ api.get('/jellyfin/image/users/:id', (req, res) => {
   const srv = imageServer(req, res);
   if (srv === null) return;
   // Plex avatars live on plex.tv; they're proxied from addresses Plex gave us.
+  // Silo has no avatars to proxy; the app shows initials instead.
+  if (srv?.type === 'silo') {
+    res.status(404).end();
+    return;
+  }
   if (srv?.type === 'plex') {
     if (!/^\d{1,12}$/.test(id)) {
       res.status(400).end();

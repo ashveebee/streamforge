@@ -7,6 +7,7 @@ import { jf, libraryItems, remote as jfRemote, type JfCtx } from './jellyfin.js'
 import { titleWatchers } from './history.js';
 import { mediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
+import * as silo from './silo.js';
 import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 import { seasonWatch, type Me } from './watchState.js';
@@ -183,7 +184,7 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
         }
         const srv = mediaServer(a.server);
         if (!srv) return;
-        const got = await (srv.type === 'plex' ? plex.itemFiles(srv, a.itemId, opts.isAdmin) : remoteFiles(srv, a.itemId, opts.isAdmin)).catch(() => undefined);
+        const got = await (srv.type === 'plex' ? plex.itemFiles(srv, a.itemId, opts.isAdmin) : srv.type === 'silo' ? silo.itemFiles(srv, a.itemId, opts.isAdmin) : remoteFiles(srv, a.itemId, opts.isAdmin)).catch(() => undefined);
         if (got) Object.assign(a, got);
       }),
     );
@@ -519,7 +520,7 @@ async function serverDetails(availableOn: { server: string; itemId: string }[]) 
   for (const a of availableOn) {
     const srv = mediaServer(a.server);
     if (!srv) continue;
-    const d = await (srv.type === 'plex' ? plex.itemDetails(srv, a.itemId) : remoteDetails(srv, a.itemId)).catch(() => undefined);
+    const d = await (srv.type === 'plex' ? plex.itemDetails(srv, a.itemId) : srv.type === 'silo' ? silo.itemDetails(srv, a.itemId) : remoteDetails(srv, a.itemId)).catch(() => undefined);
     if (d) return d;
   }
   return undefined;

@@ -25,7 +25,7 @@ export interface WatchState {
 export interface MediaFile {
   id: string;
   /** Set when copies from several servers are shown together. */
-  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverType?: 'jellyfin' | 'plex' | 'emby' | 'silo';
   name?: string;
   container?: string;
   size?: number;
@@ -95,7 +95,7 @@ export interface Season {
 /** A media server a title is on, with a link to open it there. */
 export interface AvailableOn {
   server: string;
-  type: 'jellyfin' | 'plex' | 'emby';
+  type: 'jellyfin' | 'plex' | 'emby' | 'silo';
   name: string;
   /** The sign-in server. */
   main: boolean;
@@ -116,7 +116,7 @@ export interface TitleWatcher {
   plays: number;
   serverId?: string;
   serverName?: string;
-  serverType?: 'jellyfin' | 'plex' | 'emby';
+  serverType?: 'jellyfin' | 'plex' | 'emby' | 'silo';
   client?: string;
   device?: string;
   watchedMs?: number;
@@ -125,7 +125,7 @@ export interface TitleWatcher {
 
 export interface MediaDetails {
   /** Every media server StreamForge knows, so the page can say where the title isn't. */
-  servers?: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; main: boolean }[];
+  servers?: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' | 'silo'; main: boolean }[];
   watchers?: TitleWatcher[];
   /** Every media server the title is on, the sign-in server first. */
   availableOn?: AvailableOn[];
@@ -204,7 +204,7 @@ export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
 /** One server's watch state for an episode: by you (solid tick) and/or others (outlined tick). */
 export interface EpisodeWatch {
   server: string;
-  type: 'jellyfin' | 'plex' | 'emby';
+  type: 'jellyfin' | 'plex' | 'emby' | 'silo';
   name: string;
   me: boolean;
   progress?: number;
