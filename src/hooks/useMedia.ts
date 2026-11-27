@@ -167,6 +167,17 @@ export interface MediaDetails {
   requests: { id: number; status: string; requestedBy: string; createdAt: string; is4k: boolean; seasons: number[] }[];
   can: { request: boolean; add: boolean; search: boolean; approve: boolean };
   sources: { seerr: boolean; jellyfin: boolean };
+  /** More like this: TMDb recommendations from Silo or Seerr. */
+  similar?: SimilarTitle[];
+}
+
+export interface SimilarTitle {
+  type: 'movie' | 'tv';
+  tmdbId: number;
+  title: string;
+  year?: number;
+  poster?: string;
+  status: 'available' | 'partial' | 'requested' | 'none';
 }
 
 export interface JellyfinOnly {

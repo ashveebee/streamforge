@@ -954,6 +954,17 @@ interface SiloRequestDetail {
   availability?: string;
   request?: { request_id?: string; status?: string; state?: string; requestable?: boolean };
   seasons?: { season_number: number; name?: string; episode_count?: number; air_date?: string; availability?: string; requested?: boolean }[];
+  recommendations?: { media_type: 'movie' | 'series'; tmdb_id: number; title: string; year?: number; poster_path?: string; availability?: string; request?: { state?: string; status?: string } }[];
+}
+
+/** A similar title, for "More like this" on title pages. */
+export interface SimilarTitle {
+  type: 'movie' | 'tv';
+  tmdbId: number;
+  title: string;
+  year?: number;
+  poster?: string;
+  status: 'available' | 'partial' | 'requested' | 'none';
 }
 
 /** Seerr's numeric media statuses (2 pending, 3 processing, 4 partial, 5 available). */
@@ -990,6 +1001,24 @@ export async function titleDetail(srv: JfServerTarget, type: 'movie' | 'tv', tmd
       credits: { cast: (d.cast ?? []).map((c) => ({ name: c.name, character: c.character, profilePath: c.profile_path })) },
       externalIds: { tvdbId: d.tvdb_id, imdbId: d.imdb_id },
       seasons: (d.seasons ?? []).map((x) => ({ seasonNumber: x.season_number, episodeCount: x.episode_count, name: x.name, airDate: x.air_date })),
+      // TMDb recommendations, each with whether it's in the library or requested.
+      similar: (d.recommendations ?? []).slice(0, 20).map(
+        (r): SimilarTitle => ({
+          type: r.media_type === 'series' ? 'tv' : 'movie',
+          tmdbId: r.tmdb_id,
+          title: r.title,
+          year: r.year,
+          poster: r.poster_path ? `${TMDB_IMG}/w342${r.poster_path}` : undefined,
+          status:
+            r.availability === 'available'
+              ? 'available'
+              : r.availability === 'partially_available' || r.availability === 'partial'
+                ? 'partial'
+                : r.request?.state && !['declined', 'cancelled', 'failed'].includes(r.request.state)
+                  ? 'requested'
+                  : 'none',
+        }),
+      ),
       mediaInfo: {
         status: MEDIA_NUM[d.availability ?? ''] ?? (state ? (MEDIA_NUM[state] ?? 2) : undefined),
         seasons: (d.seasons ?? []).filter((x) => x.availability && MEDIA_NUM[x.availability]).map((x) => ({ seasonNumber: x.season_number, status: MEDIA_NUM[x.availability!]! })),

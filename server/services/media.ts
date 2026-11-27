@@ -116,6 +116,27 @@ async function seerrDetails(type: MediaType, tmdbId: number) {
   return cache.get(`seerr:details:${type}:${tmdbId}`, 60_000, () => seerr()!.get<SeerrDetails>(`/api/v1/${type}/${tmdbId}`)).catch(() => undefined);
 }
 
+/** Titles like this one (TMDb recommendations) from Seerr, with whether each is in the library or requested. */
+async function seerrSimilar(type: MediaType, tmdbId: number) {
+  if (!isConfigured('seerr')) return [];
+  type R = { id: number; mediaType?: string; title?: string; name?: string; releaseDate?: string; firstAirDate?: string; posterPath?: string; mediaInfo?: { status?: number } };
+  const res = await cache
+    .get(`seerr:similar:${type}:${tmdbId}`, 30 * 60_000, () => seerr()!.get<{ results?: R[] }>(`/api/v1/${type}/${tmdbId}/recommendations`, { page: 1 }))
+    .catch(() => undefined);
+  return (res?.results ?? []).slice(0, 20).map((r) => {
+    const date = r.releaseDate ?? r.firstAirDate;
+    const st = r.mediaInfo?.status ?? 0;
+    return {
+      type: (r.mediaType === 'tv' ? 'tv' : r.mediaType === 'movie' ? 'movie' : type) as MediaType,
+      tmdbId: r.id,
+      title: r.title ?? r.name ?? 'Untitled',
+      year: date ? Number(date.slice(0, 4)) || undefined : undefined,
+      poster: r.posterPath ? `${TMDB}/w342${r.posterPath}` : undefined,
+      status: (st === 5 ? 'available' : st === 4 ? 'partial' : st === 2 || st === 3 ? 'requested' : 'none') as 'available' | 'partial' | 'requested' | 'none',
+    };
+  });
+}
+
 /** Library entries for this title in every Sonarr/Radarr instance. */
 async function arrEntries(type: MediaType, tmdbId: number, tvdbId: number | undefined, can: (k: string) => boolean) {
   const out: { inst: ArrInstance; movie?: ArrMovie; series?: ArrSeries }[] = [];
@@ -329,6 +350,8 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
       approve: opts.isAdmin && !!source,
     },
     sources: { seerr: !!s, jellyfin: !!jfItem },
+    /** More like this: TMDb recommendations from Silo or Seerr. */
+    similar: source === 'silo' ? ((s as { similar?: unknown[] } | undefined)?.similar ?? []) : source === 'seerr' ? await seerrSimilar(type, tmdbId) : [],
   };
 }
 
