@@ -8,6 +8,7 @@ import { healthMeta, ServiceIcon } from '../ui/ServiceIcon';
 import { Sparkline } from '../ui/Sparkline';
 import { STATUS_META, StatusBadge } from '../ui/Status';
 import { Skeleton } from '../ui/States';
+import { t } from '@/i18n';
 
 export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number }) {
   const meta = healthMeta(s);
@@ -37,8 +38,8 @@ export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number
             <StatusBadge status={s.status} />
             <div className="mt-1.5 truncate text-[11px] text-ink-4" title={s.reason}>
               {s.status === 'unconfigured'
-                ? 'Add credentials to enable'
-                : s.reason ?? (s.latencyMs !== undefined ? `${s.latencyMs} ms · ${relative(s.lastSuccess)}` : 'Checking…')}
+                ? t('widgets.services.addCredentials')
+                : s.reason ?? (s.latencyMs !== undefined ? `${s.latencyMs} ms · ${relative(s.lastSuccess)}` : t('widgets.services.checking'))}
             </div>
           </div>
           {s.configured && (

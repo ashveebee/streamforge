@@ -25,7 +25,7 @@ function Shelf({ items, empty }: { items: MeCard[]; empty: string }) {
   const t = useT();
   if (!items.length) return <p className="py-6 text-center text-sm text-ink-4">{empty}</p>;
   return (
-    <ScrollRow label="titles">
+    <ScrollRow label={t('ui.titles')}>
       {items.map((i) => (
         <TitleLink key={i.id} to={`/media/jellyfin/${i.id}`} className="block w-56 shrink-0 snap-start">
           <div className="relative overflow-hidden rounded-xl border border-line">

@@ -13,36 +13,36 @@ import { EmptyState, Skeleton } from '../ui/States';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { Menu, type MenuItem } from '../ui/Menu';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
-import { getLocale } from '@/i18n';
+import { getLocale, t, type MessageKey } from '@/i18n';
 
-const CONFIRM: Partial<Record<QueueActionName, string>> = {
-  remove: 'Remove this download and delete it from the download client?',
-  blocklist: 'Remove and blocklist this release? It won’t be grabbed again.',
-  'blocklist-search': 'Remove and blocklist this release, then search for another?',
+const CONFIRM: Partial<Record<QueueActionName, MessageKey>> = {
+  remove: 'widgets.queue.confirmRemove',
+  blocklist: 'widgets.queue.confirmBlocklist',
+  'blocklist-search': 'widgets.queue.confirmBlocklistSearch',
 };
 
 /** Admin actions for one queue item. */
 function QueueMenu({ item }: { item: QueueItem }) {
   const act = useQueueAction();
   const run = (action: QueueActionName) => {
-    const msg = CONFIRM[action];
-    if (msg && !confirm(`${msg}\n\n${item.releaseTitle}`)) return;
+    const key = CONFIRM[action];
+    if (key && !confirm(`${t(key)}\n\n${item.releaseTitle}`)) return;
     act.mutate({ kind: item.source, instance: item.instance, id: item.id, action });
   };
   const delayed = item.status === 'delay' || item.status === 'pending';
   const items: MenuItem[] = [
-    ...(delayed ? [{ label: 'Grab now', icon: Zap, hint: 'Skip the delay profile', onSelect: () => run('grab') }] : []),
-    { label: 'Blocklist & search again', icon: RefreshCw, hint: 'Find a different release', onSelect: () => run('blocklist-search') },
-    { label: 'Blocklist', icon: Ban, hint: 'Don’t grab this release again', onSelect: () => run('blocklist') },
-    { label: 'Remove from queue only', icon: Trash2, hint: 'Leave it in the download client', onSelect: () => run('remove-keep') },
-    { label: 'Remove & delete download', icon: Trash2, danger: true, onSelect: () => run('remove') },
+    ...(delayed ? [{ label: t('widgets.queue.grab'), icon: Zap, hint: t('widgets.queue.grabHint'), onSelect: () => run('grab') }] : []),
+    { label: t('widgets.queue.blocklistSearch'), icon: RefreshCw, hint: t('widgets.queue.blocklistSearchHint'), onSelect: () => run('blocklist-search') },
+    { label: t('widgets.queue.blocklist'), icon: Ban, hint: t('widgets.queue.blocklistHint'), onSelect: () => run('blocklist') },
+    { label: t('widgets.queue.removeKeep'), icon: Trash2, hint: t('widgets.queue.removeKeepHint'), onSelect: () => run('remove-keep') },
+    { label: t('widgets.queue.remove'), icon: Trash2, danger: true, onSelect: () => run('remove') },
   ];
   return (
     <div className="flex items-center" title={act.error ? (act.error as Error).message : undefined}>
       {act.isPending ? (
         <LoaderCircle className="m-1.5 size-4 animate-spin text-ink-4" />
       ) : (
-        <Menu items={items} label={`Actions for ${item.title}`} trigger={act.isError ? <CircleAlert className="size-4 text-bad" /> : undefined} />
+        <Menu items={items} label={t('ui.actionsFor', { title: item.title })} trigger={act.isError ? <CircleAlert className="size-4 text-bad" /> : undefined} />
       )}
     </div>
   );
@@ -82,16 +82,16 @@ export function QueueRow({ item, speedBps, stalledSince, actions = true }: { ite
       <div className="w-20 shrink-0 text-right text-[11px] tabular">
         {failed || warn ? (
           <span className={`inline-flex items-center gap-1 ${failed ? 'text-bad' : 'text-warn'}`} title={item.errorMessage ?? item.warnings.join('\n')}>
-            <CircleAlert className="size-3" /> {failed ? 'Error' : 'Warning'}
+            <CircleAlert className="size-3" /> {failed ? t('widgets.queue.error') : t('widgets.queue.warning')}
           </span>
         ) : paused ? (
-          <span className="inline-flex items-center gap-1 text-ink-3"><Pause className="size-3" /> Paused</span>
+          <span className="inline-flex items-center gap-1 text-ink-3"><Pause className="size-3" /> {t('widgets.playing.paused')}</span>
         ) : (
           <>
             <div className="font-medium text-ink-2">{Math.round(item.progress * 100)}%</div>
             {stalledSince ? (
-              <div className="text-warn" title={`No progress since ${new Date(stalledSince).toLocaleString(getLocale())}`}>
-                Stalled {duration(Date.now() - Date.parse(stalledSince))}
+              <div className="text-warn" title={t('widgets.queue.noProgress', { since: new Date(stalledSince).toLocaleString(getLocale()) })}>
+                {t('widgets.queue.stalled', { time: duration(Date.now() - Date.parse(stalledSince)) })}
               </div>
             ) : (
               <div className="text-ink-4">{speedBps ? speed(speedBps) : item.timeLeft ?? bytes(item.sizeLeft)}</div>
@@ -117,10 +117,10 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
 
   return (
     <Card className="h-full">
-      <CardHeader icon={Download} title="Download activity" subtitle={`${total} in queue · ${bytes(remaining)} remaining`} />
+      <CardHeader icon={Download} title={t('dashboard.widgets.downloads')} subtitle={t('widgets.downloads.subtitle', { count: total, remaining: bytes(remaining) })} />
       <CardBody>
         {dl.data && !dl.data.available ? (
-          <EmptyState icon={Download} title="No download managers connected" description="Connect Sonarr or Radarr to track download activity." />
+          <EmptyState icon={Download} title={t('widgets.downloads.none')} description={t('widgets.downloads.noneHint')} />
         ) : (
           <>
             <div className="flex items-end justify-between gap-4">
@@ -129,7 +129,7 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
                   <AnimatedNumber value={dl.data?.clients?.down ?? dl.data?.current ?? 0} format={(n) => speed(n)} />
                 </div>
                 <div className="mt-0.5 text-xs text-ink-3">
-                  {dl.data?.clients ? `Download clients · ↑ ${speed(dl.data.clients.up)}` : `Combined throughput · peak ${speed(dl.data?.peak)}`}
+                  {dl.data?.clients ? t('widgets.downloads.clients', { up: speed(dl.data.clients.up) }) : t('widgets.downloads.combined', { peak: speed(dl.data?.peak) })}
                 </div>
               </div>
               <Legend
@@ -160,7 +160,7 @@ export function DownloadsWidget({ limit = 5 }: { limit?: number }) {
               {loading ? (
                 <div className="space-y-3 pt-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-12" />)}</div>
               ) : items.length === 0 ? (
-                <EmptyState icon={Download} title="Queue is empty" description="Nothing downloading right now." className="py-6" />
+                <EmptyState icon={Download} title={t('widgets.downloads.empty')} description={t('widgets.downloads.emptyHint')} className="py-6" />
               ) : (
                 <ul className="divide-y divide-line">
                   <AnimatePresence initial={false}>

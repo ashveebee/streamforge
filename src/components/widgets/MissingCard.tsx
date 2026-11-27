@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { FadeImage } from '@/components/ui/Image';
 import { EmptyState, SkeletonRows } from '@/components/ui/States';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
+import { t } from '@/i18n';
 
 /** Monitored items that aren't downloaded yet, with search buttons. */
 export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 'readarr'; instance?: string }) {
@@ -20,12 +21,12 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
   const [all, setAll] = useState(false);
   const d = q.data;
   const pages = d ? Math.max(1, Math.ceil(d.total / d.pageSize)) : 1;
-  const noun = { sonarr: 'episode', radarr: 'movie', lidarr: 'album', readarr: 'book' }[kind];
+  const noun = ({ sonarr: 'episode', radarr: 'movie', lidarr: 'album', readarr: 'book' } as const)[kind];
 
   const one = (id: number) =>
     search.mutate({ instance, ids: [id] }, { onSuccess: () => setSearched((s) => new Set(s).add(id)) });
   const everything = () => {
-    if (!d || !confirm(`Search your indexers for all ${d.total} missing ${noun}s? Large searches can take a while and may hit indexer limits.`)) return;
+    if (!d || !confirm(t(`widgets.missing.confirm.${noun}`, { count: d.total }))) return;
     search.mutate({ instance, ids: [] }, { onSuccess: () => setAll(true) });
   };
 
@@ -34,13 +35,13 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
       <CardHeader
         icon={SearchX}
         accent="var(--color-bad)"
-        title="Missing"
-        subtitle={d ? `${d.total} monitored ${noun}${d.total === 1 ? '' : 's'} not downloaded` : 'Monitored, not downloaded'}
+        title={t('widgets.missing.title')}
+        subtitle={d ? t(`widgets.missing.count.${noun}`, { count: d.total }) : t('widgets.missing.about')}
         action={
           user?.isAdmin && d && d.total > 0 ? (
             <Button size="sm" disabled={search.isPending || all} onClick={everything}>
               {all ? <Check className="size-3.5" /> : <Search className="size-3.5" />}
-              {all ? 'Search started' : 'Search all'}
+              {all ? t('widgets.missing.started') : t('widgets.missing.searchAll')}
             </Button>
           ) : undefined
         }
@@ -50,7 +51,7 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
         {!d ? (
           <SkeletonRows rows={4} />
         ) : !d.items.length ? (
-          <EmptyState icon={Check} title="Nothing missing" description={`Every monitored ${noun} that has been released is downloaded.`} />
+          <EmptyState icon={Check} title={t('widgets.missing.none')} description={t(`widgets.missing.noneHint.${noun}`)} />
         ) : (
           <>
             <ul className="divide-y divide-line">
@@ -62,7 +63,7 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
                     <div className="truncate text-[11px] text-ink-3">{[i.subtitle, i.date ? dayLabel(i.date) : undefined].filter(Boolean).join(' · ')}</div>
                   </div>
                   {user?.isAdmin && (
-                    <Button size="sm" variant="ghost" disabled={search.isPending || searched.has(i.id)} onClick={() => one(i.id)} aria-label={`Search for ${i.title} ${i.subtitle ?? ''}`}>
+                    <Button size="sm" variant="ghost" disabled={search.isPending || searched.has(i.id)} onClick={() => one(i.id)} aria-label={t('widgets.missing.searchFor', { title: `${i.title} ${i.subtitle ?? ''}`.trim() })}>
                       {search.isPending && search.variables?.ids[0] === i.id ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : searched.has(i.id) ? (
@@ -70,7 +71,7 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
                       ) : (
                         <Search className="size-3.5" />
                       )}
-                      {searched.has(i.id) ? 'Searching' : 'Search'}
+                      {searched.has(i.id) ? t('widgets.missing.searching') : t('nav.search')}
                     </Button>
                   )}
                 </li>
@@ -78,9 +79,9 @@ export function MissingCard({ kind, instance }: { kind: ArrKind | 'lidarr' | 're
             </ul>
             {pages > 1 && (
               <div className="mt-3 flex items-center justify-end gap-2 text-xs text-ink-3">
-                <span>Page {page} of {pages}</span>
-                <Button size="icon" variant="ghost" className="size-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page"><ChevronLeft className="size-4" /></Button>
-                <Button size="icon" variant="ghost" className="size-8" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} aria-label="Next page"><ChevronRight className="size-4" /></Button>
+                <span>{t('widgets.page', { page, pages })}</span>
+                <Button size="icon" variant="ghost" className="size-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label={t('widgets.prev')}><ChevronLeft className="size-4" /></Button>
+                <Button size="icon" variant="ghost" className="size-8" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} aria-label={t('widgets.next')}><ChevronRight className="size-4" /></Button>
               </div>
             )}
           </>

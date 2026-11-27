@@ -356,5 +356,5 @@ const en = {
   },
 };
 
-export type Messages = typeof en;
+export type Core = typeof en;
 export default en;

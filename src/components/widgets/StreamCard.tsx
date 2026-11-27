@@ -10,8 +10,9 @@ import { Avatar, FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { DeviceGlyph } from './NowPlayingHero';
-import { kindLabel, livePosition, methodLabel, streamTitlePath, subtitleOf, titleOf } from './playback';
+import { isTranscoding, kindLabel, livePosition, methodLabel, streamTitlePath, subtitleOf, titleOf } from './playback';
 import { TitleLink } from '@/components/ui/TitleLink';
+import { useT } from '@/i18n';
 
 function Row({ icon: Icon, label, children }: { icon: typeof Cpu; label: string; children: React.ReactNode }) {
   return (
@@ -28,7 +29,8 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
   const pos = livePosition(s, fetchedAt, now);
   const progress = s.item.runtimeMs ? pos / s.item.runtimeMs : 0;
   const method = methodLabel(s);
-  const t = s.transcode;
+  const t = useT();
+  const tc = s.transcode;
   const subtitle = subtitleOf(s);
 
   return (
@@ -46,10 +48,10 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
         <div className="absolute top-3 left-3 flex gap-1.5">
           <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink">
             {s.state.isPaused ? <Pause className="size-3" /> : <Play className="size-3 text-brand" />}
-            {s.state.isPaused ? 'Paused' : 'Playing'}
+            {s.state.isPaused ? t('widgets.playing.paused') : t('widgets.playing.playing')}
           </span>
           {s.serverName && (
-            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={`Playing on this ${s.serverType ? MEDIA_SERVERS[s.serverType].name : 'Jellyfin'} server`}>
+            <span className="glass inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold text-ink" title={t('widgets.playing.onServer', { server: s.serverType ? MEDIA_SERVERS[s.serverType].name : 'Jellyfin' })}>
               {(() => {
                 const m = MEDIA_SERVERS[s.serverType ?? 'jellyfin'];
                 const Icon = m.icon ?? Server;
@@ -79,7 +81,7 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
       </div>
 
       <div className="flex flex-1 flex-col p-4 pt-3">
-        <ProgressBar value={progress} height={4} label="Playback progress" />
+        <ProgressBar value={progress} height={4} label={t('ui.progress')} />
         <div className="mt-1.5 flex justify-between text-[11px] text-ink-3 tabular">
           <span>{clock(pos)} / {clock(s.item.runtimeMs)}</span>
           <span className="font-medium text-ink-2">{pct(progress)}</span>
@@ -99,39 +101,39 @@ export function StreamCard({ s, fetchedAt, index = 0 }: { s: NowPlaying; fetched
         <SessionControls s={s} />
 
         <div className="mt-3 divide-y divide-line">
-          <Row icon={Zap} label="Playback">
-            <span className={method === 'Transcode' ? 'text-warn' : 'text-ok'}>{method}</span>
-            {t?.hwAccel && t.hwAccel !== 'none' && <span className="text-ink-3"> · HW {t.hwAccel}</span>}
+          <Row icon={Zap} label={t('widgets.playing.playback')}>
+            <span className={isTranscoding(s) ? 'text-warn' : 'text-ok'}>{method}</span>
+            {tc?.hwAccel && tc.hwAccel !== 'none' && <span className="text-ink-3"> · HW {tc.hwAccel}</span>}
           </Row>
-          <Row icon={Gauge} label="Source">
+          <Row icon={Gauge} label={t('widgets.playing.source')}>
             {[s.item.resolution, s.item.hdr, s.item.videoCodec?.toUpperCase()].filter(Boolean).join(' · ') || '—'}
             {s.item.audio && <div className="text-ink-3">{s.item.audio}</div>}
           </Row>
-          {t && (
-            <Row icon={Cpu} label="Stream">
+          {tc && (
+            <Row icon={Cpu} label={t('widgets.playing.stream')}>
               {[
-                t.isVideoDirect ? 'Video direct' : `${t.videoCodec?.toUpperCase() ?? ''} ${t.resolution ?? ''}`.trim(),
-                t.isAudioDirect ? 'Audio direct' : t.audioCodec?.toUpperCase(),
-                t.bitrate ? bitrate(t.bitrate / 8) : undefined,
+                tc.isVideoDirect ? t('widgets.playing.videoDirect') : `${tc.videoCodec?.toUpperCase() ?? ''} ${tc.resolution ?? ''}`.trim(),
+                tc.isAudioDirect ? t('widgets.playing.audioDirect') : tc.audioCodec?.toUpperCase(),
+                tc.bitrate ? bitrate(tc.bitrate / 8) : undefined,
               ]
                 .filter(Boolean)
                 .join(' · ')}
-              {t.reasons.length > 0 && (
+              {tc.reasons.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {t.reasons.map((r) => (
+                  {tc.reasons.map((r) => (
                     <span key={r} className="rounded bg-warn/10 px-1.5 py-0.5 text-[10px] text-warn">
                       {r.replace(/([a-z])([A-Z])/g, '$1 $2')}
                     </span>
                   ))}
                 </div>
               )}
-              {t.completion !== undefined && !t.isVideoDirect && (
-                <div className="mt-1.5 text-ink-3">Transcoded ahead: {Math.round(t.completion)}%</div>
+              {tc.completion !== undefined && !tc.isVideoDirect && (
+                <div className="mt-1.5 text-ink-3">{t('widgets.playing.ahead', { pct: Math.round(tc.completion) })}</div>
               )}
             </Row>
           )}
           {s.remoteAddress && (
-            <Row icon={Globe} label="Address">
+            <Row icon={Globe} label={t('widgets.playing.address')}>
               <span className="font-mono">{s.remoteAddress}</span>
             </Row>
           )}

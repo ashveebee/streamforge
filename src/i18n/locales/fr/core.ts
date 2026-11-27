@@ -1,6 +1,6 @@
-import type { Messages } from './en';
+import type { Core } from '../en/core';
 
-const fr: Messages = {
+const fr: Core = {
   language: {
     label: 'Langue',
     description: 'Change la langue sur cet appareil. Les messages de vos services restent tels qu’ils les envoient.',

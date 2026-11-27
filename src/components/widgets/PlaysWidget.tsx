@@ -4,7 +4,7 @@ import { usePlays } from '@/hooks/queries';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { axisProps, ChartTooltip, gridProps, SERIES } from '../ui/Chart';
 import { QueryState, Skeleton } from '../ui/States';
-import { getLocale } from '@/i18n';
+import { getLocale, t } from '@/i18n';
 
 const short = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'short' }).slice(0, 2);
 const long = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'long', month: 'short', day: 'numeric' });
@@ -13,7 +13,7 @@ export function PlaysWidget() {
   const q = usePlays();
   return (
     <Card className="h-full">
-      <CardHeader icon={BarChart3} accent="var(--color-jellyfin)" title="Playback activity" subtitle="Plays per day · last 14 days" />
+      <CardHeader icon={BarChart3} accent="var(--color-jellyfin)" title={t('dashboard.widgets.plays')} subtitle={t('widgets.plays.subtitle')} />
       <CardBody>
         <QueryState query={q} skeleton={<Skeleton className="h-48" />}>
           {(data) => {
@@ -23,7 +23,7 @@ export function PlaysWidget() {
               <>
                 <div className="mb-3 flex items-baseline gap-3">
                   <span className="text-3xl font-semibold tabular">{total.toLocaleString(getLocale())}</span>
-                  <span className="text-xs text-ink-3">plays{busiest?.plays ? ` · busiest ${long(busiest.date)}` : ''}</span>
+                  <span className="text-xs text-ink-3">{busiest?.plays ? t('widgets.plays.busiest', { count: total, day: long(busiest.date) }) : t('widgets.plays.plays', { count: total })}</span>
                 </div>
                 <div className="h-44">
                   <ResponsiveContainer>
@@ -39,9 +39,9 @@ export function PlaysWidget() {
                       <YAxis {...axisProps} allowDecimals={false} />
                       <Tooltip
                         cursor={{ fill: 'rgb(255 255 255 / 0.04)', radius: 6 }}
-                        content={<ChartTooltip formatLabel={long} formatValue={(v, k) => (k === 'plays' ? `${v} plays` : `${v}`)} />}
+                        content={<ChartTooltip formatLabel={long} formatValue={(v, k) => (k === 'plays' ? t('widgets.plays.plays', { count: v }) : `${v}`)} />}
                       />
-                      <Bar dataKey="plays" name="Plays" fill="url(#g-plays)" radius={[4, 4, 0, 0]} isAnimationActive />
+                      <Bar dataKey="plays" name={t('widgets.plays.label')} fill="url(#g-plays)" radius={[4, 4, 0, 0]} isAnimationActive />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

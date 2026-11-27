@@ -5,6 +5,7 @@ import type { MediaServerType } from '@/lib/types';
 import { MEDIA_SERVERS } from '../ui/ServiceIcon';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { EmptyState, QueryState, SkeletonRows } from '../ui/States';
+import { t } from '@/i18n';
 
 function iconFor(type: string, severity: string) {
   if (severity === 'Error') return { Icon: CircleAlert, cls: 'text-bad' };
@@ -22,13 +23,13 @@ export function ActivityWidget({ limit = 8, server, serverType: given }: { limit
   const q = useActivity(server);
   return (
     <Card className="h-full">
-      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : serverType === 'silo' ? 'Recent plays from Silo’s playback history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
+      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title={t('dashboard.widgets.activity')} subtitle={serverType === 'plex' ? t('widgets.activity.plex') : serverType === 'silo' ? t('widgets.activity.silo') : t('widgets.activity.log', { server: serverType === 'emby' ? 'Emby' : 'Jellyfin' })} />
       <CardBody>
         <QueryState
           query={q}
           skeleton={<SkeletonRows rows={5} />}
           isEmpty={(d) => !d.length}
-          empty={<EmptyState icon={History} title="No recent activity" />}
+          empty={<EmptyState icon={History} title={t('widgets.activity.none')} />}
         >
           {(items) => (
             <ol className="relative space-y-0.5 before:absolute before:top-2 before:bottom-2 before:left-[13px] before:w-px before:bg-line">

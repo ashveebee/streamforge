@@ -4,6 +4,7 @@ import { useTitlePlayability, VERDICT } from '@/hooks/usePlayability';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
 import { SkeletonRows } from '@/components/ui/States';
+import { t } from '@/i18n';
 
 /**
  * "Will it play?": how this movie or series would play on each device people
@@ -17,7 +18,7 @@ export function WillItPlay({ itemId }: { itemId: string }) {
   const series = (q.data?.files ?? 0) > 1;
   return (
     <Card>
-      <CardHeader icon={MonitorPlay} accent="var(--color-jellyfin)" title="Will it play?" subtitle="Learned from what each device has played" />
+      <CardHeader icon={MonitorPlay} accent="var(--color-jellyfin)" title={t('ui.willPlay.title')} subtitle={t('ui.willPlay.subtitle')} />
       {!q.data ? (
         <SkeletonRows rows={3} className="px-5 pb-5" />
       ) : (
@@ -25,11 +26,11 @@ export function WillItPlay({ itemId }: { itemId: string }) {
           {q.data.devices.map((d) => {
             const v = VERDICT[d.verdict];
             const notes = [
-              series && d.verdict !== 'direct' ? `${d.counts.direct} of ${q.data!.files} episodes play directly` : undefined,
-              d.problems.length ? `Because of ${d.problems.join(', ')}` : undefined,
-              d.version ? `Using the ${d.version} version` : undefined,
+              series && d.verdict !== 'direct' ? t('ui.willPlay.episodes', { direct: d.counts.direct, count: q.data!.files }) : undefined,
+              d.problems.length ? t('ui.willPlay.because', { list: d.problems.join(', ') }) : undefined,
+              d.version ? t('ui.willPlay.version', { version: d.version }) : undefined,
               d.subtitleWarning ? capital(d.subtitleWarning) : undefined,
-              d.untested.length ? `Not tried on this device yet: ${d.untested.join(', ')}` : undefined,
+              d.untested.length ? t('ui.willPlay.untested', { list: d.untested.join(', ') }) : undefined,
             ].filter(Boolean);
             return (
               <li key={d.key} className="px-5 py-3">

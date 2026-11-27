@@ -1,6 +1,6 @@
-import type { Messages } from './en';
+import type { Core } from '../en/core';
 
-const ptBR: Messages = {
+const ptBR: Core = {
   language: {
     label: 'Idioma',
     description: 'Muda o idioma neste dispositivo. As mensagens dos seus serviços aparecem como eles as enviam.',

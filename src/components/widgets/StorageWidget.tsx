@@ -6,13 +6,14 @@ import type { DriveHealth } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { ProgressBar, RingGauge, usageColor } from '../ui/Progress';
 import { EmptyState, ErrorState, Skeleton } from '../ui/States';
+import { t } from '@/i18n';
 
 export const DRIVE_HEALTH: Record<DriveHealth, { label: string; tone: string }> = {
-  healthy: { label: 'Healthy', tone: 'text-ok' },
-  warning: { label: 'Warning', tone: 'text-warn' },
-  critical: { label: 'Critical', tone: 'text-bad' },
-  offline: { label: 'Offline', tone: 'text-bad' },
-  unknown: { label: 'Unknown', tone: 'text-ink-3' },
+  healthy: { get label() { return t('ui.drive.healthy'); }, tone: 'text-ok' },
+  warning: { get label() { return t('ui.drive.warning'); }, tone: 'text-warn' },
+  critical: { get label() { return t('ui.drive.critical'); }, tone: 'text-bad' },
+  offline: { get label() { return t('ui.drive.offline'); }, tone: 'text-bad' },
+  unknown: { get label() { return t('ui.drive.unknown'); }, tone: 'text-ink-3' },
 };
 
 interface Vol {
@@ -38,10 +39,10 @@ export function VolumeRow({ v }: { v: Vol }) {
           <div className="flex items-baseline justify-between gap-2">
             <span className="truncate text-[13px] font-medium" title={v.mount}>{v.name}</span>
             <span className="shrink-0 text-[11px] text-ink-3 tabular">
-              {bytes(v.free)} free of {bytes(v.total)}
+              {t('ui.free', { free: bytes(v.free), total: bytes(v.total) })}
             </span>
           </div>
-          <ProgressBar value={v.usage} height={4} className="mt-1.5" glow={false} color={usageColor(v.usage) ?? 'linear-gradient(90deg,#a78bfa,#22d3ee)'} label={`${v.name} usage`} />
+          <ProgressBar value={v.usage} height={4} className="mt-1.5" glow={false} color={usageColor(v.usage) ?? 'linear-gradient(90deg,#a78bfa,#22d3ee)'} label={t('ui.usage', { name: v.name })} />
           <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-4">
             {v.mount && v.mount !== v.name && <span className="truncate font-mono">{v.mount}</span>}
             <span className="flex-1" />
@@ -83,8 +84,8 @@ export function StorageWidget() {
       <CardHeader
         icon={HardDrive}
         accent="var(--color-infinidisk)"
-        title="Storage"
-        subtitle={fromInf ? `Infinidisk · ${vols.length} drives` : 'Host filesystems'}
+        title={t('widgets.storage.title')}
+        subtitle={fromInf ? t('widgets.storage.drives', { count: vols.length }) : t('widgets.storage.host')}
       />
       <CardBody>
         {loading ? (
@@ -92,20 +93,20 @@ export function StorageWidget() {
         ) : infinidiskOn && inf.isError && !host.data?.filesystems.length ? (
           <ErrorState error={inf.error} onRetry={() => void inf.refetch()} />
         ) : vols.length === 0 ? (
-          <EmptyState icon={HardDrive} title="No storage reported" description="Configure Infinidisk or enable host metrics to see storage." />
+          <EmptyState icon={HardDrive} title={t('widgets.storage.none')} description={t('widgets.storage.noneHint')} />
         ) : (
           <>
             <div className="flex items-center gap-5">
               <RingGauge value={usage} size={104} stroke={9} color={usageColor(usage)}>
                 <div>
                   <div className="text-lg font-semibold tabular">{pct(usage)}</div>
-                  <div className="text-[10px] text-ink-4">used</div>
+                  <div className="text-[10px] text-ink-4">{t('widgets.storage.used')}</div>
                 </div>
               </RingGauge>
               <div className="grid flex-1 grid-cols-1 gap-2 text-sm">
-                <div><div className="text-[11px] text-ink-4">Capacity</div><div className="font-semibold tabular">{bytes(totals.total)}</div></div>
-                <div><div className="text-[11px] text-ink-4">Used</div><div className="font-medium text-ink-2 tabular">{bytes(totals.used)}</div></div>
-                <div><div className="text-[11px] text-ink-4">Available</div><div className="font-medium text-ink-2 tabular">{bytes(totals.free)}</div></div>
+                <div><div className="text-[11px] text-ink-4">{t('widgets.storage.capacity')}</div><div className="font-semibold tabular">{bytes(totals.total)}</div></div>
+                <div><div className="text-[11px] text-ink-4">{t('widgets.storage.usedLabel')}</div><div className="font-medium text-ink-2 tabular">{bytes(totals.used)}</div></div>
+                <div><div className="text-[11px] text-ink-4">{t('widgets.storage.available')}</div><div className="font-medium text-ink-2 tabular">{bytes(totals.free)}</div></div>
               </div>
             </div>
             <ul className="mt-3 divide-y divide-line border-t border-line">

@@ -12,9 +12,10 @@ import { Avatar, FadeImage } from '../ui/Image';
 import { ProgressBar } from '../ui/Progress';
 import { Pill } from '../ui/Status';
 import { ErrorState, Skeleton } from '../ui/States';
-import { deviceIcon, streamKey, streamTitlePath, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
+import { deviceIcon, isTranscoding, streamKey, streamTitlePath, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
 import { TitleLink } from '../ui/TitleLink';
 import { SERVER_COLOR, SERVER_NAME, ServerTag } from '../ui/ServerTag';
+import { useT } from '@/i18n';
 
 const DEVICE_ICONS = { tv: Tv, phone: Smartphone, web: MonitorSmartphone, desktop: Laptop };
 
@@ -69,6 +70,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
   const method = methodLabel(s);
   const logo = jfImage(s.item.logo, 600);
   const [logoOk, setLogoOk] = useState(true);
+  const t = useT();
   useEffect(() => setLogoOk(true), [logo]);
 
   return (
@@ -96,12 +98,12 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-md bg-brand/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-brand uppercase">
             {s.state.isPaused ? <Pause className="size-3" /> : <span className="relative flex size-1.5"><span className="absolute inset-0 animate-ping rounded-full bg-brand" /><span className="relative size-1.5 rounded-full bg-brand" /></span>}
-            {s.state.isPaused ? 'Paused' : 'Now playing'}
+            {s.state.isPaused ? t('widgets.playing.paused') : t('widgets.playing.nowPlaying')}
           </span>
           <Pill>{kindLabel(s.item.type)}</Pill>
           {s.item.resolution && <Pill>{s.item.resolution}</Pill>}
           {s.item.hdr && <Pill tone="warn">{s.item.hdr}</Pill>}
-          <Pill tone={method === 'Transcode' ? 'warn' : 'ok'}>{method}</Pill>
+          <Pill tone={isTranscoding(s) ? 'warn' : 'ok'}>{method}</Pill>
           {s.serverName && (
             <span
               className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
@@ -137,7 +139,7 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
         </div>
 
         <div className="max-w-2xl">
-          <ProgressBar value={progress} height={5} label="Playback progress" />
+          <ProgressBar value={progress} height={5} label={t('ui.progress')} />
           <div className="mt-2 flex items-center justify-between text-xs text-ink-3 tabular">
             <span>{clock(pos)}</span>
             <span className="font-medium text-ink-2">{Math.round(progress * 100)}%</span>
@@ -199,19 +201,20 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
 function IdleHero() {
   const latest = useLatest();
   const main = useMainServer();
+  const t = useT();
   const feature = useMemo(() => latest.data?.find((i) => i.backdrop), [latest.data]);
   return (
     <div className="relative flex h-full items-end p-6 sm:p-8">
       <div className="max-w-lg">
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-ink-2 uppercase">
-          <Sparkles className="size-3" /> All quiet
+          <Sparkles className="size-3" /> {t('widgets.playing.quiet')}
         </div>
-        <h2 className="text-3xl font-semibold tracking-tight text-white lg:text-4xl">Nothing is playing right now</h2>
+        <h2 className="text-3xl font-semibold tracking-tight text-white lg:text-4xl">{t('widgets.playing.nothing')}</h2>
         <p className="mt-2 text-sm text-ink-2">
           {feature ? (
-            <>Recently added to your library: <span className="font-medium text-ink">{feature.title}</span>{feature.year ? ` (${feature.year})` : ''}</>
+            <>{t('widgets.playing.recentlyAdded')} <span className="font-medium text-ink">{feature.title}</span>{feature.year ? ` (${feature.year})` : ''}</>
           ) : (
-            `Active streams from every ${main.name} app will appear here in real time.`
+            t('widgets.playing.idleHint', { server: main.name })
           )}
         </p>
       </div>
@@ -221,6 +224,7 @@ function IdleHero() {
 
 export function NowPlayingHero() {
   const q = useNowPlaying();
+  const t = useT();
   const latest = useLatest();
   const streams = q.data ?? [];
   const [active, setActive] = useState(0);
@@ -231,8 +235,8 @@ export function NowPlayingHero() {
   // Gently rotate between simultaneous streams.
   useEffect(() => {
     if (streams.length < 2 || hover) return;
-    const t = setInterval(() => setActive((a) => (a + 1) % streams.length), 12_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setActive((a) => (a + 1) % streams.length), 12_000);
+    return () => clearInterval(timer);
   }, [streams.length, hover]);
 
   const idleBackdrop = latest.data?.find((i) => i.backdrop)?.backdrop;
@@ -271,7 +275,7 @@ export function NowPlayingHero() {
           to="/now-playing"
           className="absolute right-5 bottom-5 z-10 hidden items-center gap-1 rounded-full bg-black/30 px-3 py-1.5 text-xs text-ink-2 backdrop-blur transition hover:bg-black/50 hover:text-ink sm:inline-flex"
         >
-          {streams.length} active {streams.length === 1 ? 'stream' : 'streams'} <ChevronRight className="size-3.5" />
+          {t('dashboard.streams', { count: streams.length })} <ChevronRight className="size-3.5" />
         </Link>
       )}
     </section>

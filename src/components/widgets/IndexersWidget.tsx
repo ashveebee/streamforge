@@ -5,18 +5,19 @@ import { cn } from '@/lib/cn';
 import type { Indexer } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { QueryState, SkeletonRows } from '../ui/States';
+import { t } from '@/i18n';
 
 export const INDEXER_TONE: Record<Indexer['health'], { label: string; cls: string; dot: string }> = {
-  healthy: { label: 'Healthy', cls: 'text-ok', dot: 'bg-ok' },
-  failing: { label: 'Failing', cls: 'text-bad', dot: 'bg-bad' },
-  disabled: { label: 'Disabled', cls: 'text-ink-4', dot: 'bg-idle' },
+  healthy: { get label() { return t('ui.indexer.healthy'); }, cls: 'text-ok', dot: 'bg-ok' },
+  failing: { get label() { return t('ui.indexer.failing'); }, cls: 'text-bad', dot: 'bg-bad' },
+  disabled: { get label() { return t('ui.indexer.disabled'); }, cls: 'text-ink-4', dot: 'bg-idle' },
 };
 
 export function IndexersWidget() {
   const q = useProwlarr();
   return (
     <Card className="h-full">
-      <CardHeader icon={Radar} accent="var(--color-prowlarr)" title="Indexers" subtitle="Prowlarr" />
+      <CardHeader icon={Radar} accent="var(--color-prowlarr)" title={t('dashboard.widgets.indexers')} subtitle="Prowlarr" />
       <CardBody>
         <QueryState query={q} skeleton={<SkeletonRows rows={4} />}>
           {(d) => {
@@ -29,16 +30,16 @@ export function IndexersWidget() {
                       {d.summary.healthy}
                       <span className="text-lg text-ink-4">/{d.summary.enabled}</span>
                     </div>
-                    <div className="text-xs text-ink-3">healthy indexers</div>
+                    <div className="text-xs text-ink-3">{t('widgets.indexers.healthy')}</div>
                   </div>
                   <div className="ml-auto grid grid-cols-3 gap-4 text-right text-xs">
-                    <div><div className="font-semibold text-ink tabular">{compact(d.summary.queries)}</div><div className="text-ink-4">queries</div></div>
-                    <div><div className="font-semibold text-ink tabular">{compact(d.summary.grabs)}</div><div className="text-ink-4">grabs</div></div>
-                    <div><div className="font-semibold text-ink tabular">{d.summary.avgResponseMs}ms</div><div className="text-ink-4">avg</div></div>
+                    <div><div className="font-semibold text-ink tabular">{compact(d.summary.queries)}</div><div className="text-ink-4">{t('widgets.indexers.queries')}</div></div>
+                    <div><div className="font-semibold text-ink tabular">{compact(d.summary.grabs)}</div><div className="text-ink-4">{t('widgets.indexers.grabs')}</div></div>
+                    <div><div className="font-semibold text-ink tabular">{d.summary.avgResponseMs}ms</div><div className="text-ink-4">{t('widgets.indexers.avg')}</div></div>
                   </div>
                 </div>
                 {/* Health segments: one block per indexer. */}
-                <div className="mt-4 flex gap-0.5" role="img" aria-label={`${d.summary.healthy} healthy, ${d.summary.failing} failing, ${d.summary.disabled} disabled`}>
+                <div className="mt-4 flex gap-0.5" role="img" aria-label={t('widgets.indexers.summary', { healthy: d.summary.healthy, failing: d.summary.failing, disabled: d.summary.disabled })}>
                   {d.indexers.map((i) => (
                     <span key={i.id} title={`${i.name}: ${INDEXER_TONE[i.health].label}`} className={cn('h-2 flex-1 rounded-sm first:rounded-l-full last:rounded-r-full', INDEXER_TONE[i.health].dot)} />
                   ))}

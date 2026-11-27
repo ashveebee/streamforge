@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { Input, Select } from '../ui/Input';
 import { Switch } from '../ui/Switch';
+import { t } from '@/i18n';
 
 /** Transcode and bandwidth alerts (admins). */
 export function PlaybackGuardCard() {
@@ -26,9 +27,9 @@ export function PlaybackGuardCard() {
       <CardHeader
         icon={BellRing}
         accent="var(--color-warn)"
-        title="Transcode & bandwidth alerts"
-        subtitle={d.last.error ?? (d.last.at ? `Now: ${d.last.transcodes} transcoding · ${d.last.mbps} Mbit/s · checked ${relative(d.last.at)}` : 'Checks every 30 seconds')}
-        action={<Switch checked={d.settings.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v }, { onSuccess: (r) => setForm(r.settings) })} label="Turn alerts on or off" />}
+        title={t('widgets.guard.title')}
+        subtitle={d.last.error ?? (d.last.at ? t('widgets.guard.now', { count: d.last.transcodes, mbps: d.last.mbps, when: relative(d.last.at) }) : t('widgets.guard.every'))}
+        action={<Switch checked={d.settings.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v }, { onSuccess: (r) => setForm(r.settings) })} label={t('widgets.guard.toggle')} />}
       />
       <CardBody>
         <form
@@ -39,40 +40,40 @@ export function PlaybackGuardCard() {
           }}
         >
           <label className="text-xs text-ink-3">
-            Alert above this many transcodes
+            {t('widgets.guard.maxTranscodes')}
             <Input className="mt-1 h-9" type="number" min={0} max={50} value={form.maxTranscodes} onChange={(e) => set('maxTranscodes', Number(e.target.value))} />
-            <span className="text-[11px] text-ink-4">0 turns this off</span>
+            <span className="text-[11px] text-ink-4">{t('widgets.guard.zeroOff')}</span>
           </label>
           <label className="text-xs text-ink-3">
-            Alert above total Mbit/s
+            {t('widgets.guard.maxMbps')}
             <Input className="mt-1 h-9" type="number" min={0} value={form.maxMbps} onChange={(e) => set('maxMbps', Number(e.target.value))} />
-            <span className="text-[11px] text-ink-4">e.g. your upload speed; 0 turns this off</span>
+            <span className="text-[11px] text-ink-4">{t('widgets.guard.mbpsHint')}</span>
           </label>
           <label className="text-xs text-ink-3">
-            When 4K is transcoded
+            {t('widgets.guard.fourK')}
             <Select className="mt-1 h-9" value={form.fourK} onChange={(e) => set('fourK', e.target.value as GuardSettings['fourK'])}>
-              <option value="off">Do nothing</option>
-              <option value="alert">Alert me</option>
-              <option value="message">Alert me and message the viewer</option>
+              <option value="off">{t('widgets.guard.nothing')}</option>
+              <option value="alert">{t('widgets.guard.alert')}</option>
+              <option value="message">{t('widgets.guard.alertMessage')}</option>
             </Select>
           </label>
           {form.fourK === 'message' && (
             <label className="text-xs text-ink-3 sm:col-span-3">
-              Message shown to the viewer
+              {t('widgets.guard.message')}
               <Input className="mt-1 h-9" maxLength={400} value={form.message} onChange={(e) => set('message', e.target.value)} />
             </label>
           )}
           <div className="flex items-center gap-2 sm:col-span-3">
-            <p className="mr-auto text-[11px] text-ink-4">Alerts go to channels subscribed to “Transcode and bandwidth alerts” in Settings → Notifications.{main.plex ? ' Plex can’t show viewers a message, so 4K alerts only notify you.' : main.emby ? '' : ' Needs a Jellyfin API key.'}</p>
+            <p className="mr-auto text-[11px] text-ink-4">{t('widgets.guard.where')}{main.plex ? ` ${t('widgets.guard.plex')}` : main.emby ? '' : ` ${t('widgets.guard.needsKey')}`}</p>
             {save.error && <span className="text-xs text-bad">{(save.error as Error).message}</span>}
             <Button size="sm" variant="primary" type="submit" disabled={!dirty || save.isPending}>
-              {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />} Save
+              {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />} {t('common.save')}
             </Button>
           </div>
         </form>
         {d.recent.length > 0 && (
           <div className="mt-4 border-t border-line pt-3">
-            <div className="mb-1 text-xs font-medium text-ink-2">Recent alerts</div>
+            <div className="mb-1 text-xs font-medium text-ink-2">{t('widgets.guard.recent')}</div>
             <ul className="space-y-1">
               {d.recent.slice(0, 5).map((a, i) => (
                 <li key={i} className="text-[11px] text-ink-3"><span className="text-ink-4">{relative(a.at)}</span> · {a.message}</li>
