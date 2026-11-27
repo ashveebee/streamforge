@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.1.0](https://github.com/ashveebee/streamforge/compare/v2.0.0...v2.1.0) (2026-11-27)
+
+
+### Features
+
+* "More like this" on title pages ([b26344a](https://github.com/ashveebee/streamforge/commit/b26344a22792724c984f8927d91661794a1788b6))
+* Silo as a media server ([8dde050](https://github.com/ashveebee/streamforge/commit/8dde050bfa97cee3024d60b2bc0dd73679adb39e))
+* Silo as a media server, with Silo's own requests ([29b5679](https://github.com/ashveebee/streamforge/commit/29b56798f3f40a9f061917c42cac51616ab59c34))
+* Silo request progress, and admin requests skip approval ([eaa280c](https://github.com/ashveebee/streamforge/commit/eaa280c6a999029c826bd0df9fd387b974038406))
+* Silo requests in the main menu; docs, website and screenshots ([039655d](https://github.com/ashveebee/streamforge/commit/039655d5deb101fab74fd65298fcb0fa3d497ac3))
+* use Silo's own request system when it's on ([1be4b49](https://github.com/ashveebee/streamforge/commit/1be4b49801f56a6db488068ef49d5f6e7ff9e645))
+
+
+### Bug Fixes
+
+* approving a request twice no longer errors ([5420c86](https://github.com/ashveebee/streamforge/commit/5420c860886c9a2046785d44a64f421fc691032c))
+* sideways rows can be scrolled with a mouse ([3261136](https://github.com/ashveebee/streamforge/commit/3261136f307e0ec320abbc0260e0f0ba503234e5))
+
+
+### Documentation
+
+* Silo's own requests ([319d774](https://github.com/ashveebee/streamforge/commit/319d774ab8fbb4468bf9f142e17b4376e2a7a9bd))
+
 ## [2.0.0](https://github.com/ashveebee/streamforge/compare/v1.8.0...v2.0.0) (2026-11-27)
 
 
