@@ -172,6 +172,7 @@ class PaletteBoundary extends Component<{ children: React.ReactNode; onReset: ()
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const main = useMainServer();
+  const cfgRequests = useServiceConfig().data?.requests;
   const [text, setText] = useState('');
   const q = useDeferredValue(text.trim());
   const pages = usePages();
@@ -328,7 +329,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               <span><kbd className="font-sans">↑↓</kbd> to move</span>
               <span><kbd className="font-sans">↵</kbd> to open</span>
               {d?.canRequest && <span className="hidden sm:inline"><kbd className="font-sans">⇧↵</kbd> to request</span>}
-              <span className="ml-auto">Searches {main.name}, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
+              <span className="ml-auto">Searches {main.name}, your *arr apps{d?.canRequest ? (cfgRequests === 'silo' ? ' and Silo requests' : ' and Seerr') : ''}</span>
             </div>
           </motion.div>
         </motion.div>

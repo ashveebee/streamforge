@@ -551,7 +551,8 @@ authRouter.post('/silo/setup', setupLimiter, async (req, res) => {
     const srv = existing ? updateServer(existing.id, { apiKey, serverId, enabled: true })! : addServer({ type: 'silo', name, url, apiKey, serverId });
     setMainServer('silo', srv.id);
     audit({ ip: req.ip }, `[settings] Silo server “${name}” (${url}) set as the media server during first-run setup`);
-    const session = startSession(req, res, { userId: auth.user.id, userName: auth.user.username, isAdmin: true, token: '', deviceId: newDeviceId(), serverId, method: 'silo' });
+    // The person's Silo session stays server-side, for requests in their own name.
+    const session = startSession(req, res, { userId: auth.user.id, userName: auth.user.username, isAdmin: true, token: auth.accessToken, serverToken: auth.refreshToken, deviceId: newDeviceId(), serverId, method: 'silo' });
     audit({ userId: session.userId, userName: session.userName, ip: req.ip }, '[auth] signed in with Silo');
     res.json({ user: publicUser(session) });
   } catch (err) {
@@ -565,15 +566,16 @@ authRouter.post('/silo/setup', setupLimiter, async (req, res) => {
 async function signInWithSilo(req: Request, res: Response, username: string, password: string) {
   const srv = mainSilo()!;
   try {
-    const { user } = await silo.login(srv.url, username, password);
+    const { user, accessToken, refreshToken } = await silo.login(srv.url, username, password);
     const isAdmin = user.role === 'admin';
     if (!isAdmin && !membersCanSignIn()) {
       audit({ userId: user.id, userName: user.username, ip: req.ip }, '[auth] sign-in refused: member access is off', false);
       res.status(403).json({ error: 'forbidden', message: 'StreamForge is restricted to Silo admins.' });
       return;
     }
-    // Silo's own session isn't needed afterwards: StreamForge reads Silo with its admin key.
-    const data: SessionData = { userId: user.id, userName: user.username, isAdmin, token: '', deviceId: newDeviceId(), serverId: srv.serverId, method: 'silo' };
+    // StreamForge reads Silo with its admin key; the person's own Silo session stays
+    // server-side, only for making requests in their name.
+    const data: SessionData = { userId: user.id, userName: user.username, isAdmin, token: accessToken, serverToken: refreshToken, deviceId: newDeviceId(), serverId: srv.serverId, method: 'silo' };
     if (mfaEnabled(data.userId)) {
       const challenge = randomBytes(24).toString('base64url');
       challenges.set(challenge, { data, expires: Date.now() + 5 * 60_000, attempts: 0 });

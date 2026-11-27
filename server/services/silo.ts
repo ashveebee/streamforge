@@ -40,12 +40,12 @@ interface Page<T> {
   page?: { has_more?: boolean; next_cursor?: string };
 }
 
-/** Every page of a paged list (Silo caps a page at 200). */
-async function all<T>(srv: JfServerTarget, path: string, query: Record<string, string | number | undefined> = {}, max = 5000) {
+/** Every page of a paged list (Silo caps most pages at 200, some at 50). */
+async function all<T>(srv: JfServerTarget, path: string, query: Record<string, string | number | undefined> = {}, max = 5000, pageSize = 200) {
   const out: T[] = [];
   let cursor: string | undefined;
   do {
-    const res = await silo<Page<T>>(srv, path, { ...query, limit: 200, cursor });
+    const res = await silo<Page<T>>(srv, path, { ...query, limit: pageSize, cursor });
     out.push(...(res.items ?? []));
     cursor = res.page?.has_more ? res.page.next_cursor : undefined;
   } while (cursor && out.length < max);
@@ -226,12 +226,14 @@ export async function identity(url: string) {
 
 export interface SiloSignIn {
   accessToken: string;
+  /** Kept server-side so requests can be made in the person's own name. */
+  refreshToken?: string;
   user: { id: string; username: string; role: 'admin' | 'user' };
 }
 
 /** Signs a person in with their Silo username and password. */
 export async function login(url: string, username: string, password: string): Promise<SiloSignIn> {
-  const r = await requestJson<{ access_token: string; user: SiloSignIn['user'] }>(buildUrl(base(url), '/api/v2/auth/login'), {
+  const r = await requestJson<{ access_token: string; refresh_token?: string; user: SiloSignIn['user'] }>(buildUrl(base(url), '/api/v2/auth/login'), {
     method: 'POST',
     headers: { 'X-Silo-Device-Id': 'streamforge-server', 'X-Silo-Device-Name': 'StreamForge', 'X-Silo-Device-Platform': 'server' },
     body: { username, password },
@@ -239,7 +241,7 @@ export async function login(url: string, username: string, password: string): Pr
   }).catch((err) => {
     throw err instanceof UpstreamError && (err.status === 401 || err.status === 400 || err.status === 422) ? new UpstreamError('Wrong Silo username or password', 401, 'jellyfin') : err;
   });
-  return { accessToken: r.access_token, user: r.user };
+  return { accessToken: r.access_token, refreshToken: r.refresh_token, user: r.user };
 }
 
 /** Creates StreamForge's admin API key with an admin's session (setup). */
@@ -749,4 +751,314 @@ export function image(srv: JfServerTarget, _id: string, _type: string, opts: { t
   // Only Silo's artwork paths: letters, digits and . _ - / with a signature query.
   if (!/^[A-Za-z0-9._/-]{1,300}(\?[A-Za-z0-9=&_.-]{1,300})?$/.test(tag) || tag.includes('..')) return Promise.resolve(new Response(null, { status: 404 }));
   return requestRaw(`${base(srv.url)}${ARTWORK}${tag}`, { headers: { Accept: 'image/*' }, service: 'jellyfin' });
+}
+
+/* -------------------------------- requests -------------------------------- */
+
+/*
+ * Silo's own request system (Discover, approvals, routing to Sonarr/Radarr
+ * through its request integrations). When it's switched on and Silo is the
+ * media server, StreamForge's request features use it instead of Seerr.
+ *
+ * Requests are returned in the same shape as Seerr's, so the Requests page,
+ * widget, title pages and search work unchanged. Request ids are strings:
+ * Silo's are larger than JavaScript numbers hold exactly.
+ */
+
+const TMDB_IMG = 'https://image.tmdb.org/t/p';
+
+interface SiloRequest {
+  id: string;
+  media_type: 'movie' | 'series';
+  tmdb_id: number;
+  tvdb_id?: number;
+  imdb_id?: string;
+  title: string;
+  year?: number;
+  poster_path?: string;
+  backdrop_path?: string;
+  status: string;
+  state: string;
+  outcome: string;
+  seasons?: number[];
+  requested_by_user_id?: string;
+  created_at: string;
+  updated_at?: string;
+  last_error?: string;
+}
+
+/** Whether Silo's requests are switched on (cached briefly). */
+export async function requestsEnabled(srv: JfServerTarget) {
+  return cache.get(`silo:${srv.id}:requests:on`, 30_000, async () => {
+    const c = await silo<{ requests_enabled?: boolean }>(srv, '/admin/requests/counts').catch(() => undefined);
+    return !!c?.requests_enabled;
+  });
+}
+
+/** Silo's request state → Seerr's request status word and media status word. */
+function statusOf(r: Pick<SiloRequest, 'state' | 'outcome'>) {
+  switch (r.state) {
+    case 'pending':
+      return { status: 'pending', mediaStatus: 'pending' };
+    case 'approved':
+      return { status: 'approved', mediaStatus: 'pending' };
+    case 'processing':
+      return { status: 'approved', mediaStatus: 'processing' };
+    case 'partially_available':
+      return { status: 'approved', mediaStatus: 'partially available' };
+    case 'available':
+      return { status: 'approved', mediaStatus: 'available' };
+    case 'declined':
+    case 'cancelled':
+      return { status: 'declined', mediaStatus: 'unknown' };
+    case 'failed':
+      return { status: 'failed', mediaStatus: 'unknown' };
+    default:
+      return { status: r.outcome === 'declined' ? 'declined' : 'pending', mediaStatus: 'unknown' };
+  }
+}
+
+async function normaliseRequest(srv: JfServerTarget, r: SiloRequest) {
+  const names = new Map((await accounts(srv).catch(() => [] as SiloUser[])).map((u) => [u.id, u.username]));
+  return {
+    id: r.id,
+    type: (r.media_type === 'series' ? 'tv' : 'movie') as 'movie' | 'tv',
+    tmdbId: r.tmdb_id,
+    title: r.title,
+    year: r.year,
+    poster: r.poster_path ? `${TMDB_IMG}/w342${r.poster_path}` : undefined,
+    backdrop: r.backdrop_path ? `${TMDB_IMG}/w780${r.backdrop_path}` : undefined,
+    ...statusOf(r),
+    is4k: false,
+    seasons: r.seasons ?? [],
+    requestedBy: (r.requested_by_user_id && names.get(r.requested_by_user_id)) || 'Someone',
+    modifiedBy: undefined as string | undefined,
+    createdAt: r.created_at,
+  };
+}
+
+/** Recent requests (newest first), optionally one queue view or one person's. */
+async function listRequests(srv: JfServerTarget, opts: { view?: 'needs_approval' | 'in_progress' | 'failed' | 'done'; user?: string; limit?: number } = {}) {
+  const key = `silo:${srv.id}:requests:${opts.view ?? 'all'}:${opts.user ?? '*'}:${opts.limit ?? 50}`;
+  return cache.get(key, 15_000, async () => {
+    const res = await silo<Page<SiloRequest>>(srv, '/admin/requests', { view: opts.view, requested_by_user_id: opts.user, limit: Math.min(opts.limit ?? 50, 50) });
+    return Promise.all((res.items ?? []).map((r) => normaliseRequest(srv, r)));
+  });
+}
+
+/** The Requests page, in Seerr's overview shape. */
+export async function requestsOverview(srv: JfServerTarget) {
+  const [counts, recent, pending, history] = await Promise.all([
+    cache.get(`silo:${srv.id}:requests:counts`, 15_000, () =>
+      silo<{ needs_approval?: number; in_progress?: number; failed?: number; done?: number }>(srv, '/admin/requests/counts'),
+    ),
+    listRequests(srv, { limit: 16 }),
+    listRequests(srv, { view: 'needs_approval', limit: 12 }),
+    // Up to the last 200 requests, for the movie/series split and outcomes.
+    cache.get(`silo:${srv.id}:requests:all200`, 30_000, async () => {
+      const items = await all<SiloRequest>(srv, '/admin/requests', {}, 200, 50).catch(() => [] as SiloRequest[]);
+      return items;
+    }),
+  ]);
+  const by = (f: (r: SiloRequest) => boolean) => history.filter(f).length;
+  return {
+    counts: {
+      total: (counts.needs_approval ?? 0) + (counts.in_progress ?? 0) + (counts.failed ?? 0) + (counts.done ?? 0),
+      movie: by((r) => r.media_type === 'movie'),
+      tv: by((r) => r.media_type === 'series'),
+      pending: counts.needs_approval ?? 0,
+      approved: by((r) => r.state === 'approved'),
+      declined: by((r) => r.state === 'declined' || r.state === 'cancelled'),
+      processing: counts.in_progress ?? 0,
+      available: by((r) => r.state === 'available' || r.state === 'partially_available'),
+    },
+    recent,
+    pending,
+  };
+}
+
+/** Pending requests, for new-request alerts. */
+export async function pendingRequests(srv: JfServerTarget) {
+  return listRequests(srv, { view: 'needs_approval', limit: 20 });
+}
+
+/** One person's requests (by their Silo user id), newest first. */
+export async function requestsBy(srv: JfServerTarget, userId: string) {
+  if (!/^[1-9][0-9]{0,18}$/.test(userId)) return [];
+  return listRequests(srv, { user: userId, limit: 20 });
+}
+
+/** Approves or declines a request (admin key). */
+export async function decideRequest(srv: JfServerTarget, id: string, decision: 'approve' | 'decline') {
+  if (!/^[0-9]{1,30}$/.test(id)) throw new UpstreamError('Unknown request', 400, 'seerr');
+  await post(srv, `/admin/requests/${id}/${decision}`, {});
+  cache.delete(`silo:${srv.id}:requests:`);
+}
+
+interface SiloRequestDetail {
+  media_type: 'movie' | 'series';
+  tmdb_id: number;
+  tvdb_id?: number;
+  imdb_id?: string;
+  title: string;
+  tagline?: string;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  release_date?: string;
+  first_air_date?: string;
+  runtime?: number;
+  vote_average?: number;
+  status?: string;
+  genres?: string[];
+  networks?: string[];
+  production_companies?: string[];
+  cast?: { name: string; character?: string; profile_path?: string }[];
+  availability?: string;
+  request?: { request_id?: string; status?: string; state?: string; requestable?: boolean };
+  seasons?: { season_number: number; name?: string; episode_count?: number; air_date?: string; availability?: string; requested?: boolean }[];
+}
+
+/** Seerr's numeric media statuses (2 pending, 3 processing, 4 partial, 5 available). */
+const MEDIA_NUM: Record<string, number> = { available: 5, partially_available: 4, partial: 4, processing: 3, downloading: 3, requested: 2, pending: 2 };
+const REQUEST_NUM: Record<string, number> = { pending: 1, declined: 3, cancelled: 3, failed: 4 };
+
+/**
+ * A title's TMDb details and request state from Silo, in the shape title pages
+ * read from Seerr (so they work the same either way).
+ */
+export async function titleDetail(srv: JfServerTarget, type: 'movie' | 'tv', tmdbId: number) {
+  return cache.get(`silo:${srv.id}:reqdetail:${type}:${tmdbId}`, 60_000, async () => {
+    const profile = await profileId(srv);
+    const d = await silo<SiloRequestDetail>(srv, `/requests/detail/${type === 'tv' ? 'series' : 'movie'}/${tmdbId}`, undefined, profile);
+    // The request itself, for who asked and which seasons.
+    const req = d.request?.request_id ? (await listRequests(srv, { limit: 50 })).find((r) => r.id === d.request!.request_id) : undefined;
+    const state = d.request?.state;
+    return {
+      id: d.tmdb_id,
+      title: type === 'movie' ? d.title : undefined,
+      name: type === 'tv' ? d.title : undefined,
+      tagline: d.tagline,
+      overview: d.overview,
+      releaseDate: type === 'movie' ? d.release_date : undefined,
+      firstAirDate: type === 'tv' ? (d.first_air_date ?? d.release_date) : undefined,
+      runtime: d.runtime,
+      voteAverage: d.vote_average,
+      genres: (d.genres ?? []).map((name) => ({ name })),
+      posterPath: d.poster_path,
+      backdropPath: d.backdrop_path,
+      status: d.status,
+      networks: (d.networks ?? []).map((name) => ({ name })),
+      productionCompanies: (d.production_companies ?? []).map((name) => ({ name })),
+      credits: { cast: (d.cast ?? []).map((c) => ({ name: c.name, character: c.character, profilePath: c.profile_path })) },
+      externalIds: { tvdbId: d.tvdb_id, imdbId: d.imdb_id },
+      seasons: (d.seasons ?? []).map((x) => ({ seasonNumber: x.season_number, episodeCount: x.episode_count, name: x.name, airDate: x.air_date })),
+      mediaInfo: {
+        status: MEDIA_NUM[d.availability ?? ''] ?? (state ? (MEDIA_NUM[state] ?? 2) : undefined),
+        seasons: (d.seasons ?? []).filter((x) => x.availability && MEDIA_NUM[x.availability]).map((x) => ({ seasonNumber: x.season_number, status: MEDIA_NUM[x.availability!]! })),
+        requests: d.request?.request_id
+          ? [
+              {
+                id: d.request.request_id,
+                status: REQUEST_NUM[state ?? ''] ?? 2,
+                createdAt: req?.createdAt ?? new Date().toISOString(),
+                is4k: false,
+                requestedBy: { displayName: req?.requestedBy },
+                seasons: (req?.seasons ?? (d.seasons ?? []).filter((x) => x.requested).map((x) => x.season_number)).map((seasonNumber) => ({ seasonNumber })),
+              },
+            ]
+          : [],
+      },
+    };
+  }).catch(() => undefined);
+}
+
+/** Titles to request (TMDb search through Silo), for search's Discover section. */
+export async function searchRequestable(srv: JfServerTarget, q: string, limit = 12) {
+  const profile = await profileId(srv);
+  type Result = { media_type: 'movie' | 'series'; tmdb_id: number; title: string; year?: number; poster_path?: string; overview?: string; availability?: string; request?: { requestable?: boolean; state?: string; status?: string } };
+  const res = await silo<{ results?: Result[] }>(srv, '/requests/search', { q }, profile);
+  return (res.results ?? []).slice(0, limit).map((r) => {
+    const type = r.media_type === 'series' ? ('tv' as const) : ('movie' as const);
+    const avail = r.availability ?? '';
+    const state = r.request?.state ?? r.request?.status;
+    const status =
+      avail === 'available' ? 'available' : avail === 'partially_available' || avail === 'partial' ? 'partial' : state === 'pending' ? 'requested' : state === 'approved' || state === 'processing' ? 'processing' : 'none';
+    return {
+      key: `silo-req:${type}:${r.tmdb_id}`,
+      source: 'silo' as const,
+      title: r.title,
+      subtitle: type === 'tv' ? 'Series' : 'Movie',
+      year: r.year,
+      image: r.poster_path ? `${TMDB_IMG}/w185${r.poster_path}` : undefined,
+      mediaType: type,
+      tmdbId: r.tmdb_id,
+      path: `/media/${type}/${r.tmdb_id}`,
+      status: status as 'available' | 'partial' | 'requested' | 'processing' | 'none',
+      overview: r.overview?.slice(0, 240),
+    };
+  });
+}
+
+/** A person's Silo session, kept server-side, for acting in their own name. */
+export interface SiloUserSession {
+  accessToken: string;
+  refreshToken?: string;
+}
+
+/** Calls Silo as a person, refreshing their access token once if it has expired. */
+async function asUser<T>(srv: JfServerTarget, who: SiloUserSession, onRefresh: (s: SiloUserSession) => void, path: string, init: { method?: string; body?: unknown; profile?: string } = {}) {
+  const call = (token: string) =>
+    requestJson<T>(buildUrl(base(srv.url), `/api/v2${path}`), {
+      method: init.method ?? 'GET',
+      headers: { Authorization: `Bearer ${token}`, ...(init.profile ? { 'X-Profile-Id': init.profile } : {}) },
+      body: init.body,
+      service: 'jellyfin',
+    });
+  try {
+    return await call(who.accessToken);
+  } catch (err) {
+    if (!(err instanceof UpstreamError) || err.status !== 401 || !who.refreshToken) throw err;
+    const fresh = await requestJson<{ access_token: string; refresh_token?: string }>(buildUrl(base(srv.url), '/api/v2/auth/refresh'), {
+      method: 'POST',
+      body: { refresh_token: who.refreshToken },
+      service: 'jellyfin',
+    });
+    const next = { accessToken: fresh.access_token, refreshToken: fresh.refresh_token ?? who.refreshToken };
+    onRefresh(next);
+    return call(next.accessToken);
+  }
+}
+
+/**
+ * Requests a movie or series in the person's own name (their Silo session),
+ * for every season not already in the library or requested.
+ */
+export async function createRequest(srv: JfServerTarget, who: SiloUserSession, onRefresh: (s: SiloUserSession) => void, type: 'movie' | 'tv', tmdbId: number) {
+  const profiles = await asUser<{ items?: { id: string; is_primary?: boolean; requests_allowed?: boolean }[] }>(srv, who, onRefresh, '/profiles');
+  const profile = profiles.items?.find((p) => p.is_primary) ?? profiles.items?.[0];
+  if (!profile) throw new UpstreamError('Your Silo account has no profile to request with', 400, 'seerr');
+  if (profile.requests_allowed === false) throw new UpstreamError('Your Silo profile isn’t allowed to make requests', 403, 'seerr');
+  const d = await asUser<SiloRequestDetail>(srv, who, onRefresh, `/requests/detail/${type === 'tv' ? 'series' : 'movie'}/${tmdbId}`, { profile: profile.id });
+  if (d.request && d.request.requestable === false) throw new UpstreamError('This is already requested or in the library', 409, 'seerr');
+  const body: Record<string, unknown> = {
+    media_type: type === 'tv' ? 'series' : 'movie',
+    tmdb_id: d.tmdb_id,
+    title: d.title,
+    year: (d.release_date ?? d.first_air_date)?.slice(0, 4) ? Number((d.release_date ?? d.first_air_date)!.slice(0, 4)) : undefined,
+    imdb_id: d.imdb_id,
+    tvdb_id: d.tvdb_id,
+    poster_path: d.poster_path,
+    backdrop_path: d.backdrop_path,
+    overview: d.overview,
+  };
+  if (type === 'tv') {
+    const seasons = (d.seasons ?? []).filter((x) => x.season_number > 0 && !x.requested && x.availability !== 'available').map((x) => x.season_number);
+    if (!seasons.length) throw new UpstreamError('Every season is already available or requested', 409, 'seerr');
+    body.seasons = seasons;
+  }
+  const r = await asUser<SiloRequest>(srv, who, onRefresh, '/requests', { method: 'POST', body, profile: profile.id });
+  cache.delete(`silo:${srv.id}:requests:`);
+  cache.delete(`silo:${srv.id}:reqdetail:`);
+  return { id: r.id, state: r.state };
 }

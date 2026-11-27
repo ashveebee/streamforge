@@ -1,5 +1,5 @@
 import { Check, Inbox, LoaderCircle, X } from 'lucide-react';
-import { useDecideRequest, useSeerr } from '@/hooks/queries';
+import { useDecideRequest, useSeerr, useServiceConfig } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -86,9 +86,10 @@ export function RequestRow({ r }: { r: SeerrRequest }) {
 
 export function RequestsWidget() {
   const q = useSeerr();
+  const silo = useServiceConfig().data?.requests === 'silo';
   return (
     <Card className="h-full">
-      <CardHeader icon={Inbox} accent="var(--color-seerr)" title="Requests" subtitle="Seerr" />
+      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title="Requests" subtitle={silo ? 'Silo' : 'Seerr'} />
       <CardBody>
         <QueryState query={q} skeleton={<SkeletonRows rows={4} />}>
           {(d) => (

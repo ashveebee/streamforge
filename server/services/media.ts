@@ -8,9 +8,10 @@ import { titleWatchers } from './history.js';
 import { mediaServer } from './mediaServers.js';
 import * as plex from './plex.js';
 import * as silo from './silo.js';
-import { allLibraryItems, idKeys, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
+import { allLibraryItems, idKeys, mainSilo, notJellyfinMain, openLink, type LibraryEntry, type LibraryServer } from './mainServer.js';
 import { seerr, seerrUserFor } from './seerr.js';
 import { seasonWatch, type Me } from './watchState.js';
+import { requestSource, siloRequests } from './requestSource.js';
 
 /*
  * Title details: everything StreamForge knows about one movie or series,
@@ -49,7 +50,8 @@ interface SeerrDetails {
   mediaInfo?: {
     status?: number;
     seasons?: { seasonNumber: number; status: number }[];
-    requests?: { id: number; status: number; createdAt: string; is4k?: boolean; requestedBy?: { displayName?: string }; seasons?: { seasonNumber: number }[] }[];
+    /** Seerr's ids are numbers; Silo's are long numbers kept as strings. */
+    requests?: { id: number | string; status: number; createdAt: string; is4k?: boolean; requestedBy?: { displayName?: string }; seasons?: { seasonNumber: number }[] }[];
   };
 }
 
@@ -107,6 +109,9 @@ const remote = (imgs: ArrImage[] | undefined, type: string) => {
 };
 
 async function seerrDetails(type: MediaType, tmdbId: number) {
+  // Silo's own requests, when in use, give the same TMDb details and request state.
+  const si = await siloRequests();
+  if (si) return (await silo.titleDetail(si, type, tmdbId)) as SeerrDetails | undefined;
   if (!isConfigured('seerr')) return undefined;
   return cache.get(`seerr:details:${type}:${tmdbId}`, 60_000, () => seerr()!.get<SeerrDetails>(`/api/v1/${type}/${tmdbId}`)).catch(() => undefined);
 }
@@ -260,10 +265,14 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     is4k: !!r.is4k,
     seasons: (r.seasons ?? []).map((x) => x.seasonNumber),
   }));
+  const source = await requestSource();
   if (!canSeeRequests) {
     // Members only see their own requests.
-    const me = await seerrUserFor(ctx.userId).catch(() => undefined);
-    requests = me ? requests.filter((r) => r.requestedBy === me.displayName) : [];
+    const si = source === 'silo' ? mainSilo() : undefined;
+    const myName = si
+      ? (await silo.accountList(si).catch(() => [])).find((u) => u.id === ctx.userId)?.name
+      : (await seerrUserFor(ctx.userId).catch(() => undefined))?.displayName;
+    requests = myName ? requests.filter((r) => r.requestedBy === myName) : [];
   }
 
   const canRequestArea = opts.isAdmin || opts.can('requests');
@@ -314,10 +323,10 @@ export async function mediaDetails(ctx: JfCtx, type: MediaType, tmdbId: number, 
     })),
     requests,
     can: {
-      request: canRequestArea && isConfigured('seerr') && (type === 'movie' ? availability === 'none' || availability === 'missing' : missingSeasons > 0 || availability === 'none'),
+      request: canRequestArea && !!source && (type === 'movie' ? availability === 'none' || availability === 'missing' : missingSeasons > 0 || availability === 'none'),
       add: opts.isAdmin && arr.length === 0 && arrInstances(type === 'movie' ? 'radarr' : 'sonarr').length > 0,
       search: opts.isAdmin && arr.length > 0,
-      approve: opts.isAdmin && isConfigured('seerr'),
+      approve: opts.isAdmin && !!source,
     },
     sources: { seerr: !!s, jellyfin: !!jfItem },
   };

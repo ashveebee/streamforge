@@ -1,11 +1,11 @@
 import { db } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
-import { isConfigured } from '../settings.js';
 import { jf, type JfCtx } from './jellyfin.js';
 import { mainEmby, mainPlex, mainSilo } from './mainServer.js';
 import { remote } from './jellyfin.js';
 import * as plex from './plex.js';
 import { userRequests } from './seerr.js';
+import { requestSource } from './requestSource.js';
 
 /* The signed-in user's own activity: what to watch next, history and requests. */
 
@@ -122,11 +122,11 @@ export async function myOverview(ctx: JfCtx, serverToken?: string, userName = ''
         watchedMs: r.watched_ms,
       })),
     month: { plays: month.plays, watchedMs: month.ms },
-    requestsAvailable: isConfigured('seerr'),
+    requestsAvailable: !!(await requestSource()),
   };
 }
 
 export async function myRequests(ctx: JfCtx) {
-  if (!isConfigured('seerr')) return { linked: false, requests: [] };
+  if (!(await requestSource())) return { linked: false, requests: [] };
   return userRequests(ctx.userId);
 }

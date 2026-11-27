@@ -69,6 +69,8 @@ export const useServiceConfig = () =>
         access: Area[] | null;
         downloadClients?: boolean;
         moonfin?: { openIn: 'web' | 'app'; web?: string };
+        /** Where requests go: Seerr, or Silo's own request system. */
+        requests?: 'seerr' | 'silo';
       }>('/config'),
     staleTime: Infinity,
   });
@@ -455,7 +457,7 @@ export function useSearch(kind: ArrKind | 'lidarr' | 'readarr') {
 export function useDecideRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, decision }: { id: number; decision: 'approve' | 'decline' }) =>
+    mutationFn: ({ id, decision }: { id: number | string; decision: 'approve' | 'decline' }) =>
       api<{ ok: true }>(`/seerr/requests/${id}/${decision}`, { method: 'POST' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['seerr'] }),
   });

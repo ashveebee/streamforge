@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useHealth, useMainServer, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
+import { useHealth, useMainServer, useResetService, useSaveService, useServiceConfig, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { relative } from '@/lib/format';
@@ -525,6 +525,7 @@ function Group({ id, title, description, children }: { id: string; title: string
 function ServicesTab() {
   const q = useServiceSettings();
   const main = useMainServer();
+  const config = useServiceConfig();
   const byId = new Map(q.data?.services.map((s) => [s.id, s]));
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
   if (!q.data) return <PageLoader label="Loading settings" />;
@@ -557,6 +558,12 @@ function ServicesTab() {
                 </Fragment>
               );
             })}
+            {g.id === 'requests' && config.data?.requests === 'silo' && (
+              <li className="px-1 text-[11px] leading-relaxed text-ink-4">
+                Silo’s own requests are on, so StreamForge uses them for the Requests page, Request buttons and approvals instead of Seerr. Requests are made in each person’s
+                own name and go to Sonarr and Radarr through Silo’s request integrations.
+              </li>
+            )}
             {g.id === 'indexers' && (
               <li>
                 <Card className="transition hover:bg-white/[0.02]">

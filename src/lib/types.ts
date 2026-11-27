@@ -346,7 +346,8 @@ export interface ProwlarrOverview {
 }
 
 export interface SeerrRequest {
-  id: number;
+  /** Seerr's ids are numbers; Silo's are long numbers kept as strings. */
+  id: number | string;
   type: 'movie' | 'tv';
   title: string;
   year?: number;

@@ -188,7 +188,9 @@ export function Sidebar({
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
         {shown.flatMap((id) => {
           const s = byId.get(id);
-          const meta = SERVICES[id];
+          // With Silo's own requests, the Seerr entry becomes "Requests" in Silo's colour.
+          const siloRequests = id === 'seerr' && config.data?.requests === 'silo';
+          const meta = siloRequests ? { ...SERVICES.seerr, name: 'Requests', color: MEDIA_SERVERS.silo.color } : SERVICES[id];
           const item = (
             <NavItem
               key={id}

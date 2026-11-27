@@ -24,7 +24,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useDecideRequest } from '@/hooks/queries';
+import { useDecideRequest, useServiceConfig } from '@/hooks/queries';
 import {
   useInvalidateMedia,
   useJellyfinMedia,
@@ -472,10 +472,11 @@ function InYourApps({ d }: { d: Details }) {
 function Requests({ d }: { d: Details }) {
   const decide = useDecideRequest();
   const refresh = useInvalidateMedia();
+  const silo = useServiceConfig().data?.requests === 'silo';
   if (!d.requests.length) return null;
   return (
     <Card>
-      <CardHeader icon={Inbox} accent="var(--color-seerr)" title="Requests" subtitle="From Seerr" />
+      <CardHeader icon={Inbox} accent={silo ? 'var(--color-silo)' : 'var(--color-seerr)'} title="Requests" subtitle={silo ? 'From Silo' : 'From Seerr'} />
       <CardBody>
         <ul className="divide-y divide-line">
           {d.requests.map((r) => (

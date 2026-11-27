@@ -11,6 +11,7 @@ import * as plex from './plex.js';
 import * as silo from './silo.js';
 import { creatorName, musicLibrary } from './music.js';
 import { seerr, seerrUserFor } from './seerr.js';
+import { requestSource } from './requestSource.js';
 
 /*
  * Global search. One query fans out to every connected service the user can
@@ -245,7 +246,10 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
   for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(k === 'lidarr' ? 'Lidarr' : 'Readarr')(musicHits(k, q)));
   jobs.managed = Promise.all(managed).then((l) => l.flat());
   const canRequest = isAdmin || can('requests');
-  if (isConfigured('seerr') && (canRequest || can('seerr'))) jobs.discover = settle('Seerr')(seerrHits(q));
+  const source = await requestSource();
+  const siReq = source === 'silo' ? mainSilo() : undefined;
+  if (siReq && (canRequest || can('seerr'))) jobs.discover = settle('Silo requests')(silo.searchRequestable(siReq, q, PER_SOURCE * 2));
+  else if (source === 'seerr' && (canRequest || can('seerr'))) jobs.discover = settle('Seerr')(seerrHits(q));
   else if (isAdmin) {
     const inst = [arrInstance('radarr'), arrInstance('sonarr')].filter(Boolean) as ArrInstance[];
     jobs.discover = Promise.all(inst.map((i) => settle(`${i.name} lookup`)(lookupHits(i, q)))).then((l) => l.flat());
@@ -255,7 +259,7 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
     library: out.library ?? [],
     managed: out.managed ?? [],
     discover: (out.discover ?? []).filter((d) => d.status !== 'in-library'),
-    canRequest: canRequest && isConfigured('seerr'),
+    canRequest: canRequest && !!source,
     canAdd: isAdmin && arrInstances().length > 0,
     errors,
   };
