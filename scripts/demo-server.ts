@@ -829,6 +829,14 @@ function seerr(): SeerrOverview {
       createdAt: iso(minAgo * MIN),
     };
   });
+  if (SILO) {
+    // Where Silo sent each request, and how the download is going.
+    const progress: Record<string, SeerrRequest['delivery']> = {
+      'Iron Bloom': { phase: 'downloading', server: 'Radarr · 4K', percent: 62, eta: ahead(18 * MIN) },
+      'Small Hours': { phase: 'queued', server: 'Radarr' },
+    };
+    for (const r of list) r.delivery = progress[r.title];
+  }
   return {
     counts: { total: 342, movie: 219, tv: 123, pending: 3, approved: 12, declined: 9, processing: 6, available: 312 },
     recent: list,
@@ -944,11 +952,13 @@ if (FRESH) {
   })));
 }
 // DEMO_MAIN=plex or DEMO_MAIN=emby shows a household that only runs that server: people sign in with it and every page reads it.
-const MAIN_KIND = process.env.DEMO_MAIN === 'plex' || process.env.DEMO_MAIN === 'emby' ? process.env.DEMO_MAIN : undefined;
+// DEMO_MAIN=silo shows a Silo household, with Silo's own requests and their download progress.
+const MAIN_KIND = process.env.DEMO_MAIN === 'plex' || process.env.DEMO_MAIN === 'emby' || process.env.DEMO_MAIN === 'silo' ? process.env.DEMO_MAIN : undefined;
 const PLEX_ONLY = !!MAIN_KIND;
-const MAIN_NAME = MAIN_KIND === 'emby' ? 'Emby' : 'Plex';
-const MAIN_VERSION = MAIN_KIND === 'emby' ? '4.8.10' : '1.41.2';
-const PLEX_HOME = { id: `${MAIN_KIND ?? 'plex'}-home`, name: 'Home', type: (MAIN_KIND ?? 'plex') as 'plex' | 'emby' };
+const SILO = MAIN_KIND === 'silo';
+const MAIN_NAME = MAIN_KIND === 'emby' ? 'Emby' : SILO ? 'Silo' : 'Plex';
+const MAIN_VERSION = MAIN_KIND === 'emby' ? '4.8.10' : SILO ? '0a631fb9 (build 3105)' : '1.41.2';
+const PLEX_HOME = { id: `${MAIN_KIND ?? 'plex'}-home`, name: 'Home', type: (MAIN_KIND ?? 'plex') as 'plex' | 'emby' | 'silo' };
 // An Emby household's second server is Emby too.
 const SECOND = MAIN_KIND === 'emby' ? { id: 'emby-cabin', name: 'Cabin', type: 'emby' as const } : PLEX;
 // DEMO_SIGNED_OUT=1 shows the sign-in screen of a set-up install.
@@ -973,8 +983,10 @@ if (MAIN_KIND) {
       server,
       serverName: second ? SECOND.name : PLEX_HOME.name,
       serverType: PLEX_HOME.type,
-      client: s.client?.replace('Jellyfin', MAIN_KIND === 'emby' ? 'Emby for' : 'Plex for').replace('Plex for Apple TV', MAIN_KIND === 'emby' ? 'Emby for Apple TV' : 'Plex for Apple TV'),
-      appVersion: MAIN_KIND === 'emby' ? '3.0.20' : '8.45',
+      client: SILO
+        ? s.client?.replace('Jellyfin', 'Silo')
+        : s.client?.replace('Jellyfin', MAIN_KIND === 'emby' ? 'Emby for' : 'Plex for').replace('Plex for Apple TV', MAIN_KIND === 'emby' ? 'Emby for Apple TV' : 'Plex for Apple TV'),
+      appVersion: MAIN_KIND === 'emby' ? '3.0.20' : SILO ? '1.4.0' : '8.45',
       item: {
         ...s.item,
         poster: s.item.poster && { ...s.item.poster, server },
@@ -991,7 +1003,7 @@ if (MAIN_KIND) {
     const o = jellyfinOverview();
     res.json({
       ...o,
-      server: { ...o.server, name: 'Home', version: MAIN_VERSION, os: MAIN_KIND === 'emby' ? 'Windows 11' : 'Linux 6.8', architecture: MAIN_KIND === 'emby' ? 'X64' : undefined },
+      server: { ...o.server, name: 'Home', version: MAIN_VERSION, os: MAIN_KIND === 'emby' ? 'Windows 11' : SILO ? undefined : 'Linux 6.8', architecture: MAIN_KIND === 'emby' ? 'X64' : undefined },
       libraries: o.libraries.map((l) => ({ ...l, image: l.image && { ...l.image, server: PLEX_HOME.id } })),
     });
   });
@@ -1008,10 +1020,11 @@ if (MAIN_KIND) {
     const h = enabledHealth();
     const jf = h.services.find((s) => s.id === 'jellyfin')!;
     const row = (id: string, name: string, ms: number): ServiceHealth => ({ ...jf, id, instance: id, serverType: PLEX_HOME.type, name: `${MAIN_NAME} · ${name}`, version: MAIN_VERSION, latencyMs: ms, meta: { server: name } });
-    const rest = h.services.filter((s) => s.id !== 'jellyfin' && !s.serverType);
+    // A Silo household uses Silo's own requests, so it has no Seerr.
+    const rest = h.services.filter((s) => s.id !== 'jellyfin' && !s.serverType && !(SILO && s.id === 'seerr'));
     return { ...h, services: [row(PLEX_HOME.id, 'Home', 34), ...rest] };
   }));
-  const port = MAIN_KIND === 'emby' ? 8096 : 32400;
+  const port = MAIN_KIND === 'emby' ? 8096 : SILO ? 8090 : 32400;
   app.get('/api/settings/media-servers', json(() => ({
     servers: [
       { id: PLEX_HOME.id, type: PLEX_HOME.type, name: 'Home', url: `http://192.168.1.10:${port}`, publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••K2pa', createdAt: '2026-08-01T10:00:00.000Z', main: true },
@@ -1040,6 +1053,8 @@ app.get('/api/config', json(() => ({
         ...(SINGLE ? [] : [{ ...EMBY, primary: false }, { ...PLEX, primary: false }]),
       ],
   mainServer: MAIN_KIND ?? 'jellyfin',
+  // With Silo, requests go through Silo's own request system.
+  requests: SILO ? 'silo' : 'seerr',
   kometa: true,
   access: null,
   downloadClients: true,
@@ -1880,6 +1895,13 @@ app.get('/api/media/:type/:id', (req, res) => {
     requests: pending.map((q) => ({ id: q.id, status: q.status, requestedBy: q.requestedBy, createdAt: q.createdAt, is4k: q.is4k, seasons: q.seasons })),
     can: { request: !inLib || (tv && seasons!.some((x) => x.status !== 'available')), add: !inLib, search: inLib, approve: true },
     sources: { seerr: true, jellyfin: inLib },
+    // More like this: other demo titles, some in the library and one requested.
+    similar: OSCAR_TITLES.filter((x) => x !== t.title)
+      .slice(0, 10)
+      .map((x, i) => {
+        const f = find(x);
+        return { type: f.kind === 'movie' ? 'movie' : 'tv', tmdbId: tmdbOf(f.title), title: f.title, year: f.year, poster: poster(x), status: i % 4 === 1 ? 'requested' : i % 3 === 0 ? 'none' : 'available' };
+      }),
   };
   // Three servers: the movie is on Homelab (two copies) and Cabin, not on Office.
   if (SINGLE) body.availableOn = body.availableOn.slice(0, 1);

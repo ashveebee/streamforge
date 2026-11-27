@@ -148,6 +148,7 @@ const router = createBrowserRouter([
       { path: '/radarr', element: page(<Radarr />, 'radarr') },
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },
       { path: '/seerr', element: page(<Seerr />, 'seerr') },
+      { path: '/requests', element: page(<Seerr />, 'seerr') },
       { path: '/infinidisk', element: page(<Infinidisk />, 'infinidisk') },
       { path: '/bazarr', element: page(<Bazarr />, 'bazarr') },
       { path: '/lidarr', element: page(<Lidarr />, 'lidarr') },

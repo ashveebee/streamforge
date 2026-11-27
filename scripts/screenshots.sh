@@ -5,6 +5,7 @@
 #   npm run demo                    ./scripts/screenshots.sh         # Jellyfin household
 #   DEMO_MAIN=plex npm run demo     ./scripts/screenshots.sh plex    # Plex-only household
 #   DEMO_MAIN=emby npm run demo     ./scripts/screenshots.sh emby    # Emby-only household
+#   DEMO_MAIN=silo npm run demo     ./scripts/screenshots.sh silo    # Silo household, with Silo's requests
 #   DEMO_SETUP=1 npm run demo       ./scripts/screenshots.sh setup   # first run, step 1
 #   DEMO_APPS=1 npm run demo        ./scripts/screenshots.sh apps    # first run, step 2
 #
@@ -68,7 +69,7 @@ case "$MODE" in
     shot audit       /audit       1440,900
     shot bazarr      /bazarr      1440,1100
     shot buffering   /now-playing/buffering 1440,900
-    shot title       /media/movie/1000 1440,1300
+    shot title       /media/movie/1000 1440,1950
     shot title-tv    /media/tv/1013    1440,1300
     # Phone-sized, for the website's "in your pocket" section.
     shot phone-dashboard   /                 390,844 3
@@ -82,12 +83,17 @@ case "$MODE" in
   emby)
     shot emby /emby 1440,900
     ;;
+  silo)
+    shot silo-only     /         1440,900
+    shot silo          /silo     1440,900
+    shot requests-silo /requests 1440,1100
+    ;;
   setup)
     shot setup /login 1440,900
     ;;
   apps)
     shot setup-apps /setup 1440,1500
     ;;
-  *) echo "Unknown mode: $MODE (all, plex, emby, setup or apps)" >&2; exit 1 ;;
+  *) echo "Unknown mode: $MODE (all, plex, emby, silo, setup or apps)" >&2; exit 1 ;;
 esac
 echo "Saved to $OUT"

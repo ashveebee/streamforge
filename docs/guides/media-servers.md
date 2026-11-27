@@ -44,7 +44,8 @@ On first run, StreamForge asks which media server you use:
      away.
 
   StreamForge's Requests page then shows where each request went and how its
-  download is going.
+  download is going. With Silo's requests on, **Requests** sits in the main
+  menu (not under Services), with a count of requests waiting for approval.
 
 People then sign in to StreamForge with their account on that server, and its
 admins are StreamForge admins. Everything in StreamForge reads it: Now

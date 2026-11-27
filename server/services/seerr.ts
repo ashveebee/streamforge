@@ -208,7 +208,7 @@ async function checkPending() {
     emit('request_pending', {
       title: `New request: ${r.title}${r.year ? ` (${r.year})` : ''}`,
       message: `${r.requestedBy} requested this ${r.type === 'tv' ? `series${r.seasons.length ? ` (season ${r.seasons.join(', ')})` : ''}` : 'movie'}${r.is4k ? ' in 4K' : ''}.`,
-      url: '/seerr',
+      url: si ? '/requests' : '/seerr',
     });
   }
 }

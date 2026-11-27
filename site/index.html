@@ -33,6 +33,7 @@
       --jellyfin: #aa5cc3;
       --emby: #52b54b;
       --plex: #e5a00d;
+      --silo: #8fb3d9;
       --sonarr: #35c5f4;
       --radarr: #ffc230;
       --prowlarr: #fe7a34;
@@ -531,7 +532,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Request it, add it to Sonarr or Radarr, or search for a better copy</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="2600" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
+          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="3900" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
         </div>
 
         <div class="features">
@@ -710,6 +711,7 @@
           <button class="tab" role="tab" type="button" id="tab-jellyfin" aria-controls="panel-jellyfin" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Jellyfin</button>
           <button class="tab" role="tab" type="button" id="tab-emby" aria-controls="panel-emby" aria-selected="false" style="--c:var(--emby)" tabindex="-1"><i></i>Emby</button>
           <button class="tab" role="tab" type="button" id="tab-plex" aria-controls="panel-plex" aria-selected="false" style="--c:var(--plex)" tabindex="-1"><i></i>Plex</button>
+          <button class="tab" role="tab" type="button" id="tab-silo" aria-controls="panel-silo" aria-selected="false" style="--c:var(--silo)" tabindex="-1"><i></i>Silo</button>
           <button class="tab" role="tab" type="button" id="tab-stats" aria-controls="panel-stats" aria-selected="false" style="--c:var(--violet)" tabindex="-1"><i></i>Stats</button>
           <button class="tab" role="tab" type="button" id="tab-library" aria-controls="panel-library" aria-selected="false" style="--c:var(--ok)" tabindex="-1"><i></i>Library health</button>
           <button class="tab" role="tab" type="button" id="tab-seerr" aria-controls="panel-seerr" aria-selected="false" style="--c:var(--seerr)" tabindex="-1"><i></i>Requests</button>
@@ -720,7 +722,7 @@
           <button class="tab" role="tab" type="button" id="tab-audit" aria-controls="panel-audit" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Audit log</button>
         </div>
         <div class="panel" role="tabpanel" id="panel-title" aria-labelledby="tab-title">
-          <a class="shot" href="screenshots/title.jpg"><img src="screenshots/title.jpg" width="2880" height="2600" loading="lazy" alt="A movie page with its poster, watch progress, media info for two versions, audio and subtitle tracks, and its details"></a>
+          <a class="shot" href="screenshots/title.jpg"><img src="screenshots/title.jpg" width="2880" height="3900" loading="lazy" alt="A movie page with its poster, watch progress, media info for two versions, audio and subtitle tracks, and its details"></a>
           <div class="txt">
             <div class="eyebrow">Title pages</div>
             <h3>Everything about a movie or show, in one place</h3>
@@ -731,6 +733,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Resolution, HDR, codecs, bitrate and every audio and subtitle track</li>
               <li><svg class="i"><use href="#i-check"/></svg>Request it, request missing seasons, or add it to Sonarr or Radarr</li>
               <li><svg class="i"><use href="#i-check"/></svg>Cast, trailer, crew, studios and links to IMDb and TMDB</li>
+              <li><svg class="i"><use href="#i-check"/></svg>More like this: similar titles, marked when they're in your library or requested</li>
             </ul>
           </div>
         </div>
@@ -792,6 +795,20 @@
             </ul>
           </div>
         </div>
+        <div class="panel" role="tabpanel" id="panel-silo" aria-labelledby="tab-silo" hidden>
+          <a class="shot" href="screenshots/silo-only.jpg"><img src="screenshots/silo-only.jpg" width="2880" height="1800" loading="lazy" alt="The dashboard of a Silo install: streams on Silo, a Requests entry in the menu with three waiting, and service health"></a>
+          <div class="txt">
+            <div class="eyebrow">Silo</div>
+            <h3>Run Silo? Pick it at setup</h3>
+            <p>Choose Silo on first run and sign in with a Silo admin account. StreamForge talks to Silo's own API, and everyone signs in with their Silo account.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Now Playing with pause, message and stop</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Stats and history with watch time, from Silo's playback history</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Silo's own requests, with approvals and download progress</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Silo is pre-release; its API may change before 1.0</li>
+            </ul>
+          </div>
+        </div>
         <div class="panel" role="tabpanel" id="panel-stats" aria-labelledby="tab-stats" hidden>
           <a class="shot" href="screenshots/stats.jpg"><img src="screenshots/stats.jpg" width="2880" height="2200" loading="lazy" alt="Stats page with plays per day split by direct play and transcode, and top viewers and titles"></a>
           <div class="txt">
@@ -823,11 +840,12 @@
         <div class="panel" role="tabpanel" id="panel-seerr" aria-labelledby="tab-seerr" hidden>
           <a class="shot" href="screenshots/seerr.jpg"><img src="screenshots/seerr.jpg" width="2880" height="1800" loading="lazy" alt="Seerr page with requests awaiting approval and recent requests"></a>
           <div class="txt">
-            <div class="eyebrow">Seerr</div>
+            <div class="eyebrow">Seerr or Silo</div>
             <h3>Requests, handled from anywhere</h3>
-            <p>Everything waiting for approval and everything recently requested, with who asked and when.</p>
+            <p>Everything waiting for approval and everything recently requested, with who asked and when. With Silo, its own requests are used instead of Seerr, with each one's download progress.</p>
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Approve or decline in one click</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Silo: where each request went and how its download is going</li>
               <li><svg class="i"><use href="#i-check"/></svg>Movies vs series and the request mix</li>
               <li><svg class="i"><use href="#i-check"/></svg>Members request in their own name</li>
               <li><svg class="i"><use href="#i-check"/></svg>A notification when someone asks for something</li>
