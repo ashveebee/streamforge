@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
 import { ServiceIcon } from '@/components/ui/ServiceIcon';
 import { inputCls } from '@/components/ui/Input';
+import { t } from '@/i18n';
 
 export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'Jellyfin', emby: 'Emby', plex: 'Plex', silo: 'Silo' };
 
@@ -16,21 +17,21 @@ export const SERVER_TYPE_NAMES: Record<MediaServerType, string> = { jellyfin: 'J
 const TYPE_HELP: Record<'plex' | 'emby' | 'silo', { placeholder: string; key: string; hint: string; intro: string }> = {
   emby: {
     placeholder: 'http://192.168.1.20:8096',
-    key: 'API key',
-    hint: 'Create an API key in Emby under Settings → Advanced → API Keys.',
-    intro: 'People sign in with their Emby account on this server.',
+    get key() { return t('settings.service.apiKey'); },
+    get hint() { return t('sec.main.embyHint'); },
+    get intro() { return t('sec.main.embyIntro'); },
   },
   plex: {
     placeholder: 'http://192.168.1.20:32400',
-    key: 'Plex token',
-    hint: 'The server owner’s Plex token (Plex’s “Finding an authentication token” help article shows how).',
-    intro: 'People sign in with their Plex account on this server. Plex streams can be stopped, not paused or messaged.',
+    get key() { return t('sec.main.plexToken'); },
+    get hint() { return t('sec.main.plexHint'); },
+    get intro() { return t('sec.main.plexIntro'); },
   },
   silo: {
     placeholder: 'http://192.168.1.20:8090',
-    key: 'API key',
-    hint: 'An admin API key (Settings → API Keys in Silo). Setup created one for StreamForge.',
-    intro: 'People sign in with their Silo account on this server. Silo is pre-release; StreamForge uses its /api/v2.',
+    get key() { return t('settings.service.apiKey'); },
+    get hint() { return t('sec.main.siloHint'); },
+    get intro() { return t('sec.main.siloIntro'); },
   },
 };
 
@@ -62,9 +63,9 @@ function ServerForm({ srv }: { srv: MediaServerView }) {
   return (
     <form onSubmit={onSubmit} className="space-y-3 border-t border-line px-5 py-4">
       <div className="grid gap-3 md:grid-cols-[minmax(120px,0.7fr)_minmax(180px,1.3fr)_minmax(180px,1fr)]">
-        <input aria-label="Server name" className={cn(inputCls, 'h-9')} placeholder="Name" value={form.name} aria-invalid={err?.field === 'name'} onChange={(e) => set('name', e.target.value)} />
+        <input aria-label={t('sec.main.name')} className={cn(inputCls, 'h-9')} placeholder={t('kometa.form.name')} value={form.name} aria-invalid={err?.field === 'name'} onChange={(e) => set('name', e.target.value)} />
         <input
-          aria-label="Server address"
+          aria-label={t('settings.service.address')}
           className={cn(inputCls, 'h-9')}
           type="url"
           inputMode="url"
@@ -83,7 +84,7 @@ function ServerForm({ srv }: { srv: MediaServerView }) {
             type="password"
             autoComplete="new-password"
             spellCheck={false}
-            placeholder={srv.apiKeySet ? `Saved ${srv.apiKeyHint ?? '••••'} — blank keeps it` : help.key}
+            placeholder={srv.apiKeySet ? t('sec.savedHint', { hint: srv.apiKeyHint ?? '••••' }) : help.key}
             value={form.apiKey}
             aria-invalid={err?.field === 'apiKey'}
             onChange={(e) => set('apiKey', e.target.value)}
@@ -91,13 +92,13 @@ function ServerForm({ srv }: { srv: MediaServerView }) {
         </div>
       </div>
       <input
-        aria-label="Public address (optional)"
+        aria-label={t('settings.service.publicAddress')}
         className={cn(inputCls, 'h-9')}
         type="url"
         inputMode="url"
         spellCheck={false}
         autoComplete="off"
-        placeholder="Public address, if you open it at a different one (optional)"
+        placeholder={t('sec.main.publicPh')}
         value={form.publicUrl}
         aria-invalid={err?.field === 'publicUrl'}
         onChange={(e) => set('publicUrl', e.target.value)}
@@ -108,7 +109,7 @@ function ServerForm({ srv }: { srv: MediaServerView }) {
             <span className="text-bad" role="alert">{err.message}</span>
           ) : test.data ? (
             test.data.ok ? (
-              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> Connected{test.data.version ? ` · v${test.data.version}` : ''}</span>
+              <span className="inline-flex items-center gap-1 text-ok"><CircleCheck className="size-3.5" /> {t('settings.service.connected')}{test.data.version ? ` · v${test.data.version}` : ''}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-bad"><CircleX className="size-3.5" /> {test.data.message}</span>
             )
@@ -118,11 +119,11 @@ function ServerForm({ srv }: { srv: MediaServerView }) {
         </div>
         <Button type="button" size="sm" disabled={busy || !form.url.trim()} onClick={() => test.mutate(input())}>
           {test.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />}
-          Test
+          {t('sec.sso.test')}
         </Button>
         <Button type="submit" variant="primary" size="sm" disabled={busy || !dirty}>
           {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-          Save
+          {t('common.save')}
         </Button>
       </div>
     </form>
@@ -135,9 +136,9 @@ export function MediaServerNote({ type }: { type: MediaServerType }) {
   const ignored = q.data?.ignored ?? [];
   return (
     <p className="px-1 text-[11px] leading-relaxed text-ink-4">
-      StreamForge is set up for {SERVER_TYPE_NAMES[type]}. Each install watches one media server, chosen at setup; to use a different one, start a new install with its own data volume.
+      {t('sec.main.note', { server: SERVER_TYPE_NAMES[type] })}
       {ignored.length > 0 && (
-        <> {ignored.length === 1 ? `“${ignored[0]!.name}” (${SERVER_TYPE_NAMES[ignored[0]!.type]})` : `${ignored.length} other media servers`}, added in an earlier version, {ignored.length === 1 ? 'is' : 'are'} no longer watched.</>
+        <> {ignored.length === 1 ? t('sec.main.ignoredOne', { name: ignored[0]!.name, type: SERVER_TYPE_NAMES[ignored[0]!.type] }) : t('sec.main.ignoredMany', { count: ignored.length })}</>
       )}
     </p>
   );
@@ -156,9 +157,9 @@ export function MainServerSection({ type }: { type: 'plex' | 'emby' | 'silo' }) 
             <h3 className="text-[15px] font-semibold">{SERVER_TYPE_NAMES[type]}</h3>
             <p className="text-[11px] text-ink-4">{TYPE_HELP[type].intro}</p>
           </div>
-          <Pill tone="brand">Your media server</Pill>
+          <Pill tone="brand">{t('sec.main.yours')}</Pill>
         </header>
-        {srv ? <ServerForm srv={srv} /> : <p className="border-t border-line px-5 py-4 text-xs text-ink-4">{q.isError ? 'Couldn’t load the server settings.' : 'Loading…'}</p>}
+        {srv ? <ServerForm srv={srv} /> : <p className="border-t border-line px-5 py-4 text-xs text-ink-4">{q.isError ? t('sec.main.loadError') : `${t('common.loading')}…`}</p>}
       </Card>
       <MediaServerNote type={type} />
     </li>

@@ -14,7 +14,7 @@ import { StatTile } from '@/components/ui/Stat';
 import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState, SkeletonRows } from '@/components/ui/States';
-import { REQUEST_TONE } from '@/components/widgets/RequestsWidget';
+import { REQUEST_TONE, requestStatusLabel } from '@/components/widgets/RequestsWidget';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { TitleLink } from '@/components/ui/TitleLink';
 import { ScrollRow } from '@/components/ui/ScrollRow';
@@ -134,7 +134,7 @@ export default function MePage() {
                               <div className="text-[11px] text-ink-4">{r.type === 'tv' ? t('me.series') : t('me.movie')} · {t('me.requestedWhen', { when: relative(r.createdAt) })}</div>
                             </div>
                             <span className={cn('shrink-0 rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold capitalize', REQUEST_TONE[r.status])}>
-                              {r.status === 'approved' && r.mediaStatus === 'available' ? 'available' : r.status === 'approved' ? r.mediaStatus : r.status}
+                              {requestStatusLabel(r.status === 'approved' && r.mediaStatus === 'available' ? 'available' : r.status === 'approved' ? r.mediaStatus : r.status)}
                             </span>
                           </li>
                         ))}

@@ -22,6 +22,7 @@ const en = {
     username: 'Username',
     optional: 'Optional',
     connecting: 'Contacting server…',
+    unreachable: 'Cannot reach the StreamForge server',
   },
   time: {
     justNow: 'just now',

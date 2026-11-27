@@ -11,13 +11,14 @@ import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { DRIVE_HEALTH } from '@/components/widgets/StorageWidget';
+import { t } from '@/i18n';
 
 export default function InfinidiskPage() {
   const q = useInfinidisk();
   return (
     <>
       <ServiceHeader id="infinidisk" />
-      <QueryState query={q} skeleton={<PageLoader label="Loading storage" hint="Reading drives and capacity…" />}>
+      <QueryState query={q} skeleton={<PageLoader label={t('svc.inf.loading')} hint={t('svc.inf.loadingHint')} />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-3">
@@ -26,28 +27,28 @@ export default function InfinidiskPage() {
                   <RingGauge value={d.totals.usage} size={180} stroke={14} color={usageColor(d.totals.usage)}>
                     <div>
                       <div className="text-3xl font-semibold tabular">{pct(d.totals.usage)}</div>
-                      <div className="text-xs text-ink-4">of {bytes(d.totals.total)}</div>
+                      <div className="text-xs text-ink-4">{t('watch.digest.of', { total: bytes(d.totals.total) })}</div>
                     </div>
                   </RingGauge>
                   <div className="grid w-full grid-cols-2 gap-3 text-center">
-                    <div className="rounded-xl border border-line bg-white/[0.02] p-3"><div className="font-semibold tabular">{bytes(d.totals.used)}</div><div className="text-[11px] text-ink-4">Used</div></div>
-                    <div className="rounded-xl border border-line bg-white/[0.02] p-3"><div className="font-semibold tabular">{bytes(d.totals.free)}</div><div className="text-[11px] text-ink-4">Available</div></div>
+                    <div className="rounded-xl border border-line bg-white/[0.02] p-3"><div className="font-semibold tabular">{bytes(d.totals.used)}</div><div className="text-[11px] text-ink-4">{t('widgets.storage.usedLabel')}</div></div>
+                    <div className="rounded-xl border border-line bg-white/[0.02] p-3"><div className="font-semibold tabular">{bytes(d.totals.free)}</div><div className="text-[11px] text-ink-4">{t('widgets.storage.available')}</div></div>
                   </div>
                 </CardBody>
               </Card>
               <div className="grid grid-cols-2 gap-3 lg:col-span-2">
-                <StatTile label="Drives" value={d.counts.total} icon={HardDrive} accent="var(--color-infinidisk)" hint={d.sources.remote ? `Infinidisk API${d.sources.local ? ` + ${d.sources.local} local mounts` : ''}` : `${d.sources.local} local mounts`} />
-                <StatTile label="Healthy" value={d.counts.healthy} icon={CircleCheck} accent="var(--color-ok)" />
-                <StatTile label="Warnings" value={d.counts.warning} icon={TriangleAlert} accent="var(--color-warn)" />
-                <StatTile label="Critical / offline" value={d.counts.critical + d.counts.offline} icon={XCircle} accent="var(--color-bad)" />
+                <StatTile label={t('svc.inf.drives')} value={d.counts.total} icon={HardDrive} accent="var(--color-infinidisk)" hint={d.sources.remote ? `Infinidisk API${d.sources.local ? ` + ${t('svc.inf.local', { count: d.sources.local })}` : ''}` : t('svc.inf.local', { count: d.sources.local })} />
+                <StatTile label={t('ui.drive.healthy')} value={d.counts.healthy} icon={CircleCheck} accent="var(--color-ok)" />
+                <StatTile label={t('svc.inf.warnings')} value={d.counts.warning} icon={TriangleAlert} accent="var(--color-warn)" />
+                <StatTile label={t('svc.inf.critical')} value={d.counts.critical + d.counts.offline} icon={XCircle} accent="var(--color-bad)" />
               </div>
             </div>
 
             <Card>
-              <CardHeader icon={HardDrive} accent="var(--color-infinidisk)" title="Mounted drives" subtitle={`${d.drives.length} volumes`} />
+              <CardHeader icon={HardDrive} accent="var(--color-infinidisk)" title={t('svc.inf.mounted')} subtitle={t('svc.inf.volumes', { count: d.drives.length })} />
               <CardBody>
                 {d.drives.length === 0 ? (
-                  <EmptyState icon={HardDrive} title="No drives reported" description="Check INFINIDISK_STATUS_PATH or INFINIDISK_MOUNTS on the server." />
+                  <EmptyState icon={HardDrive} title={t('svc.inf.none')} description={t('svc.inf.noneHint')} />
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                     {d.drives.map((dr, i) => {
@@ -70,17 +71,17 @@ export default function InfinidiskPage() {
                             </div>
                             <span className={cn('text-xs font-medium', h.tone)}>{h.label}</span>
                           </div>
-                          <ProgressBar value={dr.usage} height={6} className="mt-4" glow={false} color={usageColor(dr.usage) ?? 'linear-gradient(90deg,#2dd4bf,#22d3ee)'} label={`${dr.name} usage`} />
+                          <ProgressBar value={dr.usage} height={6} className="mt-4" glow={false} color={usageColor(dr.usage) ?? 'linear-gradient(90deg,#2dd4bf,#22d3ee)'} label={t('ui.usage', { name: dr.name })} />
                           <div className="mt-2 flex justify-between text-xs text-ink-3 tabular">
-                            <span>{bytes(dr.used)} used</span>
-                            <span>{bytes(dr.free)} free</span>
+                            <span>{t('svc.inf.used', { size: bytes(dr.used) })}</span>
+                            <span>{t('library.dl.free', { size: bytes(dr.free) })}</span>
                           </div>
                           <div className="mt-3 flex flex-wrap items-center gap-1.5">
                             <Pill>{bytes(dr.total)}</Pill>
                             {dr.filesystem && <Pill>{dr.filesystem}</Pill>}
-                            {dr.readOnly && <Pill tone="warn">Read-only</Pill>}
+                            {dr.readOnly && <Pill tone="warn">{t('svc.inf.readOnly')}</Pill>}
                             {dr.temperature !== undefined && <Pill tone={dr.temperature > 55 ? 'warn' : 'neutral'}><Thermometer className="size-3" />{Math.round(dr.temperature)}°C</Pill>}
-                            <Pill>{dr.source === 'remote' ? 'API' : 'Local'}</Pill>
+                            <Pill>{dr.source === 'remote' ? 'API' : t('svc.inf.localTag')}</Pill>
                           </div>
                           {dr.healthDetail && dr.health !== 'healthy' && <p className={cn('mt-2 text-xs', h.tone)}>{dr.healthDetail}</p>}
                         </motion.div>

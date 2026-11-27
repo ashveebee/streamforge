@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { ArtworkRef } from '@/lib/api';
+import { t } from '@/i18n';
 
 export type ServerType = 'jellyfin' | 'plex' | 'emby' | 'silo';
 export type SourceType = 'tmdb_list' | 'imdb_list' | 'trakt_list' | 'tmdb_trending_weekly' | 'tmdb_popular' | 'tmdb_keyword' | 'manual';
@@ -111,11 +112,11 @@ export { SERVER_COLOR, SERVER_NAME } from '@/components/ui/ServerTag';
 export const KOMETA_COLOR = '#f59e0b';
 
 export const SOURCE_LABEL: Record<SourceType, string> = {
-  tmdb_list: 'TMDb list',
-  imdb_list: 'IMDb list',
-  trakt_list: 'Trakt list',
-  tmdb_trending_weekly: 'Trending on TMDb',
-  tmdb_popular: 'Popular on TMDb',
-  tmdb_keyword: 'TMDb keyword',
-  manual: 'Hand-picked',
+  get tmdb_list() { return t('kometa.source.tmdb_list'); },
+  get imdb_list() { return t('kometa.source.imdb_list'); },
+  get trakt_list() { return t('kometa.source.trakt_list'); },
+  get tmdb_trending_weekly() { return t('kometa.source.tmdb_trending_weekly'); },
+  get tmdb_popular() { return t('kometa.source.tmdb_popular'); },
+  get tmdb_keyword() { return t('kometa.source.tmdb_keyword'); },
+  get manual() { return t('kometa.source.manual'); },
 };

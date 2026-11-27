@@ -1,4 +1,5 @@
 import { api } from './api';
+import { t } from '@/i18n';
 
 /* Web push helpers for "notify this device". */
 
@@ -8,11 +9,11 @@ export function pushSupport(): { ok: true } | { ok: false; reason: string } {
     return {
       ok: false,
       reason: ios
-        ? 'On iPhone and iPad, add StreamForge to your Home Screen first (Share → Add to Home Screen), then open it from there.'
-        : 'This browser doesn’t support push notifications.',
+        ? t('sec.notify.ios')
+        : t('sec.notify.unsupported'),
     };
   }
-  if (!window.isSecureContext) return { ok: false, reason: 'Push notifications need StreamForge to be served over HTTPS.' };
+  if (!window.isSecureContext) return { ok: false, reason: t('sec.notify.https') };
   return { ok: true };
 }
 
@@ -45,7 +46,7 @@ export async function isSubscribed() {
 
 export async function subscribe(publicKey: string) {
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Notifications are blocked for this site. Allow them in your browser settings and try again.');
+  if (permission !== 'granted') throw new Error(t('sec.notify.blocked'));
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });

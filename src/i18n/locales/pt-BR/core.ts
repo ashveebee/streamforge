@@ -19,6 +19,7 @@ const ptBR: Core = {
     username: 'Usuário',
     optional: 'Opcional',
     connecting: 'Contatando o servidor…',
+    unreachable: 'Não foi possível acessar o servidor do StreamForge',
   },
   time: {
     justNow: 'agora mesmo',

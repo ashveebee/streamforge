@@ -19,6 +19,7 @@ const es: Core = {
     username: 'Usuario',
     optional: 'Opcional',
     connecting: 'Contactando con el servidor…',
+    unreachable: 'No se puede contactar con el servidor de StreamForge',
   },
   time: {
     justNow: 'ahora mismo',

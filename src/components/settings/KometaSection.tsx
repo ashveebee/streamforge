@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
 import { useKometaStatus } from '@/components/widgets/KometaCard';
 import { useCollections, type CollectionSettings } from '@/hooks/useKometa';
+import { t } from '@/i18n';
 
 interface KometaSettings {
   enabled: boolean;
@@ -33,28 +34,27 @@ function CollectionsSetup({ s, onSave, saving }: { s: CollectionSettings; onSave
   const dirty = dir !== s.configDir || times !== s.runTimes.join(', ') || !!key;
   return (
     <div className="space-y-3 px-5 py-4">
-      <div className="text-[13px] font-medium">Collections from StreamForge</div>
+      <div className="text-[13px] font-medium">{t('sec.kometa.collections')}</div>
       <p className="text-[11px] leading-relaxed text-ink-4">
-        Mount Kometa’s config folder into StreamForge read-write (for example <code className="font-mono">- /opt/kometa/config:/kometa</code>). StreamForge only writes its own files, in a{' '}
-        <code className="font-mono">streamforge</code> folder inside it.
+        {t('sec.kometa.mount')}
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-3">Kometa config folder</span>
+          <span className="mb-1 block text-xs font-medium text-ink-3">{t('sec.kometa.folder')}</span>
           <input className={field} value={dir} placeholder="/kometa" spellCheck={false} onChange={(e) => setDir(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-3">Kometa runs at</span>
+          <span className="mb-1 block text-xs font-medium text-ink-3">{t('sec.kometa.runsAt')}</span>
           <input className={field} value={times} placeholder="05:00" spellCheck={false} onChange={(e) => setTimes(e.target.value)} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-3">TMDb API key</span>
+          <span className="mb-1 block text-xs font-medium text-ink-3">{t('sec.kometa.tmdb')}</span>
           <input
             className={field}
             type="password"
             autoComplete="new-password"
             value={key}
-            placeholder={s.tmdbKeySet ? 'Saved — blank keeps it' : s.tmdbKeyFromKometa ? 'Using Kometa’s key' : 'Optional'}
+            placeholder={s.tmdbKeySet ? t('sec.savedBlank') : s.tmdbKeyFromKometa ? t('sec.kometa.usingKometa') : t('common.optional')}
             onChange={(e) => setKey(e.target.value)}
           />
         </label>
@@ -62,24 +62,23 @@ function CollectionsSetup({ s, onSave, saving }: { s: CollectionSettings; onSave
       <div className="flex flex-wrap items-center gap-2">
         <span className={`mr-auto text-[11px] ${s.configDir && !s.folder.ok ? 'text-warn' : 'text-ink-4'}`}>
           {!s.configDir
-            ? 'Run times are Kometa’s KOMETA_TIMES; they’re used to say when new collections will appear.'
+            ? t('sec.kometa.runTimes')
             : s.folder.ok
-              ? `Folder found${s.folder.hasConfig ? ', with Kometa’s config.yml' : ' (no config.yml in it — is it the right folder?)'}.${s.tmdbKeyFromKometa ? ' TMDb key read from config.yml.' : ''}`
+              ? `${s.folder.hasConfig ? t('sec.kometa.foundConfig') : t('sec.kometa.foundNoConfig')}${s.tmdbKeyFromKometa ? ` ${t('sec.kometa.keyRead')}` : ''}`
               : s.folder.message}
         </span>
         <Button size="sm" variant="primary" disabled={!dirty || saving} onClick={() => onSave({ configDir: dir, runTimes: times.split(/[\s,]+/).filter(Boolean), ...(key ? { tmdbKey: key } : {}) })}>
-          Save
+          {t('common.save')}
         </Button>
       </div>
       {yaml && (
         <div>
-          <div className="mb-1.5 text-[12px] font-medium text-ink-2">Then load StreamForge’s files in Kometa’s config.yml</div>
+          <div className="mb-1.5 text-[12px] font-medium text-ink-2">{t('sec.kometa.thenLoad')}</div>
           <pre className="overflow-x-auto rounded-xl border border-line bg-black/30 p-3 font-mono text-[11.5px] leading-relaxed text-ink-2">{yaml}</pre>
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-4">
-            Add the <code className="font-mono">- file:</code> line to each library’s existing <code className="font-mono">collection_files</code>. Library names must match Kometa’s. Jellyfin and Emby
-            libraries need Kometa’s develop build for now.
+            {t('sec.kometa.addLine')}
           </p>
-          <div className="mt-2"><CopyButton text={yaml} label="Copy" /></div>
+          <div className="mt-2"><CopyButton text={yaml} label={t('sec.mfa.copy')} /></div>
         </div>
       )}
     </div>
@@ -99,7 +98,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         });
       }}
     >
-      {done ? <Check className="size-3.5" /> : <Copy className="size-3.5" />} {done ? 'Copied' : label}
+      {done ? <Check className="size-3.5" /> : <Copy className="size-3.5" />} {done ? t('sec.kometa.copied') : label}
     </Button>
   );
 }
@@ -131,45 +130,42 @@ export function KometaSection({ grouped = false }: { grouped?: boolean } = {}) {
         <Images className="size-4 text-[#f59e0b]" /> Kometa
       </h2>
       <p className={cn('mb-3 text-xs text-ink-3', grouped && 'px-1')}>
-        Kometa builds collections, overlays and playlists on a schedule. Point its webhooks at StreamForge to see each run, its errors and what changed, and get alerts when a
-        run fails. Connect its config folder to make collections from StreamForge.
+        {t('sec.kometa.intro')}
       </p>
       <Card>
         <div className="divide-y divide-line">
           <div className="flex items-center gap-3 px-5 py-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">Receive Kometa webhooks</div>
+              <div className="text-[13px] font-medium">{t('sec.kometa.receive')}</div>
               <div className="text-[11px] text-ink-4">
                 {!d.enabled
-                  ? 'Off: StreamForge ignores anything sent to the address.'
+                  ? t('sec.kometa.off')
                   : status.data?.waiting
-                    ? 'Waiting for Kometa’s first message.'
+                    ? t('sec.kometa.waiting')
                     : heard
-                      ? `Last heard from Kometa ${relative(heard)}.`
-                      : 'On.'}
+                      ? t('sec.kometa.heard', { when: relative(heard) })
+                      : `${t('widgets.cleanup.on')}.`}
               </div>
             </div>
-            <Switch checked={d.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v })} label="Receive Kometa webhooks" />
+            <Switch checked={d.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v })} label={t('sec.kometa.receive')} />
           </div>
           {d.enabled && (
             <div className="space-y-3 px-5 py-4">
               <div>
-                <div className="mb-1.5 text-[12px] font-medium text-ink-2">1. Add this to Kometa’s <code className="font-mono">config.yml</code></div>
+                <div className="mb-1.5 text-[12px] font-medium text-ink-2">{t('sec.kometa.step1')}</div>
                 <pre className="overflow-x-auto rounded-xl border border-line bg-black/30 p-3 font-mono text-[11.5px] leading-relaxed text-ink-2">{yaml}</pre>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <CopyButton text={yaml} label="Copy config" />
-                  <CopyButton text={url} label="Copy address" />
+                  <CopyButton text={yaml} label={t('sec.kometa.copyConfig')} />
+                  <CopyButton text={url} label={t('sec.kometa.copyAddress')} />
                 </div>
               </div>
               <p className="text-[11px] leading-relaxed text-ink-4">
-                2. The address must be reachable from where Kometa runs. If Kometa is in Docker, swap the start of it for StreamForge’s LAN address or container name, such as{' '}
-                <code className="font-mono">http://streamforge:4000</code>. Keep the rest: the long code at the end is what lets Kometa in, so keep it private. Already have
-                webhooks set up for Discord or Notifiarr? Make each entry a list and add this address to it.
+                {t('sec.kometa.step2')}
               </p>
               <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                <span className="mr-auto text-[11px] text-ink-4">Shared the address by mistake? Make a new one; the old one stops working.</span>
-                <Button type="button" size="sm" variant="ghost" disabled={save.isPending} onClick={() => confirm('Make a new webhook address? Kometa will need the new one.') && save.mutate({ regenerate: true })}>
-                  <RefreshCw className="size-3.5" /> New address
+                <span className="mr-auto text-[11px] text-ink-4">{t('sec.kometa.shared')}</span>
+                <Button type="button" size="sm" variant="ghost" disabled={save.isPending} onClick={() => confirm(t('sec.kometa.confirmNew')) && save.mutate({ regenerate: true })}>
+                  <RefreshCw className="size-3.5" /> {t('sec.kometa.newAddress')}
                 </Button>
               </div>
             </div>

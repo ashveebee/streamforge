@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -43,7 +44,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     });
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
-    throw new ApiError('Cannot reach the StreamForge server', 0, 'network');
+    throw new ApiError(t('common.unreachable'), 0, 'network');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

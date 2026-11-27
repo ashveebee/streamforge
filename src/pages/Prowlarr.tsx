@@ -9,40 +9,41 @@ import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { INDEXER_TONE } from '@/components/widgets/IndexersWidget';
+import { t } from '@/i18n';
 
 export default function ProwlarrPage() {
   const q = useProwlarr();
   return (
     <>
       <ServiceHeader id="prowlarr" />
-      <QueryState query={q} skeleton={<PageLoader label="Loading indexers" hint="Asking Prowlarr for indexer stats…" />}>
+      <QueryState query={q} skeleton={<PageLoader label={t('svc.prowlarr.loading')} hint={t('svc.prowlarr.loadingHint')} />}>
         {(d) => {
           const maxMs = Math.max(1, ...d.indexers.map((i) => i.stats.avgResponseMs));
           return (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile label="Healthy indexers" value={d.summary.healthy} icon={CheckCircle2} accent="var(--color-ok)" hint={`${d.summary.failing} failing · ${d.summary.disabled} disabled`} />
-                <StatTile label="Queries" value={d.summary.queries} icon={Search} accent="var(--color-prowlarr)" format={(n) => compact(Math.round(n))} hint={`${compact(d.summary.failedQueries)} failed`} />
-                <StatTile label="Grabs" value={d.summary.grabs} icon={Download} accent="var(--color-sonarr)" format={(n) => compact(Math.round(n))} hint={`${compact(d.summary.failedGrabs)} failed`} />
-                <StatTile label="Avg response" value={d.summary.avgResponseMs} icon={Timer} accent="var(--color-seerr)" format={(n) => `${Math.round(n)} ms`} hint={`${d.summary.torrent} torrent · ${d.summary.usenet} usenet`} />
+                <StatTile label={t('svc.prowlarr.healthy')} value={d.summary.healthy} icon={CheckCircle2} accent="var(--color-ok)" hint={t('svc.prowlarr.healthyHint', { failing: d.summary.failing, disabled: d.summary.disabled })} />
+                <StatTile label={t('svc.prowlarr.queries')} value={d.summary.queries} icon={Search} accent="var(--color-prowlarr)" format={(n) => compact(Math.round(n))} hint={t('svc.prowlarr.failed', { n: compact(d.summary.failedQueries) })} />
+                <StatTile label={t('svc.prowlarr.grabs')} value={d.summary.grabs} icon={Download} accent="var(--color-sonarr)" format={(n) => compact(Math.round(n))} hint={t('svc.prowlarr.failed', { n: compact(d.summary.failedGrabs) })} />
+                <StatTile label={t('library.system.avg')} value={d.summary.avgResponseMs} icon={Timer} accent="var(--color-seerr)" format={(n) => `${Math.round(n)} ms`} hint={`${d.summary.torrent} torrent · ${d.summary.usenet} usenet`} />
               </div>
 
               <Card>
-                <CardHeader icon={Radar} accent="var(--color-prowlarr)" title="Indexers" subtitle={`${d.summary.total} configured`} />
+                <CardHeader icon={Radar} accent="var(--color-prowlarr)" title={t('dashboard.widgets.indexers')} subtitle={t('svc.prowlarr.configured', { n: d.summary.total })} />
                 <CardBody className="px-0 pb-2">
                   {d.indexers.length === 0 ? (
-                    <EmptyState icon={Radar} title="No indexers configured" />
+                    <EmptyState icon={Radar} title={t('svc.prowlarr.none')} />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[760px] text-[13px]">
                         <thead>
                           <tr className="border-y border-line text-left text-[11px] font-medium tracking-wide text-ink-4 uppercase">
-                            <th className="px-5 py-2.5 font-medium">Indexer</th>
-                            <th className="px-3 py-2.5 font-medium">Status</th>
-                            <th className="px-3 py-2.5 text-right font-medium">Queries</th>
-                            <th className="px-3 py-2.5 text-right font-medium">Grabs</th>
-                            <th className="px-3 py-2.5 text-right font-medium">Success</th>
-                            <th className="w-48 px-5 py-2.5 font-medium">Response time</th>
+                            <th className="px-5 py-2.5 font-medium">{t('svc.prowlarr.indexer')}</th>
+                            <th className="px-3 py-2.5 font-medium">{t('library.system.status')}</th>
+                            <th className="px-3 py-2.5 text-right font-medium">{t('svc.prowlarr.queries')}</th>
+                            <th className="px-3 py-2.5 text-right font-medium">{t('svc.prowlarr.grabs')}</th>
+                            <th className="px-3 py-2.5 text-right font-medium">{t('svc.prowlarr.success')}</th>
+                            <th className="w-48 px-5 py-2.5 font-medium">{t('svc.prowlarr.responseTime')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-line">
@@ -62,7 +63,7 @@ export default function ProwlarrPage() {
                                     <span className={cn('size-1.5 rounded-full', tone.dot)} />
                                     {tone.label}
                                   </span>
-                                  {i.disabledUntil && <div className="text-[11px] text-ink-4">Retry {relative(i.disabledUntil)}</div>}
+                                  {i.disabledUntil && <div className="text-[11px] text-ink-4">{t('svc.prowlarr.retry', { when: relative(i.disabledUntil) })}</div>}
                                 </td>
                                 <td className="px-3 py-3 text-right tabular">{compact(i.stats.queries)}</td>
                                 <td className="px-3 py-3 text-right tabular">{compact(i.stats.grabs)}</td>
@@ -86,7 +87,7 @@ export default function ProwlarrPage() {
               </Card>
 
               <Card>
-                <CardHeader icon={AppWindow} title="Connected applications" subtitle="Apps Prowlarr syncs indexers to" />
+                <CardHeader icon={AppWindow} title={t('svc.prowlarr.apps')} subtitle={t('svc.prowlarr.appsHint')} />
                 <CardBody>
                   {d.applications.length ? (
                     <div className="flex flex-wrap gap-2">
@@ -99,7 +100,7 @@ export default function ProwlarrPage() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyState icon={AppWindow} title="No applications connected" className="py-4" />
+                    <EmptyState icon={AppWindow} title={t('svc.prowlarr.noApps')} className="py-4" />
                   )}
                 </CardBody>
               </Card>

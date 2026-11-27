@@ -5,6 +5,7 @@ import { dayLabel, relative } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Status';
+import { t } from '@/i18n';
 
 const COMMANDS = [
   { label: 'Docker Compose', cmd: 'docker compose pull && docker compose up -d' },
@@ -21,12 +22,12 @@ export function UpdatesSection() {
   return (
     <section id="updates" className="mt-8" aria-labelledby="updates-h">
       <h2 id="updates-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight">
-        <ArrowUpCircle className="size-4 text-brand" /> Updates
+        <ArrowUpCircle className="size-4 text-brand" /> {t('sec.updates.title')}
       </h2>
       <p className="mb-3 text-xs text-ink-3">
         {d.enabled
-          ? 'StreamForge checks GitHub for new releases every 6 hours. Only the version number is sent.'
-          : 'Update checks are off (UPDATE_CHECK=false).'}
+          ? t('sec.updates.checks')
+          : t('sec.updates.off')}
       </p>
       <Card>
         <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -34,12 +35,12 @@ export function UpdatesSection() {
             {d.available ? <ArrowUpCircle className="mt-0.5 size-5 shrink-0 text-brand" /> : <CircleCheck className="mt-0.5 size-5 shrink-0 text-ok" />}
             <div>
               <div className="text-[14px] font-semibold text-ink">
-                {d.available ? `StreamForge ${d.available} is available` : d.enabled && d.checkedAt && !d.error ? 'You’re on the latest version' : `StreamForge ${d.current}`}
+                {d.available ? t('nav.updateAvailable', { version: d.available }) : d.enabled && d.checkedAt && !d.error ? t('sec.updates.latest') : `StreamForge ${d.current}`}
               </div>
               <div className="mt-0.5 text-xs text-ink-3">
-                You’re running {d.current}
-                {d.available && d.releases.length > 1 ? ` · ${d.releases.length} releases behind` : ''}
-                {d.checkedAt ? ` · checked ${relative(d.checkedAt)}` : d.enabled ? ' · first check runs a minute after start-up' : ''}
+                {t('sec.updates.running', { version: d.current })}
+                {d.available && d.releases.length > 1 ? ` · ${t('sec.updates.behind', { count: d.releases.length })}` : ''}
+                {d.checkedAt ? ` · ${t('dashboard.checked', { when: relative(d.checkedAt) })}` : d.enabled ? ` · ${t('sec.updates.first')}` : ''}
               </div>
               {d.error && <div className="mt-1 text-xs text-warn">{d.error}</div>}
             </div>
@@ -48,12 +49,12 @@ export function UpdatesSection() {
             {d.enabled && (
               <Button size="sm" variant="outline" onClick={() => check.mutate()} disabled={check.isPending}>
                 {check.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                Check now
+                {t('sec.updates.checkNow')}
               </Button>
             )}
             <a href={d.available ? d.releases[0]!.url : d.repoUrl} target="_blank" rel="noreferrer">
               <Button size="sm" variant="ghost" tabIndex={-1}>
-                <ExternalLink className="size-3.5" /> Releases
+                <ExternalLink className="size-3.5" /> {t('sec.updates.releases')}
               </Button>
             </a>
           </div>
@@ -62,16 +63,16 @@ export function UpdatesSection() {
         {d.available && (
           <>
             <div className="border-t border-line px-5 py-4">
-              <h3 className="mb-2 text-xs font-medium text-ink-2">How to update</h3>
+              <h3 className="mb-2 text-xs font-medium text-ink-2">{t('sec.updates.how')}</h3>
               <div className="space-y-2">
                 {COMMANDS.map((c) => <Command key={c.label} {...c} />)}
               </div>
               <p className="mt-2 text-[11.5px] text-ink-4">
-                With <code className="text-ink-3">docker run</code>, remove and start the container again after pulling. If you pinned a version tag, change it to {d.available} first. Settings live in the data volume and carry over.
+                {t('sec.updates.dockerRun', { version: d.available })}
               </p>
             </div>
             <div className="border-t border-line px-5 py-4">
-              <h3 className="mb-3 text-xs font-medium text-ink-2">What’s new since {d.current}</h3>
+              <h3 className="mb-3 text-xs font-medium text-ink-2">{t('sec.updates.whatsNew', { version: d.current })}</h3>
               <div className="space-y-5">
                 {d.releases.map((r) => <ReleaseNotes key={r.version} r={r} />)}
               </div>
@@ -92,7 +93,7 @@ function Command({ label, cmd }: { label: string; cmd: string }) {
       <button
         type="button"
         className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink-2"
-        aria-label={`Copy the ${label} command`}
+        aria-label={t('sec.updates.copy', { label })}
         onClick={() => {
           void navigator.clipboard?.writeText(cmd).then(() => {
             setCopied(true);
@@ -125,7 +126,7 @@ function ReleaseNotes({ r }: { r: Release }) {
           </div>
         ))
       ) : (
-        <p className="text-[12.5px] text-ink-3">No notes for this release.</p>
+        <p className="text-[12.5px] text-ink-3">{t('sec.updates.noNotes')}</p>
       )}
     </div>
   );

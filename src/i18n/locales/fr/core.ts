@@ -19,6 +19,7 @@ const fr: Core = {
     username: 'Nom d’utilisateur',
     optional: 'Facultatif',
     connecting: 'Connexion au serveur…',
+    unreachable: 'Impossible de joindre le serveur StreamForge',
   },
   time: {
     justNow: 'à l’instant',

@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
+import { t } from '@/i18n';
 
 interface MoonfinSettings {
   enabled: boolean;
@@ -34,34 +35,34 @@ export function MoonfinSection({ grouped = false }: { grouped?: boolean } = {}) 
         <Moon className="size-4 text-brand" /> Moonfin
       </h2>
       <p className={cn('mb-3 text-xs text-ink-3', grouped && 'px-1')}>
-        Moonfin is a Jellyfin app for phones, TVs, desktops and the web. Switch it on and Play buttons offer to open titles in Moonfin. Each device asks once and can remember the answer.
+        {t('sec.moonfin.intro')}
       </p>
       <Card>
         <div className="divide-y divide-line">
           <div className="flex items-center gap-3 px-5 py-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">Open titles in Moonfin</div>
+              <div className="text-[13px] font-medium">{t('sec.moonfin.open')}</div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-4">
                 {st?.installed ? (
                   <span className="inline-flex items-center gap-1 text-ok">
-                    <CircleCheck className="size-3" /> Moonfin plugin found on your Jellyfin server{st.version ? ` · v${st.version}` : ''}
+                    <CircleCheck className="size-3" /> {t('sec.moonfin.found')}{st.version ? ` · v${st.version}` : ''}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1">
-                    <CircleHelp className="size-3" /> Moonfin plugin not found on Jellyfin. The Moonfin apps still work; the web app needs the plugin.
+                    <CircleHelp className="size-3" /> {t('sec.moonfin.notFound')}
                   </span>
                 )}
               </div>
             </div>
-            <Switch checked={d.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v })} label="Open titles in Moonfin" />
+            <Switch checked={d.enabled} disabled={save.isPending} onChange={(v) => save.mutate({ enabled: v })} label={t('sec.moonfin.open')} />
           </div>
           <div className={cn('px-5 py-4', !d.enabled && 'opacity-50')}>
-            <div className="mb-2 text-xs font-medium text-ink-2">Suggest opening in</div>
-            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Suggest opening in">
+            <div className="mb-2 text-xs font-medium text-ink-2">{t('sec.moonfin.suggest')}</div>
+            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t('sec.moonfin.suggest')}>
               {(
                 [
-                  ['web', Globe, 'Moonfin in the browser', d.webUrl ?? 'Set Jellyfin’s public address first'],
-                  ['app', Smartphone, 'The Moonfin app', 'Opens moonfin:// links in the installed app'],
+                  ['web', Globe, t('media.open.web'), d.webUrl ?? t('sec.moonfin.needsPublic')],
+                  ['app', Smartphone, t('sec.moonfin.app'), t('sec.moonfin.appHint')],
                 ] as const
               ).map(([id, Icon, label, hint]) => (
                 <button
@@ -82,9 +83,9 @@ export function MoonfinSection({ grouped = false }: { grouped?: boolean } = {}) 
               ))}
             </div>
             <p className="mt-2 text-[11px] text-ink-4">
-              People can still choose another app, or Jellyfin, from the arrow next to Play.{' '}
+              {t('sec.moonfin.choose')}{' '}
               <a href="https://github.com/Moonfin-Client" target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 text-brand hover:underline">
-                About Moonfin <ExternalLink className="size-3" />
+                {t('sec.moonfin.about')} <ExternalLink className="size-3" />
               </a>
             </p>
             {save.error && <p className="mt-2 text-xs text-bad">{(save.error as Error).message}</p>}

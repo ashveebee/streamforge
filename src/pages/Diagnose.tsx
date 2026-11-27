@@ -13,7 +13,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/ui/States';
-import { getLocale } from '@/i18n';
+import { getLocale, t } from '@/i18n';
 import { dayLabel } from '@/lib/format';
 
 const COLORS = {
@@ -26,7 +26,7 @@ const COLORS = {
   stall: 'rgb(244 63 94 / 0.14)',
 };
 
-const METHOD: Record<PlayMethod, string> = { DirectPlay: 'Direct play', DirectStream: 'Direct stream', Transcode: 'Converting' };
+const METHOD = (m: PlayMethod) => t(m === 'DirectPlay' ? 'ui.method.directPlay' : m === 'DirectStream' ? 'ui.method.directStream' : 'admin.diag.converting');
 const mbps = (bps: number | undefined) => (bps === undefined ? '—' : bps >= 10e6 ? `${Math.round(bps / 1e6)} Mbps` : `${(bps / 1e6).toFixed(1)} Mbps`);
 const when = (t: number) => {
   const d = new Date(t);
@@ -35,13 +35,13 @@ const when = (t: number) => {
   const day = d.toDateString() === today.toDateString() || d.toDateString() === yesterday.toDateString() ? dayLabel(d.toISOString()) : d.toLocaleDateString(getLocale(), { weekday: 'short' });
   return `${day} ${d.toLocaleTimeString(getLocale(), { hour: 'numeric', minute: '2-digit' })}`;
 };
-const lost = (ms: number) => (ms >= 90_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 1000)} s`);
+const lost = (ms: number) => (ms >= 90_000 ? t('media.min', { n: Math.round(ms / 60_000) }) : `${Math.round(ms / 1000)} s`);
 
 function confidence(c: number | null): { label: string; tone: 'bad' | 'warn' | 'neutral' } {
-  if (c === null) return { label: 'Best guess', tone: 'neutral' };
-  if (c >= 0.8) return { label: 'Very likely', tone: 'bad' };
-  if (c >= 0.6) return { label: 'Likely', tone: 'warn' };
-  return { label: 'Possible', tone: 'neutral' };
+  if (c === null) return { label: t('admin.diag.bestGuess'), tone: 'neutral' };
+  if (c >= 0.8) return { label: t('admin.diag.veryLikely'), tone: 'bad' };
+  if (c >= 0.6) return { label: t('admin.diag.likely'), tone: 'warn' };
+  return { label: t('admin.diag.possible'), tone: 'neutral' };
 }
 
 /** `datetime-local` value for a timestamp, in local time. */
@@ -62,18 +62,18 @@ export default function DiagnosePage() {
   }, [first, question]);
 
   if (!user?.isAdmin) {
-    return <Card><EmptyState icon={ShieldAlert} title="Administrators only" description="Only administrators can diagnose streams." /></Card>;
+    return <Card><EmptyState icon={ShieldAlert} title={t('settings.adminsOnly')} description={t('admin.diag.adminsOnly')} /></Card>;
   }
   if (status.isError) return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
-  if (!status.data) return <PageLoader label="Loading the diagnosis" />;
+  if (!status.data) return <PageLoader label={t('admin.diag.loading')} />;
   const s = status.data;
 
   return (
     <>
       <PageHeader
-        eyebrow={<Link to="/now-playing" className="transition hover:text-ink">← Now Playing</Link>}
-        title="Why did it buffer?"
-        description="StreamForge spots streams that stopped moving forward and works out what on the server was getting in the way."
+        eyebrow={<Link to="/now-playing" className="transition hover:text-ink">← {t('nav.nowPlaying')}</Link>}
+        title={t('palette.pages.whyBuffer')}
+        description={t('admin.diag.description')}
       />
       {!s.recording && (
         <Card className="mb-4">
@@ -95,12 +95,8 @@ export default function DiagnosePage() {
             <Card>
               <EmptyState
                 icon={Radar}
-                title={s.since ? 'No buffering spotted' : 'Nothing recorded yet'}
-                description={
-                  s.since
-                    ? `No stream has stalled since ${when(s.since)}. If someone says theirs did, check that moment below.`
-                    : 'StreamForge records a sample every 15 seconds. Stalls show up here once streams have played.'
-                }
+                title={s.since ? t('admin.diag.noneSpotted') : t('admin.diag.nothing')}
+                description={s.since ? t('admin.diag.noneSince', { when: when(s.since) }) : t('admin.diag.nothingHint')}
               />
             </Card>
           )}
@@ -121,11 +117,11 @@ function IncidentList({ status, selected, onPick }: { status: DiagnosisStatus; s
     <Card>
       <CardHeader
         icon={Radar}
-        title="Stalls spotted"
-        subtitle={status.since ? `Last ${status.keepDays} days · since ${when(status.since)}` : `Kept for ${status.keepDays} days`}
+        title={t('admin.diag.stalls')}
+        subtitle={status.since ? t('admin.diag.lastDays', { n: status.keepDays, when: when(status.since) }) : t('admin.diag.kept', { n: status.keepDays })}
       />
       {!status.incidents.length ? (
-        <CardBody className="text-sm text-ink-3">None yet.</CardBody>
+        <CardBody className="text-sm text-ink-3">{t('admin.diag.noneYet')}</CardBody>
       ) : (
         <ul className="max-h-[420px] divide-y divide-line overflow-y-auto border-t border-line">
           {status.incidents.map((i) => (
@@ -156,7 +152,7 @@ function IncidentRow({ i, active, onClick }: { i: Incident; active: boolean; onC
       </span>
       <span className="shrink-0 text-right text-[11px] leading-tight text-ink-4">
         <span className="block">{when(i.start)}</span>
-        <span className="block">{lost(i.lostMs)} lost</span>
+        <span className="block">{t('admin.diag.lost', { time: lost(i.lostMs) })}</span>
       </span>
     </button>
   );
@@ -173,11 +169,11 @@ function AskMoment({ status, onAsk }: { status: DiagnosisStatus; onAsk: (q: Ques
   };
   return (
     <Card>
-      <CardHeader icon={Search} title="Check a moment" subtitle="When someone says “it buffered around…”" />
+      <CardHeader icon={Search} title={t('admin.diag.check')} subtitle={t('admin.diag.checkHint')} />
       <CardBody>
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-xs text-ink-3">
-            Stream
+            {t('widgets.playing.stream')}
             <Select
               className="mt-1 h-9"
               value={session}
@@ -187,7 +183,7 @@ function AskMoment({ status, onAsk }: { status: DiagnosisStatus; onAsk: (q: Ques
                 if (p) setAt(localInput(Math.round((p.first + p.last) / 2)));
               }}
             >
-              <option value="">The whole server</option>
+              <option value="">{t('admin.diag.wholeServer')}</option>
               {plays.map((p) => (
                 <option key={`${p.id}|${p.first}`} value={`${p.id}|${p.first}`}>
                   {p.user} · {p.title} ({when(p.first)})
@@ -196,12 +192,12 @@ function AskMoment({ status, onAsk }: { status: DiagnosisStatus; onAsk: (q: Ques
             </Select>
           </label>
           <label className="block text-xs text-ink-3">
-            Around
+            {t('admin.diag.around')}
             <Input type="datetime-local" className="mt-1 h-9" value={at} onChange={(e) => setAt(e.target.value)} required />
           </label>
           <Button type="submit" variant="subtle" size="sm" className="w-full">
             <Clock className="size-3.5" />
-            Explain this moment
+            {t('admin.diag.explain')}
           </Button>
         </form>
       </CardBody>
@@ -219,20 +215,20 @@ function UploadSetting({ status }: { status: DiagnosisStatus }) {
   };
   return (
     <Card>
-      <CardHeader icon={Globe} title="Your internet upload speed" subtitle="Remote viewers get video through it" />
+      <CardHeader icon={Globe} title={t('admin.diag.upload')} subtitle={t('admin.diag.uploadHint')} />
       <CardBody>
         <form onSubmit={submit} className="flex gap-2">
           <label className="relative flex-1">
-            <span className="sr-only">Upload speed in Mbps</span>
-            <Input inputMode="decimal" className="h-9 pr-14" placeholder="Estimate it" value={value} onChange={(e) => setValue(e.target.value)} />
+            <span className="sr-only">{t('admin.diag.uploadLabel')}</span>
+            <Input inputMode="decimal" className="h-9 pr-14" placeholder={t('admin.diag.estimate')} value={value} onChange={(e) => setValue(e.target.value)} />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-ink-4">Mbps</span>
           </label>
           <Button type="submit" size="sm" className="h-9" disabled={save.isPending}>
-            Save
+            {t('common.save')}
           </Button>
         </form>
         <p className="mt-2 text-[11.5px] text-ink-4">
-          {save.isError ? (save.error as Error).message : 'Leave empty and StreamForge uses the most it has seen go out.'}
+          {save.isError ? (save.error as Error).message : t('admin.diag.leaveEmpty')}
         </p>
       </CardBody>
     </Card>
@@ -253,8 +249,8 @@ function Explanation({ question }: { question: Question }) {
         <div className="px-5 pt-5">
           <div className="text-xs text-ink-3">
             {a.incident
-              ? `${when(a.incident.start)} · stalled for about ${lost(a.incident.lostMs)}`
-              : `Around ${when(a.focus.from + 60_000)} · no stall was spotted in this stream, so here is what the server was doing`}
+              ? `${when(a.incident.start)} · ${t('admin.diag.stalledFor', { time: lost(a.incident.lostMs) })}`
+              : t('admin.diag.aroundNoStall', { when: when(a.focus.from + 60_000) })}
           </div>
           {a.stream && (
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -267,8 +263,8 @@ function Explanation({ question }: { question: Question }) {
           )}
           {a.stream && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Pill>{a.stream.remote ? <><Globe className="mr-1 inline size-3" />Away from home</> : <><House className="mr-1 inline size-3" />At home</>}</Pill>
-              <Pill tone={a.stream.method === 'Transcode' ? 'warn' : 'neutral'}>{METHOD[a.stream.method]}</Pill>
+              <Pill>{a.stream.remote ? <><Globe className="mr-1 inline size-3" />{t('admin.diag.away')}</> : <><House className="mr-1 inline size-3" />{t('admin.diag.home')}</>}</Pill>
+              <Pill tone={a.stream.method === 'Transcode' ? 'warn' : 'neutral'}>{METHOD(a.stream.method)}</Pill>
               {(a.stream.res || a.stream.codec) && <Pill>{[a.stream.res, a.stream.codec?.toUpperCase()].filter(Boolean).join(' ')}</Pill>}
               {a.stream.bitrate && <Pill>{mbps(a.stream.bitrate)}</Pill>}
             </div>
@@ -279,7 +275,7 @@ function Explanation({ question }: { question: Question }) {
 
       {rest.length > 0 && (
         <Card>
-          <CardHeader title="Also playing a part" subtitle="Less likely, but worth knowing" />
+          <CardHeader title={t('admin.diag.alsoPart')} subtitle={t('admin.diag.alsoPartHint')} />
           <ul className="divide-y divide-line border-t border-line">
             {rest.map((f) => (
               <li key={f.id} className="px-5 py-3">
@@ -299,7 +295,7 @@ function Explanation({ question }: { question: Question }) {
 
       {a.others.length > 0 && (
         <Card>
-          <CardHeader title="Also playing at the time" />
+          <CardHeader title={t('admin.diag.alsoPlaying')} />
           <ul className="divide-y divide-line border-t border-line">
             {a.others.map((o, i) => (
               <li key={i} className="flex items-center gap-3 px-5 py-2.5 text-[13px]">
@@ -307,7 +303,7 @@ function Explanation({ question }: { question: Question }) {
                   <span className="text-ink">{o.user}</span> · {o.title}
                 </span>
                 <span className="shrink-0 text-xs text-ink-4">
-                  {METHOD[o.method]} · {o.remote ? 'away' : 'home'}
+                  {METHOD(o.method)} · {o.remote ? t('admin.diag.awayShort') : t('admin.diag.homeShort')}
                   {o.bitrate ? ` · ${mbps(o.bitrate)}` : ''}
                 </span>
               </li>
@@ -333,7 +329,7 @@ function Verdict({ f }: { f: Finding }) {
         <div className="mt-4 rounded-xl border border-line bg-white/[0.02] px-4 py-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-2">
             <Lightbulb className="size-3.5 text-warn" />
-            What to try
+            {t('admin.diag.try')}
           </div>
           <ul className="list-disc space-y-1 pl-5 text-[12.5px] text-ink-2">
             {f.fixes.map((x) => <li key={x}>{x}</li>)}
@@ -380,24 +376,24 @@ function Timeline({ a }: { a: Analysis }) {
   const fmtMbps = (v: number) => (Number.isFinite(v) ? `${v.toFixed(v >= 10 ? 0 : 1)} Mbps` : '—');
   const xProps = { ...axisProps, dataKey: 't', type: 'number' as const, domain: ['dataMin', 'dataMax'] as [string, string], scale: 'time' as const, tickFormatter: (t: number) => new Date(t).toLocaleTimeString(getLocale(), { hour: 'numeric', minute: '2-digit' }), minTickGap: 40 };
   const network = [
-    has('upload') && { key: 'upload', label: 'Sent by the server', color: COLORS.upload },
-    has('stream') && { key: 'stream', label: 'This stream', color: COLORS.stream },
-    has('seeding') && { key: 'seeding', label: 'Seeding', color: COLORS.seeding },
-    has('down') && { key: 'down', label: 'Downloading', color: COLORS.down },
+    has('upload') && { key: 'upload', label: t('admin.diag.sent'), color: COLORS.upload },
+    has('stream') && { key: 'stream', label: t('admin.diag.thisStream'), color: COLORS.stream },
+    has('seeding') && { key: 'seeding', label: t('library.dl.state.seeding'), color: COLORS.seeding },
+    has('down') && { key: 'down', label: t('widgets.requests.phase.downloading'), color: COLORS.down },
   ].filter(Boolean) as { key: string; label: string; color: string }[];
   const server = [
     has('cpu') && { key: 'cpu', label: 'CPU', color: COLORS.cpu },
-    has('speed') && { key: 'speed', label: 'Conversion speed', color: COLORS.speed },
+    has('speed') && { key: 'speed', label: t('admin.diag.speed'), color: COLORS.speed },
   ].filter(Boolean) as { key: string; label: string; color: string }[];
 
   return (
     <Card>
-      <CardHeader title="What was happening" subtitle="The shaded band is where the stream stalled" />
+      <CardHeader title={t('admin.diag.happening')} subtitle={t('admin.diag.happeningHint')} />
       <CardBody className="space-y-6">
         {network.length > 0 && (
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-medium text-ink-2">Network</div>
+              <div className="text-xs font-medium text-ink-2">{t('admin.diag.network')}</div>
               <Legend items={network} />
             </div>
             <div className="h-44">
@@ -407,7 +403,7 @@ function Timeline({ a }: { a: Analysis }) {
                   {areas}
                   <XAxis {...xProps} />
                   <YAxis {...axisProps} width={40} tickFormatter={(v: number) => `${v}`} />
-                  {a.upload && <ReferenceLine y={a.upload.capacity / 1e6} stroke="rgb(255 255 255 / 0.3)" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ value: a.upload.estimated ? 'Highest seen' : 'Your upload', fill: 'var(--color-ink-4)', fontSize: 10, position: 'insideTopRight' }} />}
+                  {a.upload && <ReferenceLine y={a.upload.capacity / 1e6} stroke="rgb(255 255 255 / 0.3)" strokeDasharray="4 4" ifOverflow="extendDomain" label={{ value: a.upload.estimated ? t('admin.diag.highest') : t('admin.diag.yourUpload'), fill: 'var(--color-ink-4)', fontSize: 10, position: 'insideTopRight' }} />}
                   <Tooltip content={<ChartTooltip formatLabel={timeLabel} formatValue={fmtMbps} />} cursor={{ stroke: 'rgb(255 255 255 / 0.15)' }} />
                   {network.map((n) => (
                     <Line key={n.key} type="monotone" dataKey={n.key} name={n.label} stroke={n.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
@@ -420,7 +416,7 @@ function Timeline({ a }: { a: Analysis }) {
         {server.length > 0 && (
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-medium text-ink-2">Server</div>
+              <div className="text-xs font-medium text-ink-2">{t('svc.server.server')}</div>
               <Legend items={server} />
             </div>
             <div className="h-44">
@@ -430,7 +426,7 @@ function Timeline({ a }: { a: Analysis }) {
                   {areas}
                   <XAxis {...xProps} />
                   <YAxis {...axisProps} width={56} domain={[0, (max: number) => Math.max(100, Math.ceil(max / 50) * 50)]} tickFormatter={(v: number) => `${v}%`} />
-                  {has('speed') && <ReferenceLine y={100} stroke="rgb(255 255 255 / 0.3)" strokeDasharray="4 4" label={{ value: 'Real time', fill: 'var(--color-ink-4)', fontSize: 10, position: 'insideTopRight' }} />}
+                  {has('speed') && <ReferenceLine y={100} stroke="rgb(255 255 255 / 0.3)" strokeDasharray="4 4" label={{ value: t('admin.diag.realTime'), fill: 'var(--color-ink-4)', fontSize: 10, position: 'insideTopRight' }} />}
                   <Tooltip content={<ChartTooltip formatLabel={timeLabel} formatValue={(v) => (Number.isFinite(v) ? `${Math.round(v)}%` : '—')} />} cursor={{ stroke: 'rgb(255 255 255 / 0.15)' }} />
                   {server.map((n) => (
                     <Line key={n.key} type="monotone" dataKey={n.key} name={n.label} stroke={n.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
@@ -438,11 +434,11 @@ function Timeline({ a }: { a: Analysis }) {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            {has('speed') && <p className="mt-2 text-[11.5px] text-ink-4">Conversion speed below 100% means Jellyfin made video slower than it was watched.</p>}
+            {has('speed') && <p className="mt-2 text-[11.5px] text-ink-4">{t('admin.diag.speedHint')}</p>}
           </div>
         )}
         {!network.length && !server.length && (
-          <p className="text-sm text-ink-3">No server measurements for this time. Turn on host metrics and connect your download clients for a timeline.</p>
+          <p className="text-sm text-ink-3">{t('admin.diag.noMeasure')}</p>
         )}
       </CardBody>
     </Card>

@@ -23,7 +23,7 @@ import { LIBRARY_ICONS } from '@/components/widgets/LibraryWidget';
 import { PlaysWidget } from '@/components/widgets/PlaysWidget';
 import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
 import { PageLoader } from '@/components/ui/Loader';
-import { getLocale } from '@/i18n';
+import { getLocale, t } from '@/i18n';
 
 /** Emby and Plex pages before any server of that kind has been added. */
 function NoServers({ type }: { type: MediaServerType }) {
@@ -35,12 +35,12 @@ function NoServers({ type }: { type: MediaServerType }) {
       <Card>
         <EmptyState
           icon={MEDIA_SERVERS[type].icon}
-          title={`No ${name} servers yet`}
-          description={`Add a ${name} server under Settings → Services → ${name} to see its streams, libraries and health here.`}
+          title={t('svc.server.none', { server: name })}
+          description={t('svc.server.noneHint', { server: name })}
           action={
             user?.isAdmin ? (
               <Link to="/settings" className="inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong px-3 text-sm font-medium text-ink-2 hover:bg-white/[0.06]">
-                <Plus className="size-3.5" /> Add a {name} server
+                <Plus className="size-3.5" /> {t('svc.server.add', { server: name })}
               </Link>
             ) : undefined
           }
@@ -72,14 +72,14 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
     <>
       <ServiceHeader id="jellyfin" instance={extra} media={type} />
       <MediaServerTabs type={type} />
-      <QueryState key={server} query={q} skeleton={<PageLoader label={`Loading ${typeName}`} hint="Fetching libraries, users and server details…" />}>
+      <QueryState key={server} query={q} skeleton={<PageLoader label={t('svc.server.loading', { server: typeName })} hint={t('svc.server.loadingHint')} />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Active streams" value={d.sessions.streams} icon={MonitorPlay} accent={accent} hint={`${d.sessions.active} connected sessions`} />
-              <StatTile label="Transcoding" value={d.sessions.transcoding} icon={Repeat} accent="var(--color-warn)" hint={`${d.sessions.directPlay} direct`} />
-              <StatTile label="Users" value={d.users.total} icon={Users} accent="var(--color-seerr)" hint={`${d.users.active24h} active in 24h`} />
-              <StatTile label="Titles" value={d.counts.movies + d.counts.series} icon={Film} accent="var(--color-radarr)" hint={`${d.counts.movies.toLocaleString(getLocale())} movies · ${d.counts.series.toLocaleString(getLocale())} series`} />
+              <StatTile label={t('watch.now.active')} value={d.sessions.streams} icon={MonitorPlay} accent={accent} hint={t('svc.server.sessions', { count: d.sessions.active })} />
+              <StatTile label={t('watch.now.transcoding')} value={d.sessions.transcoding} icon={Repeat} accent="var(--color-warn)" hint={t('svc.server.direct', { count: d.sessions.directPlay })} />
+              <StatTile label={t('widgets.library.users')} value={d.users.total} icon={Users} accent="var(--color-seerr)" hint={t('svc.server.active24', { count: d.users.active24h })} />
+              <StatTile label={t('svc.server.titles')} value={d.counts.movies + d.counts.series} icon={Film} accent="var(--color-radarr)" hint={`${t('media.add.movies', { count: d.counts.movies })} · ${t('media.add.series', { count: d.counts.series })}`} />
             </div>
 
             <div className="grid gap-5 xl:grid-cols-3">
@@ -87,12 +87,12 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                 <CardHeader
                   icon={Clapperboard}
                   accent={accent}
-                  title="Libraries"
-                  subtitle={scan.error ? <span className="text-bad">{(scan.error as Error).message}</span> : `${d.libraries.length} libraries`}
+                  title={t('svc.server.libraries')}
+                  subtitle={scan.error ? <span className="text-bad">{(scan.error as Error).message}</span> : t('svc.server.libraryCount', { count: d.libraries.length })}
                   action={
                     admin ? (
                       <Button size="sm" disabled={scan.isPending} onClick={() => scan.mutate({})}>
-                        {scan.isPending && !scan.variables?.library ? <LoaderCircle className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />} Scan all
+                        {scan.isPending && !scan.variables?.library ? <LoaderCircle className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />} {t('svc.server.scanAll')}
                       </Button>
                     ) : undefined
                   }
@@ -112,19 +112,19 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                             </div>
                             <span className="text-lg font-semibold text-white tabular">{l.itemCount?.toLocaleString(getLocale()) ?? '—'}</span>
                           </div>
-                          {l.refreshing && <div className="absolute top-2 left-2"><Pill tone="brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</Pill></div>}
+                          {l.refreshing && <div className="absolute top-2 left-2"><Pill tone="brand">{t('widgets.library.scanning', { pct: Math.round(l.refreshProgress ?? 0) })}</Pill></div>}
                           {admin && (
                             <div className="absolute top-1.5 right-1.5 rounded-lg bg-black/40 text-white backdrop-blur">
                               <Menu
-                                label={`Actions for ${l.name}`}
+                                label={t('ui.actionsFor', { title: l.name })}
                                 busy={scan.isPending && scan.variables?.library === l.id}
                                 items={[
-                                  { label: 'Scan for new files', icon: ScanSearch, onSelect: () => scan.mutate({ library: l.id, name: l.name }) },
+                                  { label: t('svc.server.scan'), icon: ScanSearch, onSelect: () => scan.mutate({ library: l.id, name: l.name }) },
                                   {
-                                    label: 'Refresh all metadata',
+                                    label: t('svc.server.refresh'),
                                     icon: RefreshCw,
-                                    hint: 'Slow on large libraries',
-                                    onSelect: () => confirm(`Replace all metadata in ${l.name}? This can take a long time.`) && scan.mutate({ library: l.id, name: l.name, full: true }),
+                                    hint: t('svc.server.refreshHint'),
+                                    onSelect: () => confirm(t('svc.server.confirmRefresh', { name: l.name })) && scan.mutate({ library: l.id, name: l.name, full: true }),
                                   },
                                 ]}
                               />
@@ -138,18 +138,18 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
               </Card>
 
               <Card>
-                <CardHeader icon={MonitorPlay} title="Server" subtitle={d.server.name} />
+                <CardHeader icon={MonitorPlay} title={t('svc.server.server')} subtitle={d.server.name} />
                 <CardBody>
                   <div className="divide-y divide-line">
-                    <KV k="Version" v={d.server.version} />
-                    <KV k="Operating system" v={d.server.os ?? '—'} />
-                    <KV k="Architecture" v={d.server.architecture ?? '—'} />
-                    <KV k="Update available" v={d.server.hasUpdateAvailable ? <Pill tone="brand">Yes</Pill> : 'No'} />
-                    <KV k="Restart pending" v={d.server.hasPendingRestart ? <Pill tone="warn">Yes</Pill> : 'No'} />
-                    <KV k="Episodes" v={d.counts.episodes.toLocaleString(getLocale())} />
-                    <KV k="Songs" v={d.counts.songs.toLocaleString(getLocale())} />
-                    <KV k="Books" v={d.counts.books.toLocaleString(getLocale())} />
-                    <KV k="Collections" v={d.counts.collections.toLocaleString(getLocale())} />
+                    <KV k={t('svc.server.version')} v={d.server.version} />
+                    <KV k={t('svc.server.os')} v={d.server.os ?? '—'} />
+                    <KV k={t('svc.server.arch')} v={d.server.architecture ?? '—'} />
+                    <KV k={t('svc.server.update')} v={d.server.hasUpdateAvailable ? <Pill tone="brand">{t('media.yes')}</Pill> : t('svc.server.no')} />
+                    <KV k={t('svc.server.restart')} v={d.server.hasPendingRestart ? <Pill tone="warn">{t('media.yes')}</Pill> : t('svc.server.no')} />
+                    <KV k={t('svc.server.episodes')} v={d.counts.episodes.toLocaleString(getLocale())} />
+                    <KV k={t('svc.server.songs')} v={d.counts.songs.toLocaleString(getLocale())} />
+                    <KV k={t('svc.music.books')} v={d.counts.books.toLocaleString(getLocale())} />
+                    <KV k={t('svc.server.collections')} v={d.counts.collections.toLocaleString(getLocale())} />
                   </div>
                 </CardBody>
               </Card>
@@ -160,7 +160,7 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
             <div className="grid gap-5 xl:grid-cols-3">
               {isMain && <div className="xl:col-span-2"><PlaysWidget /></div>}
               <Card className={!isMain ? 'xl:col-span-3' : undefined}>
-                <CardHeader icon={Users} title="Users" subtitle="Most recently active first" />
+                <CardHeader icon={Users} title={t('widgets.library.users')} subtitle={t('svc.server.recentFirst')} />
                 <CardBody>
                   <ul className="space-y-1">
                     {d.users.list.slice(0, 8).map((u) => (
@@ -168,9 +168,9 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                         <Avatar src={jfUserImage(u.id, u.imageTag, 96, extra)} name={u.name} size={30} />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-medium">{u.name}</div>
-                          <div className="text-[11px] text-ink-4">{u.lastActivity ? `Active ${relative(u.lastActivity)}` : 'Never active'}</div>
+                          <div className="text-[11px] text-ink-4">{u.lastActivity ? t('svc.server.activeWhen', { when: relative(u.lastActivity) }) : t('svc.server.never')}</div>
                         </div>
-                        {u.isAdmin && <Pill>Admin</Pill>}
+                        {u.isAdmin && <Pill>{t('svc.server.admin')}</Pill>}
                       </li>
                     ))}
                   </ul>
