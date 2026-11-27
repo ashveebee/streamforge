@@ -23,6 +23,7 @@ import { LIBRARY_ICONS } from '@/components/widgets/LibraryWidget';
 import { PlaysWidget } from '@/components/widgets/PlaysWidget';
 import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
 import { PageLoader } from '@/components/ui/Loader';
+import { getLocale } from '@/i18n';
 
 /** Emby and Plex pages before any server of that kind has been added. */
 function NoServers({ type }: { type: MediaServerType }) {
@@ -78,7 +79,7 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
               <StatTile label="Active streams" value={d.sessions.streams} icon={MonitorPlay} accent={accent} hint={`${d.sessions.active} connected sessions`} />
               <StatTile label="Transcoding" value={d.sessions.transcoding} icon={Repeat} accent="var(--color-warn)" hint={`${d.sessions.directPlay} direct`} />
               <StatTile label="Users" value={d.users.total} icon={Users} accent="var(--color-seerr)" hint={`${d.users.active24h} active in 24h`} />
-              <StatTile label="Titles" value={d.counts.movies + d.counts.series} icon={Film} accent="var(--color-radarr)" hint={`${d.counts.movies.toLocaleString()} movies · ${d.counts.series.toLocaleString()} series`} />
+              <StatTile label="Titles" value={d.counts.movies + d.counts.series} icon={Film} accent="var(--color-radarr)" hint={`${d.counts.movies.toLocaleString(getLocale())} movies · ${d.counts.series.toLocaleString(getLocale())} series`} />
             </div>
 
             <div className="grid gap-5 xl:grid-cols-3">
@@ -109,7 +110,7 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                               <div className="flex items-center gap-1.5 text-sm font-semibold text-white"><Icon className="size-3.5" />{l.name}</div>
                               <div className="truncate text-[11px] text-white/60">{l.locations[0]}</div>
                             </div>
-                            <span className="text-lg font-semibold text-white tabular">{l.itemCount?.toLocaleString() ?? '—'}</span>
+                            <span className="text-lg font-semibold text-white tabular">{l.itemCount?.toLocaleString(getLocale()) ?? '—'}</span>
                           </div>
                           {l.refreshing && <div className="absolute top-2 left-2"><Pill tone="brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</Pill></div>}
                           {admin && (
@@ -145,10 +146,10 @@ function ServerView({ type, server }: { type: MediaServerType; server: string })
                     <KV k="Architecture" v={d.server.architecture ?? '—'} />
                     <KV k="Update available" v={d.server.hasUpdateAvailable ? <Pill tone="brand">Yes</Pill> : 'No'} />
                     <KV k="Restart pending" v={d.server.hasPendingRestart ? <Pill tone="warn">Yes</Pill> : 'No'} />
-                    <KV k="Episodes" v={d.counts.episodes.toLocaleString()} />
-                    <KV k="Songs" v={d.counts.songs.toLocaleString()} />
-                    <KV k="Books" v={d.counts.books.toLocaleString()} />
-                    <KV k="Collections" v={d.counts.collections.toLocaleString()} />
+                    <KV k="Episodes" v={d.counts.episodes.toLocaleString(getLocale())} />
+                    <KV k="Songs" v={d.counts.songs.toLocaleString(getLocale())} />
+                    <KV k="Books" v={d.counts.books.toLocaleString(getLocale())} />
+                    <KV k="Collections" v={d.counts.collections.toLocaleString(getLocale())} />
                   </div>
                 </CardBody>
               </Card>

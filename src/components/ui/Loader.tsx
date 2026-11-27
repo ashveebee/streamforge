@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/cn';
+import { useT } from '@/i18n';
 import { LogoMark } from '../layout/Logo';
 
 /**
@@ -9,9 +10,9 @@ import { LogoMark } from '../layout/Logo';
  * slow upstream (Jellyfin, usually) never looks like a broken page.
  */
 export function Loader({
-  label = 'Loading',
+  label,
   hint,
-  slowHint = 'This is taking longer than usual…',
+  slowHint,
   slowAfterMs = 6000,
   className,
   size = 'md',
@@ -23,6 +24,9 @@ export function Loader({
   className?: string;
   size?: 'sm' | 'md';
 }) {
+  const t = useT();
+  label ??= t('common.loading');
+  slowHint ??= t('loader.slow');
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setSlow(true), slowAfterMs);

@@ -10,6 +10,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { Loader } from '@/components/ui/Loader';
+import { getLocale } from '@/i18n';
 
 const CATEGORY_LABEL: Record<string, string> = {
   auth: 'Sign-in',
@@ -73,7 +74,7 @@ export default function AuditPage() {
                   <div className="text-[13px] break-words text-ink">{e.message}</div>
                   <div className="mt-0.5 text-[11px] text-ink-4">
                     {e.userName ?? 'System'}
-                    {e.ip ? ` · ${e.ip}` : ''} · <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>{relative(e.at)}</time>
+                    {e.ip ? ` · ${e.ip}` : ''} · <time dateTime={e.at} title={new Date(e.at).toLocaleString(getLocale())}>{relative(e.at)}</time>
                   </div>
                 </div>
                 <Pill className="shrink-0">{label(e.category)}</Pill>

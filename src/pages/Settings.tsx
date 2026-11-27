@@ -47,26 +47,19 @@ import { KometaSection } from '@/components/settings/KometaSection';
 import { UpdatesSection } from '@/components/settings/UpdatesSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
+import { useT, type MessageKey } from '@/i18n';
 
 /** Where each service keeps its API key, and an example address. */
-const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptional?: boolean }> = {
-  jellyfin: {
-    placeholder: 'https://jellyfin.example.com',
-    keyHelp: 'Optional. Dashboard → API Keys. Enables server-wide data and update/restart warnings.',
-    keyOptional: true,
-  },
-  sonarr: { placeholder: 'https://sonarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  radarr: { placeholder: 'https://radarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  prowlarr: { placeholder: 'https://prowlarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  seerr: { placeholder: 'https://seerr.example.com', keyHelp: 'Settings → General → API Key' },
-  bazarr: { placeholder: 'https://bazarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  lidarr: { placeholder: 'https://lidarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  readarr: { placeholder: 'https://readarr.example.com', keyHelp: 'Settings → General → Security → API Key' },
-  infinidisk: {
-    placeholder: 'https://infinidisk.example.com',
-    keyHelp: 'Optional if the status endpoint is public.',
-    keyOptional: true,
-  },
+const HELP: Record<ServiceId, { placeholder: string; keyHelp: MessageKey; keyOptional?: boolean }> = {
+  jellyfin: { placeholder: 'https://jellyfin.example.com', keyHelp: 'settings.keyHelp.jellyfin', keyOptional: true },
+  sonarr: { placeholder: 'https://sonarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  radarr: { placeholder: 'https://radarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  prowlarr: { placeholder: 'https://prowlarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  seerr: { placeholder: 'https://seerr.example.com', keyHelp: 'settings.keyHelp.seerr' },
+  bazarr: { placeholder: 'https://bazarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  lidarr: { placeholder: 'https://lidarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  readarr: { placeholder: 'https://readarr.example.com', keyHelp: 'settings.keyHelp.arr' },
+  infinidisk: { placeholder: 'https://infinidisk.example.com', keyHelp: 'settings.keyHelp.infinidisk', keyOptional: true },
 };
 
 /* -------------------------------- inputs -------------------------------- */
@@ -91,22 +84,24 @@ function Field({ label, htmlFor, help, error, children }: { label: string; htmlF
 }
 
 function SourceBadge({ s }: { s: ServiceSettingsView }) {
+  const t = useT();
   if (s.source === 'database')
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-        <Database className="size-3" /> Saved in StreamForge
+        <Database className="size-3" /> {t('settings.service.savedHere')}
       </span>
     );
   if (s.source === 'environment')
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-ink-3">
-        <Server className="size-3" /> From environment
+        <Server className="size-3" /> {t('settings.service.fromEnv')}
       </span>
     );
   return null;
 }
 
 function TestResult({ result }: { result: ConnectionTest }) {
+  const t = useT();
   if (!result.ok)
     return (
       <div className="flex items-start gap-2 rounded-xl border border-bad/25 bg-bad/10 px-3 py-2 text-xs text-bad" role="status">
@@ -120,7 +115,7 @@ function TestResult({ result }: { result: ConnectionTest }) {
       <div className="flex items-center gap-2 rounded-xl border border-ok/25 bg-ok/10 px-3 py-2 text-xs text-ok">
         <CircleCheck className="size-3.5 shrink-0" />
         <span>
-          Connected{result.version ? ` · v${result.version}` : ''} · {result.latencyMs} ms
+          {t('settings.service.connected')}{result.version ? ` · v${result.version}` : ''} · {result.latencyMs} ms
         </span>
       </div>
       {warnings.map((w, i) => (
@@ -171,6 +166,7 @@ function toInput(id: ServiceId, f: FormState): ServiceSettingsInput {
 }
 
 function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
+  const t = useT();
   const meta = SERVICES[s.id];
   const help = HELP[s.id];
   const { logout } = useAuth();
@@ -221,12 +217,12 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
   }
 
   const keyPlaceholder = form.clearKey
-    ? 'Key will be removed'
+    ? t('settings.service.keyRemoved')
     : s.apiKeySet
-      ? `Saved (${s.apiKeyHint ?? '••••'}) — leave blank to keep`
+      ? t('settings.service.keySaved', { hint: s.apiKeyHint ?? '••••' })
       : help.keyOptional
-        ? 'Optional'
-        : 'Paste API key';
+        ? t('common.optional')
+        : t('settings.service.pasteKey');
 
   return (
     <motion.li initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
@@ -248,14 +244,14 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
             </button>
             <div className="flex flex-wrap items-center gap-1.5">
               <SourceBadge s={s} />
-              {!s.enabled ? <Pill>Disabled</Pill> : status && <StatusBadge status={status} />}
+              {!s.enabled ? <Pill>{t('settings.service.disabled')}</Pill> : status && <StatusBadge status={status} />}
             </div>
             {s.canDisable && (
               <Switch
                 checked={s.enabled}
                 disabled={toggle.isPending}
                 onChange={(v) => toggle.mutate(v)}
-                label={s.enabled ? `Disable ${meta.name}` : `Enable ${meta.name}`}
+                label={s.enabled ? t('settings.service.disable', { name: meta.name }) : t('settings.service.enable', { name: meta.name })}
                 className="ml-1"
               />
             )}
@@ -264,7 +260,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
               onClick={() => setOpen(!open)}
               aria-expanded={open}
               aria-controls={`${s.id}-settings`}
-              aria-label={open ? `Close ${meta.name} settings` : `Open ${meta.name} settings`}
+              aria-label={open ? t('settings.service.closeSettings', { name: meta.name }) : t('settings.service.openSettings', { name: meta.name })}
               className="grid size-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white/[0.06] hover:text-ink"
             >
               <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
@@ -274,7 +270,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
           <div id={`${s.id}-settings`} hidden={!open}>
           {!s.enabled && (
             <p className="border-b border-line bg-white/[0.02] px-5 py-2.5 text-xs text-ink-3">
-              Switched off — hidden from navigation and the dashboard, and StreamForge won’t contact it. Settings are kept.
+              {t('settings.service.switchedOff')}
             </p>
           )}
           {toggle.error && (
@@ -283,10 +279,10 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
 
           <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
             <Field
-              label="Server address"
+              label={t('settings.service.address')}
               htmlFor={`${s.id}-url`}
               error={fieldError('url')}
-              help={s.id === 'jellyfin' ? 'Changing the server signs everyone out.' : 'The address StreamForge’s server uses to reach it.'}
+              help={s.id === 'jellyfin' ? t('settings.service.addressHelpJellyfin') : t('settings.service.addressHelp')}
             >
               <input
                 id={`${s.id}-url`}
@@ -303,10 +299,10 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
             </Field>
 
             <Field
-              label="Public address (optional)"
+              label={t('settings.service.publicAddress')}
               htmlFor={`${s.id}-public`}
               error={fieldError('publicUrl')}
-              help={`Where you open ${meta.name} in a browser, if it’s different. Used for links${s.id === 'jellyfin' ? ' like Play in Jellyfin' : ''}.`}
+              help={t(s.id === 'jellyfin' ? 'settings.service.publicHelpJellyfin' : 'settings.service.publicHelp', { name: meta.name })}
             >
               <input
                 id={`${s.id}-public`}
@@ -322,7 +318,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
               />
             </Field>
 
-            <Field label={help.keyOptional ? 'API key (optional)' : 'API key'} htmlFor={`${s.id}-key`} error={fieldError('apiKey')} help={help.keyHelp}>
+            <Field label={help.keyOptional ? t('settings.service.apiKeyOptional') : t('settings.service.apiKey')} htmlFor={`${s.id}-key`} error={fieldError('apiKey')} help={t(help.keyHelp)}>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-ink-4" />
                 <input
@@ -344,14 +340,14 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
                       onClick={() => set('clearKey', !form.clearKey)}
                       className="rounded-md px-1.5 py-1 text-[11px] text-ink-4 hover:text-ink-2"
                     >
-                      {form.clearKey ? 'Undo' : 'Remove'}
+                      {form.clearKey ? t('settings.service.undo') : t('settings.service.remove')}
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setShowKey((v) => !v)}
                     className="grid size-7 place-items-center rounded-md text-ink-4 hover:text-ink-2"
-                    aria-label={showKey ? 'Hide API key' : 'Show API key'}
+                    aria-label={showKey ? t('settings.service.hideKey') : t('settings.service.showKey')}
                   >
                     {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
@@ -368,7 +364,7 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
                   className="flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-ink"
                 >
                   <ChevronDown className={cn('size-3.5 transition-transform', advanced && 'rotate-180')} />
-                  Advanced
+                  {t('settings.service.advanced')}
                 </button>
                 <AnimatePresence initial={false}>
                   {advanced && (
@@ -379,21 +375,21 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
                       className="overflow-hidden"
                     >
                       <div className="grid gap-4 pt-4 md:grid-cols-3">
-                        <Field label="API key header" htmlFor="inf-header" error={fieldError('authHeader')} help="e.g. X-Api-Key">
+                        <Field label={t('settings.service.keyHeader')} htmlFor="inf-header" error={fieldError('authHeader')} help={t('settings.service.keyHeaderHelp')}>
                           <input id="inf-header" className={inputCls} spellCheck={false} value={form.authHeader} onChange={(e) => set('authHeader', e.target.value)} />
                         </Field>
-                        <Field label="Status path" htmlFor="inf-status" error={fieldError('statusPath')} help="Returns drive status as JSON">
+                        <Field label={t('settings.service.statusPath')} htmlFor="inf-status" error={fieldError('statusPath')} help={t('settings.service.statusPathHelp')}>
                           <input id="inf-status" className={inputCls} spellCheck={false} placeholder="/api/status" value={form.statusPath} onChange={(e) => set('statusPath', e.target.value)} />
                         </Field>
-                        <Field label="Health path" htmlFor="inf-health" error={fieldError('healthPath')} help="Optional liveness check">
+                        <Field label={t('settings.service.healthPath')} htmlFor="inf-health" error={fieldError('healthPath')} help={t('settings.service.healthPathHelp')}>
                           <input id="inf-health" className={inputCls} spellCheck={false} value={form.healthPath} onChange={(e) => set('healthPath', e.target.value)} />
                         </Field>
                         <div className="md:col-span-3">
                           <Field
-                            label="Local mount paths"
+                            label={t('settings.service.mounts')}
                             htmlFor="inf-mounts"
                             error={fieldError('mounts')}
-                            help="One per line. Paths visible to the StreamForge server, measured directly."
+                            help={t('settings.service.mountsHelp')}
                           >
                             <textarea
                               id="inf-mounts"
@@ -429,28 +425,28 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
           <footer className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
             <p className="mr-auto text-[11px] text-ink-4">
               {saved && !dirty ? (
-                <span className="text-ok">Saved — applied immediately</span>
+                <span className="text-ok">{t('settings.service.savedApplied')}</span>
               ) : s.source === 'database' && s.updatedAt ? (
-                <>Updated {relative(s.updatedAt)}{s.updatedBy && s.updatedBy !== 'setup' ? ` by ${s.updatedBy}` : ''}</>
+                s.updatedBy && s.updatedBy !== 'setup' ? t('settings.service.updatedBy', { when: relative(s.updatedAt), who: s.updatedBy }) : t('settings.service.updated', { when: relative(s.updatedAt) })
               ) : s.source === 'environment' ? (
-                'Saving here overrides the environment variables'
+                t('settings.service.envOverride')
               ) : (
-                'Not connected'
+                t('settings.service.notConnected')
               )}
             </p>
             {s.source === 'database' && s.envAvailable && (
-              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void onReset()} title="Remove saved settings and use the environment variables">
+              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void onReset()} title={t('settings.service.useEnvTitle')}>
                 {reset.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
-                Use environment
+                {t('settings.service.useEnv')}
               </Button>
             )}
             <Button type="button" size="sm" disabled={busy || (!form.url.trim() && !form.mounts.trim())} onClick={() => test.mutate(toInput(s.id, form))}>
               {test.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <PlugZap className="size-3.5" />}
-              Test connection
+              {t('settings.service.test')}
             </Button>
             <Button type="submit" variant="primary" size="sm" disabled={busy || !dirty}>
               {save.isPending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-              Save
+              {t('common.save')}
             </Button>
           </footer>
           </div>
@@ -464,21 +460,22 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
 
 /** Settings is split into pages; each has its own address so links land on it. */
 const TABS = [
-  { path: '', label: 'Services', icon: Server, description: 'Connect your services, or switch off the ones you don’t use. Changes apply immediately — no restart needed.' },
-  { path: 'downloads', label: 'Download clients', icon: Download, description: 'qBittorrent, Transmission, SABnzbd and NZBGet, for real speeds and the Downloads page.' },
-  { path: 'notifications', label: 'Notifications', icon: Bell, description: 'Where alerts go, and which events each channel hears about.' },
-  { path: 'access', label: 'Access', icon: Users, description: 'Who can sign in, what members see, and single sign-on.' },
-  { path: 'system', label: 'Updates & backup', icon: ArchiveRestore, description: 'New StreamForge releases, and a backup of every setting.' },
+  { path: '', key: 'services', icon: Server },
+  { path: 'downloads', key: 'downloads', icon: Download },
+  { path: 'notifications', key: 'notifications', icon: Bell },
+  { path: 'access', key: 'access', icon: Users },
+  { path: 'system', key: 'system', icon: ArchiveRestore },
 ] as const;
 
 function SettingsTabs({ update }: { update?: string }) {
+  const t = useT();
   return (
-    <nav aria-label="Settings sections" className="no-scrollbar -mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <nav aria-label={t('settings.sections')} className="no-scrollbar -mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <ul className="flex w-max gap-1 rounded-2xl border border-line bg-white/[0.02] p-1">
-        {TABS.map((t) => (
-          <li key={t.path}>
+        {TABS.map((tab) => (
+          <li key={tab.path}>
             <NavLink
-              to={t.path ? `/settings/${t.path}` : '/settings'}
+              to={tab.path ? `/settings/${tab.path}` : '/settings'}
               end
               className={({ isActive }) =>
                 cn(
@@ -487,9 +484,9 @@ function SettingsTabs({ update }: { update?: string }) {
                 )
               }
             >
-              <t.icon className="size-4" />
-              {t.label}
-              {t.path === 'system' && update && <span className="size-2 rounded-full bg-brand" title={`StreamForge ${update} is available`} />}
+              <tab.icon className="size-4" />
+              {t(`settings.tabs.${tab.key}.label`)}
+              {tab.path === 'system' && update && <span className="size-2 rounded-full bg-brand" title={t('nav.updateAvailable', { version: update })} />}
             </NavLink>
           </li>
         ))}
@@ -499,14 +496,14 @@ function SettingsTabs({ update }: { update?: string }) {
 }
 
 /** The Services tab, grouped by what each app does. */
-const GROUPS: { id: string; title: string; description: string; services: ServiceId[] }[] = [
-  { id: 'media', title: 'Media server', description: 'The server this install watches and people sign in with.', services: ['jellyfin'] },
-  { id: 'library', title: 'Library managers', description: 'Find, download and organise TV, movies, music and books.', services: ['sonarr', 'radarr', 'lidarr', 'readarr'] },
-  { id: 'indexers', title: 'Indexers and downloads', description: 'Where releases are found, and the clients that download them.', services: ['prowlarr'] },
-  { id: 'requests', title: 'Requests', description: 'Let people ask for new movies and shows.', services: ['seerr'] },
-  { id: 'metadata', title: 'Metadata and subtitles', description: 'Subtitles, collections, overlays and playlists.', services: ['bazarr'] },
-  { id: 'storage', title: 'Storage', description: 'Drive health and capacity.', services: ['infinidisk'] },
-];
+const GROUPS = [
+  { id: 'media', services: ['jellyfin'] },
+  { id: 'library', services: ['sonarr', 'radarr', 'lidarr', 'readarr'] },
+  { id: 'indexers', services: ['prowlarr'] },
+  { id: 'requests', services: ['seerr'] },
+  { id: 'metadata', services: ['bazarr'] },
+  { id: 'storage', services: ['infinidisk'] },
+] as const satisfies readonly { id: string; services: readonly ServiceId[] }[];
 
 function Group({ id, title, description, children }: { id: string; title: string; description: string; children: ReactNode }) {
   return (
@@ -526,14 +523,15 @@ function ServicesTab() {
   const q = useServiceSettings();
   const main = useMainServer();
   const config = useServiceConfig();
+  const t = useT();
   const byId = new Map(q.data?.services.map((s) => [s.id, s]));
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
-  if (!q.data) return <PageLoader label="Loading settings" />;
+  if (!q.data) return <PageLoader label={t('settings.loading')} />;
   let n = 0;
   return (
     <div className="space-y-9">
       {GROUPS.map((g) => (
-        <Group key={g.id} id={g.id} title={g.title} description={g.description}>
+        <Group key={g.id} id={g.id} title={t(`settings.groups.${g.id}.title`)} description={t(`settings.groups.${g.id}.description`)}>
           <ul className="space-y-4">
             {g.services.map((id) => {
               const s = byId.get(id);
@@ -560,9 +558,7 @@ function ServicesTab() {
             })}
             {g.id === 'requests' && config.data?.requests === 'silo' && (
               <li className="px-1 text-[11px] leading-relaxed text-ink-4">
-                Silo’s own requests are on, so StreamForge uses them for the Requests page, Request buttons and approvals instead of Seerr. Requests are made in each person’s
-                own name. Silo sends approved ones to the request servers set up in Silo (Admin → Requests → Settings → Servers), such as the community Sonarr &amp;
-                Radarr or Seerr plugins.
+                {t('settings.siloRequests')}
               </li>
             )}
             {g.id === 'indexers' && (
@@ -571,8 +567,8 @@ function ServicesTab() {
                 <Link to="/settings/downloads" className="flex items-center gap-3 px-5 py-4 text-left">
                   <Download className="size-5 shrink-0 text-ink-3" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[14px] font-medium">Download clients</span>
-                    <span className="block text-[11px] text-ink-4">qBittorrent, Transmission, SABnzbd and NZBGet have their own tab.</span>
+                    <span className="block text-[14px] font-medium">{t('settings.tabs.downloads.label')}</span>
+                    <span className="block text-[11px] text-ink-4">{t('settings.downloadClientsHint')}</span>
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-ink-4" />
                 </Link>
@@ -585,8 +581,8 @@ function ServicesTab() {
         </Group>
       ))}
       <p className="flex flex-wrap items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
-        <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
-        <Link to="/setup" className="text-brand hover:underline">Find apps on your network</Link>
+        <KeyRound className="size-3" /> {t('settings.keysNote')}
+        <Link to="/setup" className="text-brand hover:underline">{t('settings.findApps')}</Link>
       </p>
     </div>
   );
@@ -594,6 +590,7 @@ function ServicesTab() {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const t = useT();
   const main = useMainServer();
   const { section = '' } = useParams();
   const updates = useUpdates(!!user?.isAdmin);
@@ -601,7 +598,7 @@ export default function SettingsPage() {
   if (!user?.isAdmin) {
     return (
       <Card>
-        <EmptyState icon={ShieldAlert} title="Administrators only" description="Ask an administrator to change StreamForge's settings." />
+        <EmptyState icon={ShieldAlert} title={t('settings.adminsOnly')} description={t('settings.adminsOnlyDescription')} />
       </Card>
     );
   }
@@ -610,7 +607,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Configuration" title="Settings" description={tab.description} />
+      <PageHeader eyebrow={t('settings.eyebrow')} title={t('settings.title')} description={t(`settings.tabs.${tab.key}.description`)} />
       <SettingsTabs update={updates.data?.available} />
       {/* Each section brings its own heading; the first needs no gap above it. */}
       <div className="[&>section:first-child]:mt-0">

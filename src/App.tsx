@@ -12,6 +12,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Loader } from '@/components/ui/Loader';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import { useT } from '@/i18n';
 
 const NowPlaying = lazyPage(() => import('@/pages/NowPlaying'));
 const MediaServer = lazyPage(() => import('@/pages/MediaServer'));
@@ -42,9 +43,10 @@ const SetupApps = lazyPage(() => import('@/pages/SetupApps'));
 const NotFound = lazyPage(() => import('@/pages/NotFound'));
 
 function Splash() {
+  const t = useT();
   return (
     <div className="grid min-h-dvh place-items-center">
-      <Loader label="Starting StreamForge" slowHint="Still connecting to the server…" />
+      <Loader label={t('app.starting')} slowHint={t('app.stillConnecting')} />
     </div>
   );
 }
@@ -82,10 +84,11 @@ function PublicOnly() {
 /** Pages a member hasn't been given access to say so instead of erroring. */
 function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }) {
   const canSee = useCanSee();
+  const t = useT();
   if (area && !canSee(area)) {
     return (
       <Card>
-        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask an administrator if you need it." />
+        <EmptyState icon={Lock} title={t('app.notAvailable')} description={t('app.notAvailableDescription')} />
       </Card>
     );
   }
@@ -93,7 +96,7 @@ function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }
 }
 
 const page = (el: React.ReactNode, area?: Area) => (
-  <Suspense fallback={<Loader className="min-h-[60vh]" label="Loading" />}>
+  <Suspense fallback={<Loader className="min-h-[60vh]" />}>
     <AreaGate area={area}>{el}</AreaGate>
   </Suspense>
 );
@@ -101,14 +104,15 @@ const page = (el: React.ReactNode, area?: Area) => (
 /** Shown instead of a blank page if a page crashes. */
 function RouteError() {
   const error = useRouteError() as Error | undefined;
+  const t = useT();
   return (
     <div className="grid min-h-dvh place-items-center p-6">
       <Card className="max-w-md p-6 text-center">
-        <h1 className="text-lg font-semibold">Something went wrong on this page</h1>
-        <p className="mt-2 text-sm text-ink-3">{error?.message ?? 'An unexpected error occurred.'}</p>
+        <h1 className="text-lg font-semibold">{t('app.crashTitle')}</h1>
+        <p className="mt-2 text-sm text-ink-3">{error?.message ?? t('app.crashFallback')}</p>
         <div className="mt-5 flex justify-center gap-2">
-          <button className="rounded-xl border border-line-strong px-4 py-2 text-sm text-ink-2 hover:bg-white/[0.06]" onClick={() => location.reload()}>Reload</button>
-          <a className="rounded-xl bg-brand/15 px-4 py-2 text-sm text-brand hover:bg-brand/25" href="/">Go to Overview</a>
+          <button className="rounded-xl border border-line-strong px-4 py-2 text-sm text-ink-2 hover:bg-white/[0.06]" onClick={() => location.reload()}>{t('app.reload')}</button>
+          <a className="rounded-xl bg-brand/15 px-4 py-2 text-sm text-brand hover:bg-brand/25" href="/">{t('app.goToOverview')}</a>
         </div>
       </Card>
     </div>

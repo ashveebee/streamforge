@@ -7,13 +7,14 @@ import { Card, CardBody, CardHeader } from '../ui/Card';
 import { ProgressBar, usageColor } from '../ui/Progress';
 import { Sparkline } from '../ui/Sparkline';
 import { EmptyState, SkeletonRows } from '../ui/States';
+import { getLocale } from '@/i18n';
 
 type Vol = StorageForecast['volumes'][number];
 
 function outlook(v: Vol) {
   if (v.growthPerDay === undefined) return { text: 'Collecting data — a forecast appears after a day', tone: 'text-ink-4' };
   if (v.daysLeft === undefined) return { text: v.growthPerDay < 0 ? 'Shrinking' : 'Not growing', tone: 'text-ink-3' };
-  const when = v.fullOn ? new Date(v.fullOn).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: v.daysLeft > 300 ? 'numeric' : undefined }) : undefined;
+  const when = v.fullOn ? new Date(v.fullOn).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', year: v.daysLeft > 300 ? 'numeric' : undefined }) : undefined;
   const tone = v.daysLeft < 30 ? 'text-bad' : v.daysLeft < 90 ? 'text-warn' : 'text-ink-2';
   const span = v.daysLeft < 60 ? `${v.daysLeft} days` : v.daysLeft < 730 ? `${Math.round(v.daysLeft / 30)} months` : `${(v.daysLeft / 365).toFixed(1)} years`;
   return { text: `Full in ~${span}${when ? ` (${when})` : ''}`, tone };

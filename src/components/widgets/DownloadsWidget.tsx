@@ -13,6 +13,7 @@ import { EmptyState, Skeleton } from '../ui/States';
 import { AnimatedNumber } from '../ui/AnimatedNumber';
 import { Menu, type MenuItem } from '../ui/Menu';
 import { TitleLink, arrTitlePath } from '@/components/ui/TitleLink';
+import { getLocale } from '@/i18n';
 
 const CONFIRM: Partial<Record<QueueActionName, string>> = {
   remove: 'Remove this download and delete it from the download client?',
@@ -89,7 +90,7 @@ export function QueueRow({ item, speedBps, stalledSince, actions = true }: { ite
           <>
             <div className="font-medium text-ink-2">{Math.round(item.progress * 100)}%</div>
             {stalledSince ? (
-              <div className="text-warn" title={`No progress since ${new Date(stalledSince).toLocaleString()}`}>
+              <div className="text-warn" title={`No progress since ${new Date(stalledSince).toLocaleString(getLocale())}`}>
                 Stalled {duration(Date.now() - Date.parse(stalledSince))}
               </div>
             ) : (

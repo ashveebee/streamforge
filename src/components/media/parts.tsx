@@ -5,16 +5,17 @@ import { cn } from '@/lib/cn';
 import { ServerTag } from '@/components/ui/ServerTag';
 import type { Episode, MediaFile } from '@/hooks/useMedia';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { getLocale } from '@/i18n';
 
 /* Small pieces shared by the title page and its episode details. */
 
 export const episodeLabel = (e: Pick<Episode, 'season' | 'number'>) => [e.season !== undefined && `S${e.season}`, e.number !== undefined && `E${e.number}`].filter(Boolean).join(' ');
 export const bits = (bps?: number) => (bps ? bitrate(bps / 8) : undefined);
-export const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
+export const longDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric' }) : undefined);
 export const langName = (code?: string) => {
   if (!code || code === 'und') return undefined;
   try {
-    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code;
+    return new Intl.DisplayNames(getLocale(), { type: 'language' }).of(code) ?? code;
   } catch {
     return code;
   }

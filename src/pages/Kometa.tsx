@@ -15,6 +15,7 @@ import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState } from '@/components/ui/States';
 import { CollectionForm, ServerTag } from '@/components/kometa/CollectionForm';
 import { useKometaStatus } from '@/components/widgets/KometaCard';
+import { getLocale } from '@/i18n';
 
 export function KometaIcon({ size = 52 }: { size?: number }) {
   return (
@@ -116,7 +117,7 @@ export default function KometaPage() {
           <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
             {status.data?.running ? <Pill tone="brand">Running</Pill> : last ? <Pill tone={last.errors ? 'warn' : 'ok'}>{last.errors ? `${last.errors} error${last.errors === 1 ? '' : 's'} last run` : 'Healthy'}</Pill> : null}
             {last && <span>Last run finished {relative(last.at)}{last.runTime ? ` · took ${last.runTime}` : ''}</span>}
-            {d?.nextRun && <span>Next run {new Date(d.nextRun).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+            {d?.nextRun && <span>Next run {new Date(d.nextRun).toLocaleString(getLocale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
           </span>
         }
         actions={
@@ -149,7 +150,7 @@ export default function KometaPage() {
             {waiting > 0 && (
               <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#f59e0b]/25 bg-[#f59e0b]/[0.06] px-4 py-3 text-[13px] text-ink-2">
                 <b style={{ color: KOMETA_COLOR }}>{waiting} change{waiting === 1 ? '' : 's'} waiting.</b>
-                Kometa builds {waiting === 1 ? 'it' : 'them'} on its next run{d?.nextRun ? `, ${new Date(d.nextRun).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.
+                Kometa builds {waiting === 1 ? 'it' : 'them'} on its next run{d?.nextRun ? `, ${new Date(d.nextRun).toLocaleString(getLocale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.
               </div>
             )}
             <div role="tablist" aria-label="Filter collections" className="mb-5 flex flex-wrap gap-1.5">

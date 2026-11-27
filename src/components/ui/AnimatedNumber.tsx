@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { animate, useReducedMotion } from 'motion/react';
+import { getLocale } from '@/i18n';
 
 /** Counts smoothly to the new value whenever it changes. */
-export function AnimatedNumber({ value, format = (n) => Math.round(n).toLocaleString(), className }: {
+export function AnimatedNumber({ value, format = (n) => Math.round(n).toLocaleString(getLocale()), className }: {
   value: number | undefined;
   format?: (n: number) => string;
   className?: string;

@@ -4,6 +4,7 @@ import { compact } from '@/lib/format';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { StatTile } from '../ui/Stat';
 import { QueryState, Skeleton } from '../ui/States';
+import { getLocale } from '@/i18n';
 
 export const LIBRARY_ICONS: Record<string, typeof Film> = {
   movies: Film,
@@ -36,7 +37,7 @@ export function LibraryWidget() {
                       <Icon className="size-4 text-ink-4" />
                       <span className="flex-1 truncate">{l.name}</span>
                       {l.refreshing && <span className="text-[11px] text-brand">Scanning {Math.round(l.refreshProgress ?? 0)}%</span>}
-                      <span className="text-ink-3 tabular">{l.itemCount !== undefined ? l.itemCount.toLocaleString() : '—'}</span>
+                      <span className="text-ink-3 tabular">{l.itemCount !== undefined ? l.itemCount.toLocaleString(getLocale()) : '—'}</span>
                     </li>
                   );
                 })}

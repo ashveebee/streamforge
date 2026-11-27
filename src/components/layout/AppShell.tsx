@@ -10,6 +10,7 @@ import { Avatar } from '../ui/Image';
 import { Sidebar } from './Sidebar';
 import { LogoMark } from './Logo';
 import { CommandPalette, useCommandPaletteHotkey } from './CommandPalette';
+import { useT } from '@/i18n';
 
 export function Ambient() {
   return (
@@ -28,6 +29,7 @@ export function AppShell() {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const t = useT();
   const outlet = useOutlet();
   const [searching, setSearching] = useState(false);
   const openSearch = useCallback(() => setSearching(true), []);
@@ -55,14 +57,14 @@ export function AppShell() {
             <button
               onClick={() => setDrawer(true)}
               className="-ml-1.5 grid size-9 place-items-center rounded-lg text-ink-2 hover:bg-white/5"
-              aria-label="Open navigation"
+              aria-label={t('nav.openNavigation')}
             >
               <Menu className="size-5" />
             </button>
             <LogoMark size={26} />
             <span className="text-[15px] font-semibold tracking-tight">StreamForge</span>
             <div className="flex-1" />
-            <button onClick={openSearch} className="grid size-9 place-items-center rounded-lg text-ink-2 hover:bg-white/5" aria-label="Search">
+            <button onClick={openSearch} className="grid size-9 place-items-center rounded-lg text-ink-2 hover:bg-white/5" aria-label={t('nav.search')}>
               <Search className="size-5" />
             </button>
             {user && <Avatar src={jfUserImage(user.id, user.imageTag)} name={user.name} size={30} />}

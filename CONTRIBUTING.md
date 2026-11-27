@@ -12,6 +12,24 @@ npm run typecheck    # must pass before opening a PR
 npm run build
 ```
 
+## Translations
+
+UI text lives in `src/i18n/locales/`. `en.ts` is the source; every other
+locale has the same keys, and `npm run typecheck` fails if one is missing.
+
+- **In a component:** `const t = useT();` then `t('nav.overview')`, or
+  `t('dashboard.streams', { count: 3 })`. Outside React, import `t` from `@/i18n`.
+- **New text:** add the key to `en.ts` and to every other locale. If you can't
+  translate it, copy the English for now; it can be fixed later.
+- **Placeholders:** `{name}` is filled from the second argument. Keep the same
+  placeholders in every language.
+- **Plurals:** use `{ one: '…', other: '…' }` and pass `count`. Each language's
+  own plural rules choose the form.
+- **Dates and numbers:** use the helpers in `src/lib/format.ts`, or pass
+  `getLocale()` to `Intl` / `toLocale…String`, never `undefined`.
+- **Adding a language:** copy `en.ts` to `<code>.ts` (for example `it.ts`),
+  translate it, and add it to `LOCALES` in `src/i18n/index.tsx`.
+
 ## Commit messages and PR titles
 
 Releases, version numbers and the changelog are generated from

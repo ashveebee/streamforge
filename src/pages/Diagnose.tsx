@@ -13,6 +13,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Status';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/ui/States';
+import { getLocale } from '@/i18n';
+import { dayLabel } from '@/lib/format';
 
 const COLORS = {
   upload: '#0d9488',
@@ -30,8 +32,8 @@ const when = (t: number) => {
   const d = new Date(t);
   const today = new Date();
   const yesterday = new Date(Date.now() - 86_400_000);
-  const day = d.toDateString() === today.toDateString() ? 'Today' : d.toDateString() === yesterday.toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short' });
-  return `${day} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+  const day = d.toDateString() === today.toDateString() || d.toDateString() === yesterday.toDateString() ? dayLabel(d.toISOString()) : d.toLocaleDateString(getLocale(), { weekday: 'short' });
+  return `${day} ${d.toLocaleTimeString(getLocale(), { hour: 'numeric', minute: '2-digit' })}`;
 };
 const lost = (ms: number) => (ms >= 90_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 1000)} s`);
 
@@ -376,7 +378,7 @@ function Timeline({ a }: { a: Analysis }) {
   const stalls = a.stalls.length ? a.stalls : a.incident ? [{ start: a.incident.start, end: a.incident.end }] : [];
   const areas = stalls.map((s) => <ReferenceArea key={s.start} x1={s.start} x2={s.end} fill={COLORS.stall} strokeOpacity={0} ifOverflow="extendDomain" />);
   const fmtMbps = (v: number) => (Number.isFinite(v) ? `${v.toFixed(v >= 10 ? 0 : 1)} Mbps` : '—');
-  const xProps = { ...axisProps, dataKey: 't', type: 'number' as const, domain: ['dataMin', 'dataMax'] as [string, string], scale: 'time' as const, tickFormatter: (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }), minTickGap: 40 };
+  const xProps = { ...axisProps, dataKey: 't', type: 'number' as const, domain: ['dataMin', 'dataMax'] as [string, string], scale: 'time' as const, tickFormatter: (t: number) => new Date(t).toLocaleTimeString(getLocale(), { hour: 'numeric', minute: '2-digit' }), minTickGap: 40 };
   const network = [
     has('upload') && { key: 'upload', label: 'Sent by the server', color: COLORS.upload },
     has('stream') && { key: 'stream', label: 'This stream', color: COLORS.stream },

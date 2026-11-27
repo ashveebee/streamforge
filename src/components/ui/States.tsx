@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { PlugZap, RefreshCw, Settings, TriangleAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useT } from '@/i18n';
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={cn('skeleton rounded-lg', className)} />;
@@ -59,20 +60,21 @@ export function EmptyState({
 }
 
 export function ErrorState({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) {
+  const t = useT();
   const e = error as ApiError;
   if (e instanceof ApiError && e.notConfigured) {
     return (
       <EmptyState
         className={className}
         icon={PlugZap}
-        title="Not connected"
-        description="Add this service's address and API key in Settings to enable it."
+        title={t('states.notConnected')}
+        description={t('states.notConnectedDescription')}
         action={
           <Link
             to="/settings"
             className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-white/5 hover:text-ink"
           >
-            <Settings className="size-3" /> Open Settings
+            <Settings className="size-3" /> {t('states.openSettings')}
           </Link>
         }
       />
@@ -84,15 +86,15 @@ export function ErrorState({ error, onRetry, className }: { error: unknown; onRe
         <TriangleAlert className="size-4.5 text-bad" />
       </div>
       <div>
-        <p className="text-sm font-medium text-ink">Couldn't load data</p>
-        <p className="mt-1 max-w-sm text-xs break-words text-ink-3">{e?.message ?? 'Unknown error'}</p>
+        <p className="text-sm font-medium text-ink">{t('states.loadFailed')}</p>
+        <p className="mt-1 max-w-sm text-xs break-words text-ink-3">{e?.message ?? t('states.unknownError')}</p>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
           className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-1.5 text-xs text-ink-2 transition hover:bg-white/5 hover:text-ink"
         >
-          <RefreshCw className="size-3" /> Retry
+          <RefreshCw className="size-3" /> {t('common.retry')}
         </button>
       )}
     </div>

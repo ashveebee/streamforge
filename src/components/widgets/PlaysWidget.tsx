@@ -4,9 +4,10 @@ import { usePlays } from '@/hooks/queries';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { axisProps, ChartTooltip, gridProps, SERIES } from '../ui/Chart';
 import { QueryState, Skeleton } from '../ui/States';
+import { getLocale } from '@/i18n';
 
-const short = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2);
-const long = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+const short = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'short' }).slice(0, 2);
+const long = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { weekday: 'long', month: 'short', day: 'numeric' });
 
 export function PlaysWidget() {
   const q = usePlays();
@@ -21,7 +22,7 @@ export function PlaysWidget() {
             return (
               <>
                 <div className="mb-3 flex items-baseline gap-3">
-                  <span className="text-3xl font-semibold tabular">{total.toLocaleString()}</span>
+                  <span className="text-3xl font-semibold tabular">{total.toLocaleString(getLocale())}</span>
                   <span className="text-xs text-ink-3">plays{busiest?.plays ? ` · busiest ${long(busiest.date)}` : ''}</span>
                 </div>
                 <div className="h-44">

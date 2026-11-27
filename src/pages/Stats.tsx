@@ -14,6 +14,7 @@ import { axisProps, ChartTooltip, gridProps, Legend, SERIES } from '@/components
 import { StatTile } from '@/components/ui/Stat';
 import { PageLoader } from '@/components/ui/Loader';
 import { EmptyState, QueryState } from '@/components/ui/States';
+import { getLocale } from '@/i18n';
 
 const RANGES = [7, 30, 90, 365] as const;
 // Validated two-series pair (same as Sonarr/Radarr elsewhere).
@@ -21,7 +22,7 @@ const DIRECT = SERIES.sonarr;
 const TRANSCODE = SERIES.radarr;
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const shortDate = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const shortDate = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
 
 function DailyChart({ d, accent }: { d: PlaybackStats; accent: string }) {
   const main = useMainServer();
@@ -194,7 +195,7 @@ export default function StatsPage() {
                 <p className="rounded-xl border border-line bg-white/[0.02] px-4 py-3 text-xs text-ink-3">
                   {!d.recording
                     ? 'Add a Jellyfin API key in Settings to record watch time and direct-play vs transcode. Until then these figures come from the Jellyfin activity log.'
-                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString() : 'now'} onwards; earlier days come from ${main.plex ? 'Plex watch history' : `the ${main.name} activity log`}.`}
+                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString(getLocale()) : 'now'} onwards; earlier days come from ${main.plex ? 'Plex watch history' : `the ${main.name} activity log`}.`}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

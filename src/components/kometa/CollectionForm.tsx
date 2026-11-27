@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { SERVER_NAME, SOURCE_LABEL, useSaveCollection, type CollectionInput, type Library, type SourceType } from '@/hooks/useKometa';
+import { getLocale } from '@/i18n';
 
 const input =
   'h-10 w-full rounded-xl border border-line-strong bg-white/[0.03] px-3 text-sm text-ink placeholder:text-ink-4 outline-none transition focus:border-brand/60 focus:ring-4 focus:ring-brand/10 aria-[invalid=true]:border-bad/60 [&>option]:bg-surface-2 [&>optgroup]:bg-surface-2';
@@ -240,7 +241,7 @@ export function CollectionForm({
 
         <div className="flex items-center gap-2 border-t border-line px-6 py-4">
           <span className="mr-auto text-[11px] text-ink-4">
-            {nextRun ? `Builds on Kometa’s next run, ${new Date(nextRun).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'Builds on Kometa’s next run.'}
+            {nextRun ? `Builds on Kometa’s next run, ${new Date(nextRun).toLocaleString(getLocale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'Builds on Kometa’s next run.'}
           </span>
           <Button type="button" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={save.isPending || !f.name.trim() || !lib}>

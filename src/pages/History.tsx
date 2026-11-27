@@ -11,6 +11,7 @@ import { Avatar, FadeImage } from '@/components/ui/Image';
 import { PageLoader } from '@/components/ui/Loader';
 import { Pill } from '@/components/ui/Status';
 import { EmptyState, QueryState } from '@/components/ui/States';
+import { getLocale } from '@/i18n';
 
 interface HistoryRow {
   id: string;
@@ -108,7 +109,7 @@ export default function HistoryPage() {
         title="Watch history"
         description={
           d?.recordingSince
-            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
+            ? `Recorded by StreamForge since ${new Date(d.recordingSince).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', year: 'numeric' })}${d.serverHistory ? `; older plays come from ${SERVER_LABEL[d.serverHistory]}’s own history` : ''}.`
             : 'What each person on your server has watched.'
         }
       />
