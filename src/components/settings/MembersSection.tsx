@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react';
-import { useMemberAccess, useSaveMemberAccess } from '@/hooks/queries';
+import { useMainServer, useMemberAccess, useSaveMemberAccess } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
 import type { Area } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
@@ -25,6 +25,7 @@ const LABEL: Record<Area, string> = {
 
 /** Whether non-admin Jellyfin users can sign in, and which pages they see. */
 export function MembersSection() {
+  const main = useMainServer();
   const q = useMemberAccess();
   const save = useSaveMemberAccess();
   const d = q.data;
@@ -38,7 +39,7 @@ export function MembersSection() {
         <div className="divide-y divide-line">
           <div className="flex items-center gap-3 px-5 py-4">
             <div className="flex-1">
-              <div className="text-[13px] font-medium">Non-admin Jellyfin users can sign in</div>
+              <div className="text-[13px] font-medium">{main.plex ? 'People you share your Plex server with can sign in' : `Non-admin ${main.name} users can sign in`}</div>
               <div className="text-[11px] text-ink-4">Turning this off signs members out within a few minutes.</div>
             </div>
             <Switch checked={d.signIn} disabled={save.isPending} onChange={(v) => save.mutate({ signIn: v })} label="Allow members to sign in" />

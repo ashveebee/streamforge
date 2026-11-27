@@ -3,6 +3,10 @@ import { cache } from '../lib/cache.js';
 import { isConfigured } from '../settings.js';
 import { emit } from './notify.js';
 import { jf, serverApiKey } from './jellyfin.js';
+import { canWatchInBackground, mainEmby, mainExtra, mainPlex, mediaReady } from './mainServer.js';
+import { mediaServers, type MediaServer } from './mediaServers.js';
+import { remote } from './jellyfin.js';
+import * as plex from './plex.js';
 import { storageForecast } from './storage.js';
 
 /*
@@ -38,7 +42,7 @@ export interface DigestSettings {
 }
 const DEFAULTS: DigestSettings = { enabled: false, day: 0, hour: 18 };
 let settings: DigestSettings = { ...DEFAULTS, ...readPref<Partial<DigestSettings>>('digest', {}) };
-export const digestSettings = () => ({ ...settings, lastSent: readPref<string | null>('digestLastSent', null), canSend: !!serverApiKey() });
+export const digestSettings = () => ({ ...settings, lastSent: readPref<string | null>('digestLastSent', null), canSend: canWatchInBackground() });
 export function updateDigest(p: Partial<DigestSettings>) {
   settings = { ...settings, ...p };
   writePref('digest', settings);
@@ -52,9 +56,12 @@ export interface Who {
   userId?: string;
 }
 
-async function added(who: Who, since: number) {
-  const res = await jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, {
-    userId: who.userId,
+type Added = Awaited<ReturnType<typeof plex.addedSince>>;
+
+/** What a Jellyfin-API server (the main Jellyfin, or an Emby/Jellyfin server via its key) added since a time. */
+async function addedVia(get: (q: Record<string, string | number | boolean | undefined>) => Promise<{ Items: JfItem[] }>, since: number, on: string, userId?: string): Promise<Added> {
+  const res = await get({
+    userId,
     Recursive: true,
     IncludeItemTypes: 'Movie,Episode,MusicAlbum,Book,AudioBook',
     MinDateCreated: new Date(since).toISOString(),
@@ -64,20 +71,20 @@ async function added(who: Who, since: number) {
     Limit: 500,
     EnableTotalRecordCount: false,
   });
-  const movies: { id: string; title: string; year?: number; image?: string }[] = [];
-  const shows = new Map<string, { id: string; title: string; episodes: number; image?: string }>();
-  const other: { id: string; title: string; kind: string }[] = [];
+  const movies: Added['movies'] = [];
+  const shows = new Map<string, Added['shows'][number]>();
+  const other: Added['other'] = [];
   let runtime = 0;
   for (const i of res.Items) {
     runtime += (i.RunTimeTicks ?? 0) / TICKS_PER_MS;
     if (i.Type === 'Movie') {
-      movies.push({ id: i.Id, title: i.Name, year: i.ProductionYear, image: i.ImageTags?.Primary ? `/api/jellyfin/image/items/${i.Id}/Primary?w=200&tag=${i.ImageTags.Primary}` : undefined });
+      movies.push({ id: i.Id, title: i.Name, year: i.ProductionYear, image: i.ImageTags?.Primary ? `/api/jellyfin/image/items/${i.Id}/Primary?w=200&tag=${i.ImageTags.Primary}${on}` : undefined });
     } else if (i.Type === 'Episode' && i.SeriesId) {
       const s = shows.get(i.SeriesId) ?? {
         id: i.SeriesId,
         title: i.SeriesName ?? 'Unknown series',
         episodes: 0,
-        image: i.SeriesPrimaryImageTag ? `/api/jellyfin/image/items/${i.SeriesId}/Primary?w=200&tag=${i.SeriesPrimaryImageTag}` : undefined,
+        image: i.SeriesPrimaryImageTag ? `/api/jellyfin/image/items/${i.SeriesId}/Primary?w=200&tag=${i.SeriesPrimaryImageTag}${on}` : undefined,
       };
       s.episodes++;
       shows.set(i.SeriesId, s);
@@ -86,6 +93,42 @@ async function added(who: Who, since: number) {
     }
   }
   return { movies, shows: [...shows.values()].sort((a, b) => b.episodes - a.episodes), other, runtimeMs: runtime };
+}
+
+/** What one extra (or main Plex/Emby) server added. */
+function addedOn(srv: MediaServer, since: number) {
+  if (srv.type === 'plex') return plex.addedSince(srv, since);
+  return addedVia((q) => remote<{ Items: JfItem[] }>(srv, '/Items', q), since, `&server=${encodeURIComponent(srv.id)}`);
+}
+
+/**
+ * What was added on every media server. A title on more than one server is
+ * listed once (the sign-in server's copy first); a server that's down is skipped.
+ */
+async function added(who: Who, since: number): Promise<Added> {
+  const main = mainExtra();
+  const jobs: Promise<Added>[] = [];
+  if (main) jobs.push(addedOn(main, since));
+  else if (isConfigured('jellyfin')) jobs.push(addedVia((q) => jf<{ Items: JfItem[] }>('/Items', who.token, who.deviceId, q), since, '', who.userId));
+  for (const s of mediaServers()) if (s.id !== main?.id) jobs.push(addedOn(s, since));
+  const parts = (await Promise.allSettled(jobs)).flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  const key = (t: string, y?: number) => `${t.toLowerCase()}|${y ?? ''}`;
+  const movies = new Map<string, Added['movies'][number]>();
+  const shows = new Map<string, Added['shows'][number]>();
+  const other = new Map<string, Added['other'][number]>();
+  let runtimeMs = 0;
+  for (const p of parts) {
+    for (const m of p.movies) if (!movies.has(key(m.title, m.year))) movies.set(key(m.title, m.year), m);
+    for (const s of p.shows) {
+      const cur = shows.get(key(s.title));
+      if (!cur) shows.set(key(s.title), s);
+      // The same episodes on two servers: count them once.
+      else cur.episodes = Math.max(cur.episodes, s.episodes);
+    }
+    for (const o of p.other) if (!other.has(key(o.title))) other.set(key(o.title), o);
+    runtimeMs = Math.max(runtimeMs, p.runtimeMs);
+  }
+  return { movies: [...movies.values()], shows: [...shows.values()].sort((a, b) => b.episodes - a.episodes), other: [...other.values()], runtimeMs };
 }
 
 function watched(since: number) {
@@ -147,9 +190,9 @@ export function digestText(d: Awaited<ReturnType<typeof buildDigest>>) {
 
 export async function sendDigest() {
   const key = serverApiKey();
-  if (!key) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
+  if (!key && !mainPlex() && !mainEmby()) throw new Error('The weekly digest needs a Jellyfin API key (Settings → Jellyfin).');
   cache.delete('jf:digest:server');
-  const d = await buildDigest({ token: key, deviceId: 'streamforge-server' });
+  const d = await buildDigest({ token: key ?? '', deviceId: 'streamforge-server' });
   const count = d.added.movies.length + d.added.shows.length + d.added.other.length;
   emit('weekly_digest', { title: count ? `This week: ${count} new title${count === 1 ? '' : 's'}` : 'Your weekly StreamForge digest', message: digestText(d), url: '/digest' });
   writePref('digestLastSent', new Date().toISOString());
@@ -157,7 +200,7 @@ export async function sendDigest() {
 }
 
 function due(now = new Date()) {
-  if (!settings.enabled || !isConfigured('jellyfin')) return false;
+  if (!settings.enabled || !mediaReady()) return false;
   if (now.getDay() !== settings.day || now.getHours() !== settings.hour) return false;
   const last = readPref<string | null>('digestLastSent', null);
   return !last || now.getTime() - Date.parse(last) > 2 * 86_400_000;

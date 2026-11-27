@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StreamForge — one dashboard for your Jellyfin media stack</title>
-  <meta name="description" content="A self-hosted control centre for Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
+  <title>StreamForge — one dashboard for your Plex, Jellyfin or Emby media stack</title>
+  <meta name="description" content="A self-hosted control centre for Jellyfin (plus extra Emby and Plex servers), Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients: live streams, service health, downloads, requests and storage in one place, with global search, automation rules, notifications, single sign-on and two-factor sign-in.">
   <meta name="theme-color" content="#0b0c12">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="StreamForge — one dashboard for your Jellyfin media stack">
+  <meta property="og:title" content="StreamForge — one dashboard for your Plex, Jellyfin or Emby media stack">
   <meta property="og:description" content="Live streams, service health, downloads, requests, search and automation for Jellyfin and the *arr stack, in one self-hosted dashboard.">
   <meta property="og:image" content="https://ashveebee.github.io/streamforge/screenshots/dashboard.jpg">
   <meta name="twitter:card" content="summary_large_image">
@@ -31,6 +31,8 @@
       --ok: #34d399;
       --grad: linear-gradient(100deg, #8b5cf6, #d946ef 45%, #22d3ee);
       --jellyfin: #aa5cc3;
+      --emby: #52b54b;
+      --plex: #e5a00d;
       --sonarr: #35c5f4;
       --radarr: #ffc230;
       --prowlarr: #fe7a34;
@@ -126,11 +128,20 @@
     .card .ico svg.i { width: 20px; height: 20px; }
     .card h3 { margin: 18px 0 6px; font-size: 18px; letter-spacing: -.01em; }
     .card p { margin: 0; color: var(--ink-3); font-size: 15px; }
+    a.card.guide { display: block; text-decoration: none; }
+    a.card.guide h3::after { content: " →"; color: var(--ink-3); }
 
     .show { display: grid; gap: 32px; align-items: center; margin-top: 72px; }
     @media (min-width: 900px) { .show { grid-template-columns: 5fr 7fr; gap: 56px; } .show.flip { grid-template-columns: 7fr 5fr; } .show.flip .txt { order: 2; } }
     .show .shot { border-radius: 16px; border: 1px solid var(--line-strong); overflow: hidden; box-shadow: 0 40px 80px -40px rgb(0 0 0 / .9); background: var(--surface); }
     .show .shot img { width: 100%; height: auto; }
+    .setup-shots { display: grid; gap: 16px; margin-top: 28px; align-items: start; }
+    @media (min-width: 820px) { .setup-shots { grid-template-columns: 1fr 1fr; gap: 24px; } }
+    .setup-shots figure { margin: 0; }
+    .setup-shots a { display: block; border-radius: 14px; border: 1px solid var(--line-strong); overflow: hidden; background: var(--surface); box-shadow: 0 30px 60px -36px rgb(0 0 0 / .9); }
+    .setup-shots img { display: block; width: 100%; height: auto; }
+    .setup-shots .crop { aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+    .setup-shots figcaption { margin-top: 10px; font-size: 13px; color: var(--ink-3); }
     .show h3 { font-size: clamp(22px, 3vw, 30px); letter-spacing: -.02em; margin: 10px 0 0; line-height: 1.2; }
     .show p { color: var(--ink-3); margin: 14px 0 0; }
     .ticks { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
@@ -331,6 +342,7 @@
         <a href="#tour">Tour</a>
         <a href="#phone">Phone</a>
         <a href="#install">Install</a>
+        <a href="guides/index.html">Guides</a>
         <a href="#license">License</a>
       </nav>
       <a class="btn btn-ghost btn-sm" href="https://github.com/ashveebee/streamforge">
@@ -345,13 +357,15 @@
       <div class="wrap">
         <span class="pill"><span class="dot"></span> Self-hosted · Free and open source</span>
         <h1>Your whole media stack, <span class="grad-text">one dashboard.</span></h1>
-        <p class="lede">StreamForge brings Jellyfin, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
+        <p class="lede">StreamForge brings Plex, Jellyfin or Emby, the *arr apps, Seerr, your download clients and your storage together: who's watching, what's downloading, what's been requested and whether everything is healthy, live.</p>
         <div class="cta">
           <a class="btn btn-primary" href="#install">Get started <svg class="i"><use href="#i-arrow"/></svg></a>
           <a class="btn btn-ghost" href="https://github.com/ashveebee/streamforge"><svg class="i"><use href="#i-github"/></svg> View on GitHub</a>
         </div>
         <div class="services" aria-label="Supported services">
           <span class="chip" style="--c:var(--jellyfin)"><i></i>Jellyfin</span>
+          <span class="chip" style="--c:var(--emby)"><i></i>Emby</span>
+          <span class="chip" style="--c:var(--plex)"><i></i>Plex</span>
           <span class="chip" style="--c:var(--sonarr)"><i></i>Sonarr</span>
           <span class="chip" style="--c:var(--radarr)"><i></i>Radarr</span>
           <span class="chip" style="--c:var(--lidarr)"><i></i>Lidarr</span>
@@ -360,6 +374,7 @@
           <span class="chip" style="--c:var(--prowlarr)"><i></i>Prowlarr</span>
           <span class="chip" style="--c:var(--seerr)"><i></i>Seerr</span>
           <span class="chip" style="--c:var(--infinidisk)"><i></i>Infinidisk</span>
+          <span class="chip" style="--c:#f59e0b"><i></i>Kometa</span>
           <span class="chip" style="--c:var(--downloads)"><i></i>qBittorrent · Transmission · SABnzbd · NZBGet</span>
         </div>
         <div class="frame reveal">
@@ -380,7 +395,7 @@
           <article class="card reveal" style="--c:var(--jellyfin)">
             <div class="ico"><svg class="i"><use href="#i-play"/></svg></div>
             <h3>Now Playing, live</h3>
-            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, across one Jellyfin server or several. Pause, message or stop a stream when you need to.</p>
+            <p>Every active stream with artwork, progress, user and device, plus direct play or transcode details, on your Jellyfin, Plex or Emby server. Pause, message or stop a stream when you need to.</p>
           </article>
           <article class="card reveal" style="--c:var(--ok)">
             <div class="ico"><svg class="i"><use href="#i-activity"/></svg></div>
@@ -405,7 +420,7 @@
           <article class="card reveal" style="--c:var(--violet)">
             <div class="ico"><svg class="i"><use href="#i-settings"/></svg></div>
             <h3>Set up from the UI</h3>
-            <p>Add each service's address and API key in Settings, test the connection and save, or let StreamForge find your Jellyfin servers on the network. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
+            <p>Add each service's address and API key in Settings, test the connection and save, or let StreamForge find your Jellyfin, Emby and Plex servers on the network. Switch off what you don't use. Changes apply instantly, with no config files or restarts.</p>
           </article>
           <article class="card reveal" style="--c:var(--downloads)">
             <div class="ico"><svg class="i"><use href="#i-gauge"/></svg></div>
@@ -483,6 +498,62 @@
       </div>
     </section>
 
+    <section id="servers" style="padding-top:0">
+      <div class="wrap">
+        <div class="center">
+          <div class="eyebrow">Every viewer, every title</div>
+          <h2>Know <span class="grad-text">who watched what, and how</span></h2>
+          <p class="section-lede">StreamForge records every play on your Jellyfin, Plex or Emby server, brings each title's details together in one page, and builds Kometa collections for you.</p>
+        </div>
+
+        <div class="show reveal">
+          <div class="txt">
+            <div class="eyebrow">Watch history</div>
+            <h3>Every person's history</h3>
+            <p>Pick someone, or everyone, and a time range. Each play shows the poster, the episode, the device, how long they watched and whether it transcoded.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Filled in from your server's own history, so it isn't empty on day one</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Filter by person, time range or title</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Click a viewer in Stats to open their history</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/history.jpg" width="2880" height="2000" alt="Watch history: a list of people on the left, and each play with its poster, device and time watched" loading="lazy"></div>
+        </div>
+
+        <div class="show flip reveal">
+          <div class="txt">
+            <div class="eyebrow">Title pages</div>
+            <h3>Everything about a title, in one place</h3>
+            <p>Details from your media server, Sonarr or Radarr and Seerr together: files and quality, audio and subtitle tracks, seasons and episodes, and a Play button that opens it in your server's own app.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Watched ticks on episodes: yours, and for admins everyone else's</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Who's watched it, on which device</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Request it, add it to Sonarr or Radarr, or search for a better copy</li>
+            </ul>
+          </div>
+          <div class="shot"><img src="screenshots/title.jpg" width="2880" height="2600" alt="A movie page with its details, files, cast and who has watched it" loading="lazy"></div>
+        </div>
+
+        <div class="features">
+          <article class="card reveal" style="--c:#f59e0b">
+            <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
+            <h3>Kometa collections</h3>
+            <p>Make collections from TMDb, IMDb or Trakt lists, trending titles or your own picks, shown all year or just in December. Kometa builds them on its next run, and its run reports show up in StreamForge.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--radarr)">
+            <div class="ico"><svg class="i"><use href="#i-download"/></svg></div>
+            <h3>Add to Sonarr and Radarr</h3>
+            <p>Add one title, or tick every missing title in a collection and add them in one go, with your choice of instance, quality profile, folder and whether to search now.</p>
+          </article>
+          <article class="card reveal" style="--c:var(--ok)">
+            <div class="ico"><svg class="i"><use href="#i-users"/></svg></div>
+            <h3>Watched by everyone</h3>
+            <p>Movies and shows every person has already finished, biggest first. Choose who counts, then delete or stop monitoring them through Sonarr or Radarr, so nothing comes back.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section id="act" style="padding-top:0">
       <div class="wrap">
         <div class="center">
@@ -544,7 +615,7 @@
               <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop a stream</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/now-playing.jpg" width="2880" height="1800" loading="lazy" alt="Now Playing page with active streams, artwork and playback details"></div>
+          <div class="shot"><img src="screenshots/now-playing.jpg" width="2880" height="1800" loading="lazy" alt="Now Playing page with active streams from Jellyfin, Emby and Plex, with artwork and playback details"></div>
         </div>
 
         <div class="show flip reveal">
@@ -570,13 +641,13 @@
             <ul class="ticks">
               <li><svg class="i"><use href="#i-check"/></svg>Changes apply immediately, with no restart</li>
               <li><svg class="i"><use href="#i-check"/></svg>Environment variables still work as a fallback</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Find Jellyfin servers on your network instead of typing an address</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Find Jellyfin, Emby and Plex servers on your network instead of typing an address</li>
               <li><svg class="i"><use href="#i-check"/></svg>Add a second Sonarr or Radarr, such as a 4K library</li>
-              <li><svg class="i"><use href="#i-check"/></svg>Monitor extra Jellyfin servers alongside the main one</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Monitor as many extra Jellyfin, Emby and Plex servers as you run</li>
               <li><svg class="i"><use href="#i-check"/></svg>Switch off services you don't use</li>
             </ul>
           </div>
-          <div class="shot"><img src="screenshots/settings.jpg" width="2880" height="2000" loading="lazy" alt="Settings page with an address and API key field for each service"></div>
+          <div class="shot"><img src="screenshots/settings.jpg" width="2880" height="2000" loading="lazy" alt="Settings page with the Jellyfin service and extra Emby and Plex servers"></div>
         </div>
 
         <div class="show flip reveal">
@@ -638,6 +709,8 @@
           <button class="tab" role="tab" type="button" id="tab-title" aria-controls="panel-title" aria-selected="true" style="--c:var(--seerr)"><i></i>Title pages</button>
           <button class="tab" role="tab" type="button" id="tab-arr" aria-controls="panel-arr" aria-selected="false" style="--c:var(--sonarr)" tabindex="-1"><i></i>Sonarr &amp; Radarr</button>
           <button class="tab" role="tab" type="button" id="tab-jellyfin" aria-controls="panel-jellyfin" aria-selected="false" style="--c:var(--jellyfin)" tabindex="-1"><i></i>Jellyfin</button>
+          <button class="tab" role="tab" type="button" id="tab-emby" aria-controls="panel-emby" aria-selected="false" style="--c:var(--emby)" tabindex="-1"><i></i>Emby</button>
+          <button class="tab" role="tab" type="button" id="tab-plex" aria-controls="panel-plex" aria-selected="false" style="--c:var(--plex)" tabindex="-1"><i></i>Plex</button>
           <button class="tab" role="tab" type="button" id="tab-stats" aria-controls="panel-stats" aria-selected="false" style="--c:var(--violet)" tabindex="-1"><i></i>Stats</button>
           <button class="tab" role="tab" type="button" id="tab-library" aria-controls="panel-library" aria-selected="false" style="--c:var(--ok)" tabindex="-1"><i></i>Library health</button>
           <button class="tab" role="tab" type="button" id="tab-seerr" aria-controls="panel-seerr" aria-selected="false" style="--c:var(--seerr)" tabindex="-1"><i></i>Requests</button>
@@ -687,7 +760,36 @@
               <li><svg class="i"><use href="#i-check"/></svg>Recently added, linking to each title</li>
               <li><svg class="i"><use href="#i-check"/></svg>Users and when they were last active</li>
               <li><svg class="i"><use href="#i-check"/></svg>Run scheduled tasks such as a library scan now</li>
-              <li><svg class="i"><use href="#i-check"/></svg>More than one Jellyfin server, each in its own tab</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign in with Jellyfin, or single sign-on through your identity provider</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-emby" aria-labelledby="tab-emby" hidden>
+          <a class="shot" href="screenshots/emby.jpg"><img src="screenshots/emby.jpg" width="2880" height="1800" loading="lazy" alt="Emby page with libraries, users, server details and recently added items"></a>
+          <div class="txt">
+            <div class="eyebrow">Emby</div>
+            <h3>Run Emby? Pick it at setup</h3>
+            <p>Choose Emby on first run and everyone signs in with their Emby account. The dashboard, stats, history, search and alerts all run on it.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Libraries with item counts</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recently added, users and the activity log</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Pause, message or stop Emby streams</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Watch history filled in from Emby's activity log</li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel" role="tabpanel" id="panel-plex" aria-labelledby="tab-plex" hidden>
+          <a class="shot" href="screenshots/plex.jpg"><img src="screenshots/plex.jpg" width="2880" height="1800" loading="lazy" alt="Plex page with libraries, server details and recently added items"></a>
+          <div class="txt">
+            <div class="eyebrow">Plex</div>
+            <h3>Only have Plex? That works too</h3>
+            <p>Choose Plex on first run: everyone signs in with their Plex account, and the dashboard, stats, search, your page and alerts all run on Plex. No Jellyfin needed.</p>
+            <ul class="ticks">
+              <li><svg class="i"><use href="#i-check"/></svg>Libraries, episode and track counts</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Recently added and recent plays from Plex's watch history</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Stop a Plex stream with a reason the viewer sees</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Sign in with Plex, for you and everyone you share with</li>
+              <li><svg class="i"><use href="#i-check"/></svg>Watched ticks on episodes from Plex's watch history</li>
             </ul>
           </div>
         </div>
@@ -831,7 +933,7 @@
       <div class="wrap">
         <div class="eyebrow">Install</div>
         <h2>Up and running in a minute</h2>
-        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Jellyfin server.</p>
+        <p class="section-lede">One container, multi-arch images for <code>amd64</code> and <code>arm64</code>. All you need is Docker and a Plex, Jellyfin or Emby server.</p>
 
         <div class="code reveal">
           <header><span>docker-compose.yml</span><button class="copy" type="button" data-copy="compose"><svg class="i"><use href="#i-copy"/></svg><span>Copy</span></button></header>
@@ -855,15 +957,66 @@
             <p>Save the file above and run <code>docker compose up -d</code>, or use the one-line <code>docker run</code> from the README.</p>
           </div>
           <div class="card step reveal">
-            <h3>Connect Jellyfin</h3>
-            <p>Open <code>http://your-server:4000</code>, enter your Jellyfin address and sign in with a Jellyfin administrator account.</p>
+            <h3>Choose your media server</h3>
+            <p>Open <code>http://your-server:4000</code> and pick Plex, Jellyfin or Emby. Plex: click Sign in with Plex and choose your server. Jellyfin or Emby: enter its address, or find it on your network, and sign in as an administrator.</p>
           </div>
           <div class="card step reveal">
-            <h3>Add your services</h3>
-            <p>In Settings, add the address and API key for Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr, Infinidisk and your download clients. Skip any you don't use.</p>
+            <h3>Set up your apps</h3>
+            <p>StreamForge looks for Sonarr, Radarr, Seerr, Prowlarr and the rest on your Docker network, your machines and your domain, and fills in their addresses. Paste each API key to connect. Already use Seerr? It shares your Sonarr and Radarr in one click. Skip any you don't use.</p>
           </div>
         </div>
-        <p class="note">Full guide, Docker networking tips, backups and troubleshooting are in the <a href="https://github.com/ashveebee/streamforge#installation">installation docs</a>. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
+
+        <div class="setup-shots reveal">
+          <figure>
+            <a href="screenshots/setup.jpg"><img src="screenshots/setup.jpg" width="2880" height="1800" loading="lazy" alt="First run, step 1: choose Plex, Jellyfin or Emby"></a>
+            <figcaption>Step 1: choose your media server.</figcaption>
+          </figure>
+          <figure>
+            <a href="screenshots/setup-apps.jpg"><img class="crop" src="screenshots/setup-apps.jpg" width="2880" height="3000" loading="lazy" alt="First run, step 2: apps found on the network with their addresses filled in, and an offer to connect Radarr using Seerr's details"></a>
+            <figcaption>Step 2: your apps, found for you. Paste each key to connect.</figcaption>
+          </figure>
+        </div>
+        <p class="note">The <a href="guides/install.html">install guide</a> covers Docker networking, reverse proxies, Tailscale, backups and troubleshooting. Want to look around first? Clone the repo and run <code>npm run demo</code>.</p>
+      </div>
+    </section>
+
+    <section id="guides" style="padding-top:0">
+      <div class="wrap">
+        <div class="eyebrow">Guides</div>
+        <h2>Step-by-step guides</h2>
+        <p class="section-lede">From the first <code>docker compose up</code> to Kometa collections, with the exact settings to use.</p>
+        <div class="features">
+          <a class="card reveal guide" href="guides/install.html" style="--c:var(--violet)">
+            <div class="ico"><svg class="i"><use href="#i-box"/></svg></div>
+            <h3>Install and configure</h3>
+            <p>Docker Compose, the two-step first run (your media server, then your apps, found for you), Docker networking, reverse proxies and Tailscale.</p>
+          </a>
+          <a class="card reveal guide" href="guides/media-servers.html" style="--c:var(--jellyfin)">
+            <div class="ico"><svg class="i"><use href="#i-film"/></svg></div>
+            <h3>Media servers</h3>
+            <p>Choosing Jellyfin, Plex or Emby, running more than one, finding a Plex token, and what works on each.</p>
+          </a>
+          <a class="card reveal guide" href="guides/kometa.html" style="--c:#f59e0b">
+            <div class="ico"><svg class="i"><use href="#i-sparkles"/></svg></div>
+            <h3>Kometa</h3>
+            <p>Run reports through webhooks, then collections from StreamForge: sharing the config folder, <code>collection_files</code>, and every option.</p>
+          </a>
+          <a class="card reveal guide" href="guides/sonarr-radarr.html" style="--c:var(--sonarr)">
+            <div class="ico"><svg class="i"><use href="#i-download"/></svg></div>
+            <h3>Sonarr and Radarr</h3>
+            <p>4K and anime instances, adding titles one at a time or in bulk, and freeing up space.</p>
+          </a>
+          <a class="card reveal guide" href="guides/watch-history-and-stats.html" style="--c:var(--cyan)">
+            <div class="ico"><svg class="i"><use href="#i-chart"/></svg></div>
+            <h3>Watch history and stats</h3>
+            <p>How plays are recorded, the Watch history and Stats pages, and who can see what.</p>
+          </a>
+          <a class="card reveal guide" href="guides/notifications.html" style="--c:var(--seerr)">
+            <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
+            <h3>Notifications</h3>
+            <p>Discord, ntfy, Pushover, webhooks and push to your phone, and every event you can subscribe to.</p>
+          </a>
+        </div>
       </div>
     </section>
 
@@ -873,7 +1026,7 @@
         <h2>Your keys never leave the server</h2>
         <div class="trust">
           <div class="card reveal"><div class="ico" style="--c:var(--ok)"><svg class="i"><use href="#i-key"/></svg></div><h3>Server-side credentials</h3><p>API keys and Jellyfin tokens stay on the server. The browser only gets an opaque, HttpOnly session cookie.</p></div>
-          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Jellyfin sign-in</h3><p>Sign in with your existing Jellyfin account. Only administrators get in by default; you choose which pages the rest of the household sees.</p></div>
+          <div class="card reveal"><div class="ico" style="--c:var(--violet)"><svg class="i"><use href="#i-lock"/></svg></div><h3>Plex, Jellyfin or Emby sign-in</h3><p>Sign in with your existing Plex, Jellyfin or Emby account. Only the server's owner or administrators get in by default; you choose which pages the rest of the household sees.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--cyan)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Hardened by default</h3><p>CSRF protection, rate-limited login, a strict content security policy and artwork proxied through validated routes.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--radarr)"><svg class="i"><use href="#i-box"/></svg></div><h3>Signed images</h3><p>Every release image ships with an SBOM and build provenance you can verify with <code>gh attestation verify</code>.</p></div>
           <div class="card reveal"><div class="ico" style="--c:var(--seerr)"><svg class="i"><use href="#i-shield"/></svg></div><h3>Single sign-on and two-factor</h3><p>Sign in through Authentik, Authelia, Keycloak or any OpenID Connect provider, and protect password sign-ins with authenticator-app codes.</p></div>
@@ -906,9 +1059,10 @@
 
   <footer>
     <div class="wrap">
-      <span>StreamForge · Not affiliated with Jellyfin, the *arr projects, Seerr or Infinidisk.</span>
+      <span>StreamForge · Not affiliated with Jellyfin, Emby, Plex, the *arr projects, Seerr or Infinidisk.</span>
       <nav aria-label="Footer">
         <a href="https://github.com/ashveebee/streamforge">GitHub</a>
+        <a href="guides/index.html">Guides</a>
         <a href="https://github.com/ashveebee/streamforge/releases">Releases</a>
         <a href="https://github.com/ashveebee/streamforge/issues">Issues</a>
         <a href="https://github.com/ashveebee/streamforge/blob/main/LICENSE">License</a>

@@ -1,12 +1,17 @@
 import { db } from '../lib/db.js';
+import { isConfigured } from '../settings.js';
 import type { JfCtx } from './jellyfin.js';
 import * as jellyfin from './jellyfin.js';
+import { allLibraryItems, canWatchInBackground, mainEmby, mainExtra, mainNowPlaying, mainPlex } from './mainServer.js';
+import { titleLinks } from './history.js';
+import { mediaServers } from './mediaServers.js';
+import * as plex from './plex.js';
 
 /*
  * Playback statistics.
  *
- * With a Jellyfin API key set, a recorder samples active sessions every 30
- * seconds and stores one row per play: who, what, on which client, how it
+ * A recorder samples active sessions on every media server (the main one
+ * needs a Jellyfin API key when it's Jellyfin) every 30 seconds and stores one row per play: who, what, on which client, how it
  * was delivered (the "worst" method seen, so a play that ever transcoded
  * counts as a transcode) and how long it was actually watched.
  *
@@ -27,22 +32,39 @@ interface Active {
 const active = new Map<string, Active>();
 
 const insert = db.prepare(
-  `INSERT INTO plays (id, user_id, user_name, item_id, title, series, type, client, device, method, started_at, last_seen, watched_ms)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+  `INSERT INTO plays (id, user_id, user_name, item_id, title, series, type, client, device, method, started_at, last_seen, watched_ms, server, server_name)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 );
 const touch = db.prepare('UPDATE plays SET last_seen = ?, watched_ms = watched_ms + ?, method = ? WHERE id = ?');
 
+/**
+ * Streams on every media server: the main one, plus each extra Jellyfin, Emby
+ * and Plex server. A server that's down is skipped; the rest still count.
+ */
+async function everyStream() {
+  const main = mainExtra();
+  const extras = mediaServers().filter((s) => s.id !== main?.id);
+  const lists = await Promise.all([
+    mainNowPlaying().catch(() => undefined),
+    ...extras.map((srv) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv)).catch(() => undefined)),
+  ]);
+  if (lists.every((l) => l === undefined)) return undefined;
+  return lists.flatMap((l) => l ?? []);
+}
+
 export async function recordSample() {
-  const streams = await jellyfin.serverNowPlaying().catch(() => undefined);
+  const streams = await everyStream();
   if (!streams) return;
   const now = Date.now();
   const seen = new Set<string>();
   for (const s of streams) {
-    seen.add(s.sessionId);
-    const cur = active.get(s.sessionId);
+    // Session ids are only unique within one server.
+    const key = `${s.server ?? 'main'}:${s.sessionId}`;
+    seen.add(key);
+    const cur = active.get(key);
     const method = s.state.playMethod;
     if (!cur || cur.itemId !== s.item.id) {
-      const rowId = `${s.sessionId}:${s.item.id}:${now}`;
+      const rowId = `${key}:${s.item.id}:${now}`;
       insert.run(
         rowId,
         s.user.id ?? null,
@@ -56,8 +78,10 @@ export async function recordSample() {
         method,
         now,
         now,
+        s.server ?? null,
+        s.serverName ?? null,
       );
-      active.set(s.sessionId, { rowId, itemId: s.item.id, method, lastSeen: now });
+      active.set(key, { rowId, itemId: s.item.id, method, lastSeen: now });
       continue;
     }
     // Count time only while playing, and never more than one interval (gaps = server was busy/asleep).
@@ -77,6 +101,8 @@ export function startPlaybackRecorder() {
 /* --------------------------------- stats --------------------------------- */
 
 interface Play {
+  /** The media server it was played on. */
+  server: string;
   user: string;
   title: string;
   group: string;
@@ -91,6 +117,18 @@ const dayKey = (t: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+/**
+ * Jellyfin 12's activity log names episodes "Show - Episode" (no S01E02), so
+ * the show is found by matching the longest " - " prefix that's a series in a library.
+ */
+export function splitSeries(title: string, isSeries: (name: string) => boolean) {
+  for (let i = title.lastIndexOf(' - '); i > 0; i = title.lastIndexOf(' - ', i - 1)) {
+    const series = title.slice(0, i);
+    if (isSeries(series)) return { series, episode: title.slice(i + 3) };
+  }
+  return undefined;
+}
+
 /** "Alex is playing Some Show - S01E02 - Pilot on Living Room TV" → parts. */
 export function parsePlaybackName(name: string) {
   const m = name.match(/^(.+?) (?:is playing|has finished playing|is watching) (.+?) on (.+)$/);
@@ -100,24 +138,53 @@ export function parsePlaybackName(name: string) {
   return { user: m[1]!.trim(), title, group: series ?? title, client: m[3]!.trim() };
 }
 
+/** The main server's id, as plays and the server filter use it. */
+const mainId = () => mainExtra()?.id ?? 'jellyfin';
+
+/** Every media server StreamForge knows, main one first. */
+async function allServers() {
+  const main = mainExtra();
+  const list: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby' }[] = [];
+  if (!main && isConfigured('jellyfin')) list.push({ id: 'jellyfin', name: (await jellyfin.publicInfo().catch(() => undefined))?.ServerName ?? 'Jellyfin', type: 'jellyfin' });
+  if (main) list.push({ id: main.id, name: main.name, type: main.type });
+  for (const s of mediaServers()) if (s.id !== main?.id) list.push({ id: s.id, name: s.name, type: s.type });
+  return list;
+}
+
 function fromRecorder(since: number): Play[] {
   const rows = db
-    .prepare('SELECT user_name, title, series, client, method, started_at, watched_ms FROM plays WHERE started_at >= ? ORDER BY started_at')
-    .all(since) as { user_name: string; title: string; series: string | null; client: string | null; method: string; started_at: number; watched_ms: number }[];
+    .prepare('SELECT user_name, title, series, client, method, started_at, watched_ms, server FROM plays WHERE started_at >= ? ORDER BY started_at')
+    .all(since) as { user_name: string; title: string; series: string | null; client: string | null; method: string; started_at: number; watched_ms: number; server: string | null }[];
+  const main = mainId();
   // Very short plays are usually someone browsing or a false start.
   return rows
     .filter((r) => r.watched_ms >= 60_000)
-    .map((r) => ({ user: r.user_name, title: r.title, group: r.series ?? r.title, client: r.client ?? undefined, method: r.method, at: r.started_at, watchedMs: r.watched_ms }));
+    // Plays on the main server carry no server id.
+    .map((r) => ({ server: r.server ?? main, user: r.user_name, title: r.title, group: r.series ?? r.title, client: r.client ?? undefined, method: r.method, at: r.started_at, watchedMs: r.watched_ms }));
 }
 
+/** Plays from the media server's own history: Plex's watch history, Jellyfin's or Emby's activity log. */
 async function fromActivity(ctx: JfCtx, since: number): Promise<Play[]> {
-  const entries = await jellyfin.playbackEntries(ctx, new Date(since));
-  const out: Play[] = [];
-  for (const e of entries) {
-    const p = parsePlaybackName(e.name);
-    if (p) out.push({ ...p, at: Date.parse(e.date) });
+  const fromLog = (server: string, entries: { name: string; date: string }[]) =>
+    entries.flatMap((e) => {
+      const p = parsePlaybackName(e.name);
+      return p ? [{ ...p, server, at: Date.parse(e.date) }] : [];
+    });
+  const sources: Promise<Play[]>[] = [];
+  const p = mainPlex();
+  const emby = mainEmby();
+  if (p) sources.push(plex.playsSince(p, since).then((xs) => xs.map((x) => ({ server: p.id, user: x.user, title: x.title, group: x.group, at: x.at }))));
+  else if (emby) sources.push(jellyfin.remotePlaybackEntries(emby, new Date(since)).then((es) => fromLog(emby.id, es)));
+  else if (isConfigured('jellyfin')) sources.push(jellyfin.playbackEntries(ctx, new Date(since)).then((es) => fromLog(mainId(), es)));
+  const results = await Promise.allSettled(sources);
+  const plays = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  // Group "Show - Episode" plays under their show when the log didn't say S01E02.
+  if (plays.some((x) => x.group === x.title && x.title.includes(' - '))) {
+    const lib = await allLibraryItems(ctx).catch(() => undefined);
+    const shows = new Set((lib?.items ?? []).filter((i) => i.type === 'Series').map((i) => i.name.toLowerCase()));
+    for (const x of plays) if (x.group === x.title) x.group = splitSeries(x.title, (n) => shows.has(n.toLowerCase()))?.series ?? x.group;
   }
-  return out;
+  return plays;
 }
 
 function top<K extends string>(plays: Play[], key: (p: Play) => K | undefined, n = 10) {
@@ -136,7 +203,7 @@ function top<K extends string>(plays: Play[], key: (p: Play) => K | undefined, n
     .map((e) => ({ ...e, hours: Math.round(e.hours * 10) / 10 }));
 }
 
-export async function playbackStats(ctx: JfCtx, days: number) {
+export async function playbackStats(ctx: JfCtx, days: number, server?: string) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const since = start.getTime() - (days - 1) * 86_400_000;
@@ -153,6 +220,12 @@ export async function playbackStats(ctx: JfCtx, days: number) {
       source = recorded.length ? 'mixed' : 'activity';
     }
   }
+
+  // With more than one server, the page can show one at a time.
+  const known = await allServers();
+  const servers = known.map((x) => ({ ...x, plays: plays.filter((p) => p.server === x.id).length }));
+  const selected = server && known.some((x) => x.id === server) ? server : undefined;
+  if (selected) plays = plays.filter((p) => p.server === selected);
 
   const byDay = new Map<string, { date: string; plays: number; direct: number; transcode: number; hours: number }>();
   for (let i = 0; i < days; i++) {
@@ -177,8 +250,10 @@ export async function playbackStats(ctx: JfCtx, days: number) {
 
   return {
     days,
+    servers,
+    server: selected,
     source,
-    recording: jellyfin.hasServerKey(),
+    recording: canWatchInBackground() || mediaServers().length > 0,
     recordingSince: firstRecorded ? new Date(firstRecorded).toISOString() : undefined,
     totals: {
       plays: plays.length,
@@ -189,7 +264,10 @@ export async function playbackStats(ctx: JfCtx, days: number) {
     daily: [...byDay.values()].map((d) => ({ ...d, hours: Math.round(d.hours * 10) / 10 })),
     heatmap: heat,
     topUsers: top(plays, (p) => p.user),
-    topTitles: top(plays, (p) => p.group),
+    topTitles: await (async () => {
+      const link = await titleLinks(ctx);
+      return top(plays, (p) => p.group).map((t) => ({ ...t, link: link(t.name) }));
+    })(),
     topClients: top(plays, (p) => p.client, 6),
   };
 }

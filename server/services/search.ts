@@ -4,6 +4,10 @@ import { isConfigured } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
 import { jf, type JfCtx } from './jellyfin.js';
+import { mainEmby, mainPlex } from './mainServer.js';
+import { mediaServers } from './mediaServers.js';
+import { remote, type JfServerTarget } from './jellyfin.js';
+import * as plex from './plex.js';
 import { creatorName, musicLibrary } from './music.js';
 import { seerr, seerrUserFor } from './seerr.js';
 
@@ -19,7 +23,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g
 
 export interface SearchHit {
   key: string;
-  source: 'jellyfin' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
+  source: 'jellyfin' | 'plex' | 'emby' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
   title: string;
   subtitle?: string;
   year?: number;
@@ -45,30 +49,50 @@ interface JfItem {
   ImageTags?: { Primary?: string };
   SeriesId?: string;
   SeriesPrimaryImageTag?: string;
+  ProviderIds?: Record<string, string>;
 }
 
-async function jellyfinHits(ctx: JfCtx, q: string): Promise<SearchHit[]> {
-  const res = await jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, {
+/** Title page for an Emby/extra-server movie or series, matched across servers by TMDB id. */
+function titlePage(i: JfItem) {
+  const tmdb = i.ProviderIds?.Tmdb ?? i.ProviderIds?.tmdb;
+  if (!tmdb || !/^\d+$/.test(tmdb) || (i.Type !== 'Movie' && i.Type !== 'Series')) return undefined;
+  return `/media/${i.Type === 'Movie' ? 'movie' : 'tv'}/${tmdb}`;
+}
+
+/**
+ * Library search on the main Jellyfin server, on a main Emby server (`emby`)
+ * with the user's token, or on an extra Jellyfin/Emby server with its API key (`asServer`).
+ */
+async function jellyfinHits(ctx: JfCtx, q: string, emby?: JfServerTarget, asServer = false): Promise<SearchHit[]> {
+  const query = {
     userId: ctx.userId,
     searchTerm: q,
     Recursive: true,
     Limit: PER_SOURCE * 2,
     IncludeItemTypes: 'Movie,Series,Episode,MusicAlbum,MusicArtist,Book,AudioBook',
-    Fields: 'PrimaryImageAspectRatio',
+    Fields: 'PrimaryImageAspectRatio,ProviderIds',
     EnableTotalRecordCount: false,
-  });
+  };
+  const res = emby
+    ? await remote<{ Items: JfItem[] }>(asServer ? emby : { ...emby, apiKey: ctx.token }, '/Items', asServer ? { ...query, userId: undefined } : query)
+    : await jf<{ Items: JfItem[] }>('/Items', ctx.token, ctx.deviceId, query);
+  const on = emby ? `&server=${encodeURIComponent(emby.id)}` : '';
   return (res.Items ?? []).slice(0, PER_SOURCE * 2).map((i) => {
     const imgId = i.ImageTags?.Primary ? i.Id : i.SeriesId;
     const tag = i.ImageTags?.Primary ?? i.SeriesPrimaryImageTag;
     return {
-      key: `jf:${i.Id}`,
-      source: 'jellyfin',
+      key: emby ? `${emby.id}:${i.Id}` : `jf:${i.Id}`,
+      source: emby?.type === 'emby' ? ('emby' as const) : ('jellyfin' as const),
       title: i.Name,
       subtitle: [i.Type === 'Episode' ? i.SeriesName : i.AlbumArtist, (i.Type ?? '').replace(/([a-z])([A-Z])/g, '$1 $2')].filter(Boolean).join(' · '),
       year: i.ProductionYear,
-      image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}` : undefined,
+      image: imgId && tag ? `/api/jellyfin/image/items/${imgId}/Primary?w=120&tag=${encodeURIComponent(tag)}${on}` : undefined,
       status: 'available',
-      path: ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type) ? `/media/jellyfin/${i.Id}` : '/jellyfin',
+      path: emby
+        ? (titlePage(i) ?? `/${emby.type}${asServer ? `?instance=${encodeURIComponent(emby.id)}` : ''}`)
+        : ['Movie', 'Series', 'Episode', 'Season'].includes(i.Type)
+          ? `/media/jellyfin/${i.Id}`
+          : '/jellyfin',
     };
   });
 }
@@ -200,7 +224,19 @@ export async function search(ctx: JfCtx, q: string, can: (area: string) => boole
       return [] as SearchHit[];
     });
   const jobs: Record<string, Promise<SearchHit[]>> = {};
-  if (isConfigured('jellyfin')) jobs.library = settle('Jellyfin')(jellyfinHits(ctx, q));
+  const main = mainPlex();
+  const emby = mainEmby();
+  // The sign-in server first, then every other media server, each labelled with where it is.
+  const library: Promise<SearchHit[]>[] = [];
+  if (main) library.push(settle('Plex')(plex.search(main, q, PER_SOURCE * 2)));
+  else if (emby) library.push(settle('Emby')(jellyfinHits(ctx, q, emby)));
+  else if (isConfigured('jellyfin')) library.push(settle('Jellyfin')(jellyfinHits(ctx, q)));
+  const others = mediaServers().filter((s) => s.id !== (main ?? emby)?.id);
+  for (const srv of others) {
+    const hits = srv.type === 'plex' ? plex.search(srv, q, PER_SOURCE) : jellyfinHits(ctx, q, srv, true);
+    library.push(settle(srv.name)(hits.then((list) => list.slice(0, PER_SOURCE).map((h) => ({ ...h, subtitle: [h.subtitle, srv.name].filter(Boolean).join(' · ') })))));
+  }
+  if (library.length) jobs.library = Promise.all(library).then((l) => l.flat().slice(0, PER_SOURCE * 3));
   const managed: Promise<SearchHit[]>[] = [];
   for (const inst of arrInstances()) if (can(inst.kind)) managed.push(settle(inst.primary ? inst.name : `${inst.kind} ${inst.name}`)(arrHits(inst, q)));
   for (const k of ['lidarr', 'readarr'] as const) if (isConfigured(k) && can(k)) managed.push(settle(k === 'lidarr' ? 'Lidarr' : 'Readarr')(musicHits(k, q)));
@@ -262,44 +298,3 @@ export async function requestMedia(jellyfinUserId: string, isAdmin: boolean, med
   }
 }
 
-/** Adds a title straight to Sonarr/Radarr (default profile and root folder) and searches for it. */
-export async function addToArr(kind: 'sonarr' | 'radarr', ids: { tmdbId?: number; tvdbId?: number }, instanceId?: string) {
-  const inst = arrInstance(kind, instanceId);
-  if (!inst) throw new HttpError(404, `${kind} is not configured`, 'not_configured');
-  const c = inst.client;
-  const [profiles, roots] = await Promise.all([c.get<{ id: number; name: string }[]>('/api/v3/qualityprofile'), c.get<{ path: string; accessible?: boolean }[]>('/api/v3/rootfolder')]);
-  const profile = profiles[0];
-  const root = roots.find((r) => r.accessible !== false) ?? roots[0];
-  if (!profile || !root) throw new HttpError(400, `Set up a quality profile and root folder in ${inst.name} first.`);
-  if (kind === 'radarr') {
-    if (!ids.tmdbId) throw new HttpError(400, 'Missing TMDB id');
-    const movie = await c.get<Record<string, unknown> & { id?: number; title: string }>('/api/v3/movie/lookup/tmdb', { tmdbId: ids.tmdbId });
-    if (movie.id) throw new HttpError(409, `${movie.title} is already in ${inst.name}.`);
-    const added = await c.post<{ id: number; title: string }>('/api/v3/movie', {
-      ...movie,
-      qualityProfileId: profile.id,
-      rootFolderPath: root.path,
-      monitored: true,
-      minimumAvailability: 'released',
-      addOptions: { searchForMovie: true },
-    });
-    cache.delete(`${inst.id}:`);
-    return { ok: true, title: added.title, instance: inst.name };
-  }
-  const term = ids.tvdbId ? `tvdb:${ids.tvdbId}` : ids.tmdbId ? `tmdb:${ids.tmdbId}` : undefined;
-  if (!term) throw new HttpError(400, 'Missing TVDB id');
-  const found = await c.get<(Record<string, unknown> & { id?: number; title: string; tmdbId?: number; tvdbId?: number })[]>('/api/v3/series/lookup', { term });
-  const series = found.find((s) => (ids.tvdbId ? s.tvdbId === ids.tvdbId : s.tmdbId === ids.tmdbId)) ?? found[0];
-  if (!series) throw new HttpError(404, 'Sonarr couldn’t find that series.');
-  if (series.id) throw new HttpError(409, `${series.title} is already in ${inst.name}.`);
-  const added = await c.post<{ id: number; title: string }>('/api/v3/series', {
-    ...series,
-    qualityProfileId: profile.id,
-    rootFolderPath: root.path,
-    monitored: true,
-    seasonFolder: true,
-    addOptions: { monitor: 'all', searchForMissingEpisodes: true },
-  });
-  cache.delete(`${inst.id}:`);
-  return { ok: true, title: added.title, instance: inst.name };
-}

@@ -1,15 +1,17 @@
 # StreamForge
 
-A modern control centre for a Jellyfin media server and the services around it:
-**Jellyfin, Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
-Infinidisk and your download clients** (qBittorrent, Transmission, SABnzbd,
-NZBGet).
+A modern control centre for a **Jellyfin, Plex or Emby** media server and the
+services around it: **Sonarr, Radarr, Lidarr, Readarr, Bazarr, Prowlarr, Seerr,
+Infinidisk, Kometa and your download clients** (qBittorrent, Transmission, SABnzbd,
+NZBGet). Each install watches one media server, chosen on first run; then
+StreamForge finds your apps on the network so you only paste their keys.
+Using Plex or Emby? See [Plex-only and Emby-only households](#plex-only-and-emby-only-households).
 
 Built with React, Vite, TypeScript and Tailwind CSS, with a small Node/Express
 backend that handles authentication and keeps every service credential on the
 server.
 
-[**Website**](https://ashveebee.github.io/streamforge/) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
+[**Website**](https://ashveebee.github.io/streamforge/) · [**Guides**](docs/guides/README.md) · [Install](#installation) · [Screenshots](#screenshots) · [Demo](#demo-mode) · [License](#license)
 
 ![StreamForge dashboard: the stream playing now, health of every service, download activity and storage](docs/screenshots/dashboard.jpg)
 
@@ -19,12 +21,16 @@ server.
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/now-playing.jpg"><img src="docs/screenshots/now-playing.jpg" alt="Now Playing: every active stream with artwork, progress and playback details"></a><br><b>Now Playing.</b> Every stream, with direct play or transcode details.</td>
+    <td width="50%"><a href="docs/screenshots/now-playing.jpg"><img src="docs/screenshots/now-playing.jpg" alt="Now Playing: every active stream with artwork, progress and playback details"></a><br><b>Now Playing.</b> Every stream on your media server, with direct play or transcode details.</td>
     <td width="50%"><a href="docs/screenshots/system.jpg"><img src="docs/screenshots/system.jpg" alt="System Status: health, response time and uptime for each service"></a><br><b>System Status.</b> Health, response times and issues for each service.</td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/jellyfin.jpg"><img src="docs/screenshots/jellyfin.jpg" alt="Jellyfin: libraries, server details and recently added items"></a><br><b>Jellyfin.</b> Libraries, users, server details and new additions.</td>
     <td><a href="docs/screenshots/sonarr.jpg"><img src="docs/screenshots/sonarr.jpg" alt="Sonarr: download queue, airing soon, auto-import and missing episodes"></a><br><b>Sonarr and Radarr.</b> Queues with actions, auto-import, missing items and what's airing.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/emby.jpg"><img src="docs/screenshots/emby.jpg" alt="Emby: libraries, users, server details and recently added items for an Emby server"></a><br><b>Emby.</b> Its own page, with a tab per Emby server.</td>
+    <td><a href="docs/screenshots/plex.jpg"><img src="docs/screenshots/plex.jpg" alt="Plex: libraries, server details and recently added items for a Plex server"></a><br><b>Plex.</b> Its own page, with a tab per Plex server.</td>
   </tr>
   <tr>
     <td><a href="docs/screenshots/seerr.jpg"><img src="docs/screenshots/seerr.jpg" alt="Seerr: requests awaiting approval and recent requests"></a><br><b>Seerr.</b> Pending approvals and recent requests.</td>
@@ -51,15 +57,20 @@ server.
     <td><a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings: connect each service with an address and API key, and test the connection"></a><br><b>Settings.</b> Connect services, download clients, SSO and backups from the UI.</td>
   </tr>
   <tr>
+    <td><a href="docs/screenshots/history.jpg"><img src="docs/screenshots/history.jpg" alt="Watch history: people on the left, and each play with its poster, server, device and time watched"></a><br><b>Watch history.</b> Everyone's plays, with their device and time watched.</td>
+    <td><a href="docs/screenshots/title.jpg"><img src="docs/screenshots/title.jpg" alt="A movie page with its details, files, cast and who has watched it"></a><br><b>Title pages.</b> Details, files and audio tracks, and who has watched it.</td>
+  </tr>
+  <tr>
     <td colspan="2"><a href="docs/screenshots/buffering.jpg"><img src="docs/screenshots/buffering.jpg" alt="Buffering diagnosis: a stream that stalled, the likely cause with evidence, and what to try"></a><br><b>Why did it buffer?</b> Spots streams that stalled and explains the likely cause, from the transcoder to your upload.</td>
   </tr>
 </table>
 
 ## Features
 
-- **Jellyfin sign-in.** Users sign in with their Jellyfin account. The server
-  keeps the Jellyfin token, and the browser only holds an opaque HttpOnly session
-  cookie. The user's profile and avatar come from Jellyfin.
+- **Jellyfin, Plex or Emby sign-in.** Users sign in with their account on your
+  media server: a Jellyfin or Emby username and password, or **Sign in with
+  Plex**. The server keeps the token, and the browser only holds an opaque
+  HttpOnly session cookie. The user's profile and avatar come from that server.
 - **Now playing.** Every active stream is shown with backdrop, poster, logo,
   title, season/episode, year, live progress, elapsed and remaining time, user,
   device and client. Each stream also shows direct play or transcode details:
@@ -68,18 +79,29 @@ server.
 - **Service integrations**
   - *Jellyfin:* server info, sessions, users, library statistics, recently added
     items, daily plays and the activity log.
-  - *Jellyfin server discovery:* on first run, or under Settings → Jellyfin,
-    **Find on network** lists the Jellyfin servers on your local network so you
-    can pick one instead of typing its address. It uses Jellyfin's own
-    auto-discovery (UDP port 7359). In Docker it only works with
-    `network_mode: host`, because broadcasts don't leave a bridge network.
-  - *Multiple Jellyfin servers:* add more Jellyfin servers under the main one in
-    Settings, each with its own API key (Jellyfin → Dashboard → API Keys). Each
-    one gets a health check and outage alerts on System Status, its streams on
-    Now Playing (labelled with the server, with pause, message and stop), and
-    its own tab on the Jellyfin page with libraries, users, recently added and
-    activity. Sign-in, title pages, stats, playback alerts and the buffering
-    diagnosis still use the main server.
+  - *Two-step setup with discovery:* on first run you choose Jellyfin, Plex or
+    Emby. **Find on network** lists the servers on your local network so you
+    can pick one instead of typing its address. It uses each server's own
+    discovery: UDP port 7359 for Jellyfin and Emby, and Plex's GDM (UDP port
+    32414, "Enable local network discovery" in Plex → Settings → Network). In
+    Docker it only works with `network_mode: host`, because broadcasts don't
+    leave a bridge network.
+
+    Step 2, **Set up your apps**, looks for Sonarr, Radarr, Seerr, Prowlarr,
+    Bazarr, Lidarr and Readarr: by Docker service name (`http://sonarr:8989`),
+    on this machine, the Docker host and the media server's machine at their
+    usual ports, and at subdomains next to the media server's
+    (`sonarr.example.com`). Found apps have their address filled in; paste the
+    API key to connect. Once Seerr or Prowlarr is connected, StreamForge
+    offers to connect the Sonarr and Radarr they already know, keys copied on
+    the server. It's at `/setup`, linked from Settings → Services.
+  - *One media server per install:* the server chosen on first run stays.
+    Settings → Services lets you change its address and key, not swap it.
+    Jellyfin and Emby streams can be paused, messaged and stopped. Plex
+    streams can only be stopped, with a reason the viewer sees (stopping
+    needs Plex Pass). Plex has no activity log, so its page shows recent
+    plays from Plex's watch history instead. Running two media servers? Run
+    a StreamForge for each; they can share the same Sonarr, Radarr and Seerr.
   - *Sonarr:* series stats, queue, airing calendar and disk space, plus a
     missing-episodes list with search buttons.
   - *Radarr:* movie stats, queue, cinema/digital/physical release dates,
@@ -91,6 +113,12 @@ server.
   - *Multiple instances:* add extra Sonarr/Radarr instances (a 4K Radarr, an
     anime Sonarr) under the main service in Settings. Each gets its own tab,
     health check and place in the queues, calendar and download charts.
+  - *Adding titles:* admins add a movie or show from its title page, or many
+    at once from a Kometa collection's missing titles. Pick the instance,
+    quality profile, root folder (with free space), minimum availability or
+    which seasons to monitor, and whether to search now and tag it
+    `streamforge`. Titles already in any instance are skipped, searches go out
+    one after another, and your choices are remembered for next time.
   - *Prowlarr:* health, query/grab/failure stats and response time for each
     indexer, plus connected apps.
   - *Seerr:* request counts by status, pending approvals and recent requests,
@@ -117,8 +145,9 @@ server.
   through the last 30 days estimates when each volume will be full.
 - **Playback stats.** A Stats page shows plays per day split by direct play vs
   transcode, watch time, top viewers, titles and clients, and a weekday-by-hour
-  heatmap. Watch time and transcode figures need a Jellyfin API key (see
-  *Notes on data sources*).
+  heatmap. Viewer names open their watch history and
+  titles open their pages. Watch time and transcode figures need a Jellyfin API
+  key (see *Notes on data sources*).
 - **Library health.** Cross-checks Sonarr, Radarr and Jellyfin by TVDB/TMDB/IMDb
   id. It lists monitored series with missing episodes, files that could be
   upgraded (with a search button), downloads Jellyfin doesn't have, and Jellyfin
@@ -162,6 +191,14 @@ server.
   Sonarr/Radarr instance, Lidarr and Readarr at once, and jump to any page.
   New titles come from Seerr, where people can request them in their own
   name; admins can also add a title straight to Sonarr or Radarr.
+- **Watch history for every user.** Admins get a **Watch history** page:
+  pick a person (or everyone) and a time range to see each play with its
+  poster, the time, episode, app, device, how long they watched and whether
+  it transcoded, plus their most-watched titles and usual device. Older
+  plays, from before StreamForge was installed, are filled in from
+  Jellyfin's own record (the last time each user finished each movie and
+  episode), Emby's activity log or Plex's watch history, so it isn't empty on
+  day one.
 - **Your own page.** Everyone gets a page (click your name in the sidebar)
   with continue watching, next up, watch history, their Seerr requests,
   signed-in devices and two-factor settings.
@@ -184,6 +221,14 @@ server.
 - **Cleanup suggestions.** Library health lists big movies and series nobody
   has watched in 3–24 months, with the space each would free. Keep, stop
   monitoring, or delete them from there.
+- **Watched by everyone.** Library health also lists the movies and series
+  every Jellyfin user has finished, biggest first, so you can free space
+  without removing something someone still means to watch. Choose who counts
+  (leave out an admin or test account that never watches anything), tick
+  titles, and delete them or stop monitoring them through Sonarr or Radarr in
+  one go, so they aren't downloaded again. A series counts once every episode
+  is watched. This needs Jellyfin as your media server, because it uses
+  Jellyfin's watched state for each user.
 - **Transcode and bandwidth alerts.** Get alerted when too many streams
   transcode at once, total bandwidth passes a limit, or a 4K file is being
   transcoded (optionally messaging the viewer).
@@ -226,7 +271,16 @@ server.
 ## Installation
 
 StreamForge runs as a single Docker container (images for `amd64` and `arm64`).
-All you need is Docker and a Jellyfin server it can reach.
+All you need is Docker and a Jellyfin, Plex or Emby server it can reach.
+
+> **Guides:** the [install and configure guide](docs/guides/install.md) walks
+> through everything below in more detail, including reverse proxies and
+> Tailscale. There are also guides for
+> [media servers](docs/guides/media-servers.md), [Kometa](docs/guides/kometa.md),
+> [Sonarr and Radarr](docs/guides/sonarr-radarr.md),
+> [watch history and stats](docs/guides/watch-history-and-stats.md) and
+> [notifications](docs/guides/notifications.md). They're also on the
+> [website](https://ashveebee.github.io/streamforge/guides/).
 
 ### 1. Start the container
 
@@ -265,22 +319,88 @@ docker run -d --name streamforge \
 The `/data` volume holds the settings database. Keep it, or you'll need to set
 everything up again after an upgrade.
 
-### 2. Connect Jellyfin
+### 2. Choose your media server
 
-Open **http://your-server:4000**. On first launch StreamForge asks for your
-Jellyfin server address (for example `https://jellyfin.example.com` or
-`http://192.168.1.10:8096`). It checks that the server is reachable, then you
-sign in with a **Jellyfin administrator** account.
+Open **http://your-server:4000**. On first launch StreamForge asks which media
+server you use. People sign in to StreamForge with their account on it.
 
-### 3. Connect your other services
+- **Plex:** click **Sign in with Plex** and approve it in the Plex window
+  that opens, using the account that owns your server. Pick the server, and
+  you're in. StreamForge finds the server's address itself, preferring the
+  local one. Everyone you share the server with can then sign in with their
+  own Plex account.
+- **Jellyfin:** enter your Jellyfin server address (for example
+  `https://jellyfin.example.com` or `http://192.168.1.10:8096`), or click
+  **Find servers on my network** to pick one. Then sign in with a **Jellyfin
+  administrator** account.
+- **Emby:** enter your Emby server address (or find it on the network) and
+  sign in with an **Emby administrator** account. StreamForge creates its own
+  API key on the server for background features, and everyone else signs in
+  with their Emby account.
 
-Go to **Settings** in the sidebar. For each service you use, enter its address
-and API key, click **Test connection**, then **Save**. Changes apply
+Each install watches the one media server you choose. Running two? Run a
+StreamForge for each.
+
+<a href="docs/screenshots/setup.jpg"><img src="docs/screenshots/setup.jpg" width="32%" alt="First-run setup: pick Plex, Jellyfin or Emby"></a>
+<a href="docs/screenshots/setup-plex.jpg"><img src="docs/screenshots/setup-plex.jpg" width="32%" alt="After signing in with Plex: pick which of your Plex servers to use"></a>
+<a href="docs/screenshots/setup-emby.jpg"><img src="docs/screenshots/setup-emby.jpg" width="32%" alt="Emby setup: the server address, servers found on the network, and an administrator sign-in"></a>
+
+### 3. Set up your apps
+
+After you sign in, StreamForge opens **Set up your apps** and looks for Sonarr,
+Radarr, Seerr, Prowlarr, Bazarr, Lidarr and Readarr: by Docker service name,
+on this machine and the media server's machine at their usual ports, and at
+subdomains next to your media server's. Found apps have their address filled
+in; paste each API key and click **Test and connect**. Once Seerr or Prowlarr
+is connected, StreamForge offers to connect the Sonarr and Radarr they already
+know. Apps you skip are switched off; turn them on any time in Settings.
+
+<a href="docs/screenshots/setup-apps.jpg"><img src="docs/screenshots/setup-apps.jpg" width="60%" alt="Set up your apps: Sonarr and Seerr connected, Radarr, Prowlarr and Bazarr found with their addresses filled in, and an offer to connect Radarr using Seerr's details"></a>
+
+### Plex-only and Emby-only households
+
+With Plex or Emby as your media server, the whole app runs on it. Jellyfin isn't
+needed at all. **Emby** works almost exactly like Jellyfin (it has the same
+API): pausing and messaging streams, the activity log and scans all work. The
+notes below are mostly about **Plex**.
+
+<a href="docs/screenshots/plex-only.jpg"><img src="docs/screenshots/plex-only.jpg" alt="The dashboard of a Plex-only install: Plex streams, a Plex sidebar entry and service health"></a>
+
+- **Emby sign-in:** username and password, like Jellyfin. Emby
+  administrators are StreamForge administrators; other Emby users are members.
+  Cleanup suggestions use the plays StreamForge records, because Emby's
+  per-user watch data needs each user's own token.
+- **Plex sign-in:** **Sign in with Plex**. The server's owner is an administrator.
+  People the server is shared with are members, and can sign in when Settings
+  → Access allows it. Two-factor sign-in works as usual. StreamForge never
+  sees anyone's Plex password; plex.tv handles the sign-in.
+- **Works the same:** dashboard, Now Playing (with stop), the Plex page with
+  libraries, users, recently added and scans, Stats, your page (On Deck from
+  Plex), ⌘K search, Library health, cleanup suggestions, the weekly digest,
+  rules, playback alerts and the buffering diagnosis. Seerr requests are
+  matched to Plex accounts.
+- **Plex differences:** Plex streams can be stopped (with a reason, needs Plex
+  Pass) but not paused or messaged, so the 4K alert only notifies you. Stats
+  for the time before StreamForge started recording come from Plex's watch
+  history, which has no watch time or transcode details. Title pages show
+  details from Seerr and the *arr apps, without per-episode file info. Single
+  sign-on and Moonfin are Jellyfin features and are hidden (with Emby too).
+- **Needs:** the StreamForge server must be able to reach `plex.tv` (for
+  sign-in) and your Plex server.
+
+### 4. Change them later in Settings
+
+Go to **Settings** in the sidebar. Services are grouped: media server, library
+managers, indexers and downloads, requests, metadata and subtitles, and
+storage. For each service you use, enter its address and API key, click
+**Test connection**, then **Save**. Changes apply
 immediately; no restart is needed. Skip any service you don't run.
 
 | Service | Where to find the API key |
 | --- | --- |
 | Jellyfin | Dashboard → API Keys (optional; enables server-wide stats and update warnings) |
+| Emby | Emby → Settings → Advanced → API Keys (on the Emby card in Settings) |
+| Plex | The server owner's Plex token (on the Plex card in Settings) |
 | Sonarr / Radarr / Prowlarr | Settings → General → Security → API Key |
 | Seerr | Settings → General → API Key |
 | Lidarr / Readarr / Bazarr | Settings → General → Security → API Key |
@@ -337,6 +457,88 @@ address** on a service in Settings (or `JELLYFIN_PUBLIC_URL`,
 for example `https://jellyfin.example.com`. Links such as **Play in
 Jellyfin** and **Open in Sonarr** then use it.
 
+### Kometa
+
+> The [Kometa guide](docs/guides/kometa.md) has the full step-by-step setup,
+> every collection option and troubleshooting.
+
+[Kometa](https://kometa.wiki) (previously Plex Meta Manager) builds collections,
+overlays and playlists on a schedule. It has no API, but it can send webhooks,
+and StreamForge can receive them:
+
+1. In StreamForge, go to **Settings → Services → Kometa** and switch on
+   **Receive Kometa webhooks**.
+2. Copy the `webhooks:` block it shows into Kometa's `config.yml`. If you
+   already have a `webhooks:` section (for Discord or Notifiarr, say), turn
+   each entry into a list and add StreamForge's address to it:
+
+   ```yaml
+   webhooks:
+     error:
+       - notifiarr
+       - http://streamforge:4000/api/hooks/kometa/<your code>
+     run_end: http://streamforge:4000/api/hooks/kometa/<your code>
+   ```
+
+3. Use an address Kometa can reach. In Docker that's usually StreamForge's
+   container name or LAN IP, not `localhost`.
+
+After Kometa's next run, **System Status** shows a Kometa card: whether it's
+running, the last run's time and counts (collections created, updated and
+removed, items added and removed), a strip of recent runs, errors with the
+library and collection they came from, a notice when a newer Kometa is out,
+and recent collection changes. Under **Settings → Notifications** you can
+subscribe a channel to **Kometa errors** and **Kometa run finished**.
+
+The long code at the end of the address is what lets Kometa in, because Kometa
+can't send a password. Keep it private; **New address** replaces it if it
+leaks. StreamForge keeps the last 1,000 Kometa events and drops the poster
+images Kometa sometimes includes.
+
+#### Making collections from StreamForge
+
+The **Kometa** page (in the sidebar once Kometa is set up) lists the
+collections on every Plex, Jellyfin and Emby server, and admins can add their
+own: from a TMDb, IMDb or Trakt list, TMDb trending or popular, a TMDb
+keyword, or titles picked by hand. Each can be shown all year or only between
+two dates (a Christmas collection in December), ordered like the list, by
+release date or A–Z, and can send missing titles to Radarr or Sonarr. Opening
+a collection shows what's on the list, what you have, what's missing (tick
+them and add them to Sonarr or Radarr in one go), its run history and the
+Kometa config StreamForge wrote.
+
+StreamForge doesn't run Kometa. It writes its collections to its own files, and
+Kometa builds them on its next run:
+
+1. Mount Kometa's config folder into StreamForge **read-write**:
+
+   ```yaml
+   volumes:
+     - /opt/kometa/config:/kometa
+   ```
+
+2. Under **Settings → Services → Kometa → Collections from StreamForge**, enter
+   the folder (`/kometa`) and the times Kometa runs, so StreamForge can say
+   when a change will show up. The TMDb key is read from Kometa's
+   `config.yml`; enter one only if it isn't there.
+3. Add the `- file:` line Settings shows to each library's `collection_files`
+   in Kometa's `config.yml`, for example:
+
+   ```yaml
+   libraries:
+     Movies:
+       collection_files:
+         - file: config/streamforge/plex-cabin-movies.yml
+   ```
+
+StreamForge only writes files in a `streamforge` folder inside the config
+folder, and never touches your own Kometa files. Jellyfin and Emby libraries
+need Kometa's develop (nightly) build for now; the stable release is Plex-only.
+StreamForge can show what's on TMDb lists before Kometa builds them, but not
+IMDb or Trakt lists, so those show what's in the collection on the server.
+To make collections on your main Jellyfin server, give it an API key under
+**Settings → Jellyfin**.
+
 ### Moonfin
 
 If you use [Moonfin](https://github.com/Moonfin-Client), switch it on in
@@ -365,7 +567,13 @@ default for **Member access** in Settings. See `.env.example` for the full list.
   address from inside the container:
   `docker exec streamforge wget -qO- <url>/System/Info/Public`.
 - **"Unauthorised — check API key":** the key is wrong or was regenerated.
-  Paste it again in Settings.
+  Paste it again in Settings. For Plex, use the token of the account that owns
+  the server: a shared user's token can't see sessions or history.
+- **Plex says "Plex can only stop streams":** Plex doesn't let a server pause
+  a stream or send the viewer a message. Stopping works with Plex Pass.
+- **"Find on network" doesn't find Plex or Emby:** turn on "Enable local
+  network discovery (GDM)" in Plex (Settings → Network). In Docker, use
+  `network_mode: host`. You can always add a server by its address.
 - **"Re-enter the API key when changing the server address":** a saved key is
   never sent to a new address. Paste the key again along with the new address.
 - **Locked out after changing the Jellyfin server:** this is expected, because
@@ -375,6 +583,13 @@ default for **Member access** in Settings. See `.env.example` for the full list.
   it under Settings → Sign-in security. If you're the only admin, start the
   container once with `STREAMFORGE_RESET_2FA=<your Jellyfin user name>`, sign
   in, and remove the variable again.
+- **"Sign in with Plex" says your account doesn't have access:** the account
+  must own the server or have it shared with it. Sharing happens in Plex
+  (Settings → Users & Sharing). If it's shared, check that member sign-in is
+  on under Settings → Access.
+- **Plex setup says it can't reach the server:** StreamForge tries every
+  address plex.tv lists for the server, local ones first. In Docker, make sure
+  the container can reach the server's LAN address (or use host networking).
 - **Single sign-on says there's no Jellyfin user:** the username claim
   (`preferred_username` by default) must match a Jellyfin user name. Change the
   claim under Settings → Sign-in security if your provider sends something else.
@@ -404,6 +619,21 @@ This runs a mock API (`scripts/demo-server.ts`) with fictional streams,
 libraries, queues and requests, and generated artwork. To re-create the README
 screenshots after changing the UI, keep the demo running and run
 `./scripts/screenshots.sh` (needs Google Chrome).
+
+The demo shows a household with a main Jellyfin server plus an Emby and a Plex
+server. Other set-ups:
+
+| Variable | Shows |
+| --- | --- |
+| `DEMO_SINGLE=1` | One Jellyfin server and nothing else |
+| `DEMO_MAIN=plex` / `DEMO_MAIN=emby` | A Plex-only or Emby-only household |
+| `DEMO_SETUP=1` | The first-run setup screen |
+| `DEMO_SIGNED_OUT=1` | The sign-in screen |
+
+For example `DEMO_SINGLE=1 npm run demo`.
+
+To preview the guides as website pages, run
+`node scripts/build-guides.mjs` (they're written to `_site/guides`).
 
 ### Production build
 
@@ -519,12 +749,15 @@ To add an integration:
   digest notification, single sign-on, the active-streams and ended-series
   rules, and watch history all work in the background, so they use the
   Jellyfin API key (Settings → Jellyfin).
-- **Cleanup suggestions** count a title as watched when any Jellyfin user has
-  played or started it, or StreamForge recorded a play. Results are cached for
-  ten minutes.
-- **Playback stats.** With a Jellyfin API key set (Settings → Jellyfin), a
-  recorder samples active sessions every 30 seconds and stores each play,
-  including watch time and whether it transcoded. Without a key, or for days
+- **Cleanup suggestions** count a title as watched when it was played on any
+  media server: any Jellyfin user played or started it on the main Jellyfin
+  server, any account watched it on a Plex server (from Plex's watch history),
+  or StreamForge recorded a play on any server. Results are cached for ten
+  minutes.
+- **Playback stats.** A recorder samples active sessions on your media
+  server every 30 seconds and stores each play, including watch time and
+  whether it transcoded. Jellyfin needs a Jellyfin API key for this
+  (Settings → Jellyfin); Plex and Emby already have one from setup. Without a key, or for days
   before recording started, the Stats page uses Jellyfin's activity log, which
   has plays but no watch time or transcode data.
 - **Storage forecast.** Usage is sampled hourly from Infinidisk, the host and
@@ -536,6 +769,13 @@ To add an integration:
   between samples, taken every 5 seconds.
 - **Playback activity chart.** This is built from Jellyfin's activity log
   (`VideoPlayback` and `AudioPlayback` entries). No plugin is needed.
+- **Extra Emby and Plex servers.** Emby shares Jellyfin's API, so StreamForge
+  reads it the same way (under Emby's `/emby` path, with the `X-Emby-Token`
+  header). Plex is read through its own API (`server/services/plex.ts`): active
+  streams from `/status/sessions`, libraries and counts from
+  `/library/sections`, users from `/accounts`, recent plays from
+  `/status/sessions/history/all` and artwork through Plex's photo transcoder.
+  Plex user avatars live on plex.tv, so Plex users show initials instead.
 - **CPU, RAM and network.** These figures come from the machine running the
   StreamForge server. Run it on the media server, with host networking in
   Docker, to see that server's figures.

@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Navigate, NavLink, useParams } from 'react-router';
+import { Link, Navigate, NavLink, useParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArchiveRestore,
   Bell,
   ChevronDown,
+  ChevronRight,
   Download,
   CircleCheck,
   CircleX,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useHealth, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
+import { useHealth, useMainServer, useResetService, useSaveService, useServiceSettings, useSetServiceEnabled, useTestService } from '@/hooks/queries';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { relative } from '@/lib/format';
@@ -35,13 +36,14 @@ import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { Pill, StatusBadge } from '@/components/ui/Status';
 import { Switch } from '@/components/ui/Switch';
 import { InstancesSection } from '@/components/settings/InstancesSection';
-import { JellyfinServersSection } from '@/components/settings/JellyfinServersSection';
+import { MainServerSection, MediaServerNote } from '@/components/settings/MainServerSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { MembersSection } from '@/components/settings/MembersSection';
 import { ClientsSection } from '@/components/settings/ClientsSection';
 import { BackupSection } from '@/components/settings/BackupSection';
 import { SsoSection } from '@/components/settings/SsoSection';
 import { MoonfinSection } from '@/components/settings/MoonfinSection';
+import { KometaSection } from '@/components/settings/KometaSection';
 import { UpdatesSection } from '@/components/settings/UpdatesSection';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { PageLoader } from '@/components/ui/Loader';
@@ -66,8 +68,6 @@ const HELP: Record<ServiceId, { placeholder: string; keyHelp: string; keyOptiona
     keyOptional: true,
   },
 };
-
-const ORDER: ServiceId[] = ['jellyfin', 'sonarr', 'radarr', 'lidarr', 'readarr', 'bazarr', 'prowlarr', 'seerr', 'infinidisk'];
 
 /* -------------------------------- inputs -------------------------------- */
 
@@ -181,10 +181,11 @@ function ServiceCard({ s, index }: { s: ServiceSettingsView; index: number }) {
   const [showKey, setShowKey] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [saved, setSaved] = useState(false);
-  // Healthy services start closed to keep the page short; ones that need
-  // attention (not connected, offline, degraded) start open.
+  // Healthy and switched-off services start closed to keep the page short;
+  // ones that need attention (switched on but not connected, offline,
+  // degraded) start open.
   const [openState, setOpen] = useState<boolean>();
-  const open = openState ?? (!s.configured || (s.enabled && (status === 'offline' || status === 'degraded')));
+  const open = openState ?? (s.enabled && (!s.configured || status === 'offline' || status === 'degraded'));
   const test = useTestService(s.id);
   const save = useSaveService(s.id);
   const reset = useResetService(s.id);
@@ -497,43 +498,102 @@ function SettingsTabs({ update }: { update?: string }) {
   );
 }
 
+/** The Services tab, grouped by what each app does. */
+const GROUPS: { id: string; title: string; description: string; services: ServiceId[] }[] = [
+  { id: 'media', title: 'Media server', description: 'The server this install watches and people sign in with.', services: ['jellyfin'] },
+  { id: 'library', title: 'Library managers', description: 'Find, download and organise TV, movies, music and books.', services: ['sonarr', 'radarr', 'lidarr', 'readarr'] },
+  { id: 'indexers', title: 'Indexers and downloads', description: 'Where releases are found, and the clients that download them.', services: ['prowlarr'] },
+  { id: 'requests', title: 'Requests', description: 'Let people ask for new movies and shows.', services: ['seerr'] },
+  { id: 'metadata', title: 'Metadata and subtitles', description: 'Subtitles, collections, overlays and playlists.', services: ['bazarr'] },
+  { id: 'storage', title: 'Storage', description: 'Drive health and capacity.', services: ['infinidisk'] },
+];
+
+function Group({ id, title, description, children }: { id: string; title: string; description: string; children: ReactNode }) {
+  return (
+    <section aria-labelledby={`group-${id}`} className="space-y-3">
+      <div className="px-1">
+        <h2 id={`group-${id}`} className="text-[11px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
+          {title}
+        </h2>
+        <p className="mt-0.5 text-xs text-ink-4">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function ServicesTab() {
   const q = useServiceSettings();
+  const main = useMainServer();
   const byId = new Map(q.data?.services.map((s) => [s.id, s]));
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => void q.refetch()} /></Card>;
   if (!q.data) return <PageLoader label="Loading settings" />;
+  let n = 0;
   return (
-    <>
-      <ul className="space-y-4">
-        {ORDER.map((id, i) => {
-          const s = byId.get(id);
-          if (!s) return null;
-          return (
-            <Fragment key={id}>
-              <ServiceCard s={s} index={i} />
-              {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
-              {id === 'jellyfin' && s.configured && <JellyfinServersSection />}
-            </Fragment>
-          );
-        })}
-      </ul>
-      <MoonfinSection />
-      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
+    <div className="space-y-9">
+      {GROUPS.map((g) => (
+        <Group key={g.id} id={g.id} title={g.title} description={g.description}>
+          <ul className="space-y-4">
+            {g.services.map((id) => {
+              const s = byId.get(id);
+              if (!s) return null;
+              const i = n++;
+              return (
+                <Fragment key={id}>
+                  {/* The media server chosen at setup; it can be edited but not swapped. */}
+                  {id === 'jellyfin' && main.other ? (
+                    <MainServerSection type={main.plex ? 'plex' : 'emby'} />
+                  ) : id === 'jellyfin' ? (
+                    <>
+                      <ServiceCard s={s} index={i} />
+                      <li className="-mt-2">
+                        <MediaServerNote type="jellyfin" />
+                      </li>
+                    </>
+                  ) : (
+                    <ServiceCard s={s} index={i} />
+                  )}
+                  {(id === 'sonarr' || id === 'radarr') && s.enabled && <InstancesSection kind={id} />}
+                </Fragment>
+              );
+            })}
+            {g.id === 'indexers' && (
+              <li>
+                <Card className="transition hover:bg-white/[0.02]">
+                <Link to="/settings/downloads" className="flex items-center gap-3 px-5 py-4 text-left">
+                  <Download className="size-5 shrink-0 text-ink-3" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-medium">Download clients</span>
+                    <span className="block text-[11px] text-ink-4">qBittorrent, Transmission, SABnzbd and NZBGet have their own tab.</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-ink-4" />
+                </Link>
+                </Card>
+              </li>
+            )}
+          </ul>
+          {g.id === 'media' && !main.other && <MoonfinSection grouped />}
+          {g.id === 'metadata' && <KometaSection grouped />}
+        </Group>
+      ))}
+      <p className="flex flex-wrap items-center justify-center gap-1.5 text-center text-[11px] text-ink-4">
         <KeyRound className="size-3" /> API keys are stored on the StreamForge server and never sent to your browser.
+        <Link to="/setup" className="text-brand hover:underline">Find apps on your network</Link>
       </p>
-    </>
+    </div>
   );
 }
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const main = useMainServer();
   const { section = '' } = useParams();
   const updates = useUpdates(!!user?.isAdmin);
 
   if (!user?.isAdmin) {
     return (
       <Card>
-        <EmptyState icon={ShieldAlert} title="Administrators only" description="Ask a Jellyfin administrator to change StreamForge's settings." />
+        <EmptyState icon={ShieldAlert} title="Administrators only" description="Ask an administrator to change StreamForge's settings." />
       </Card>
     );
   }
@@ -552,7 +612,7 @@ export default function SettingsPage() {
         {tab.path === 'access' && (
           <>
             <MembersSection />
-            <SsoSection />
+            {!main.other && <SsoSection />}
           </>
         )}
         {tab.path === 'system' && (

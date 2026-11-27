@@ -24,8 +24,10 @@ export interface ServiceHealth {
   /** Service id, or an extra Sonarr/Radarr instance id such as `radarr-4k`. */
   id: string;
   kind: ServiceId;
-  /** Set for extra Sonarr/Radarr instances. */
+  /** Set for extra Sonarr/Radarr instances and extra media servers. */
   instance?: string;
+  /** Extra media servers only: Jellyfin, Emby or Plex. */
+  serverType?: MediaServerType;
   name: string;
   configured: boolean;
   status: ServiceStatus;
@@ -114,9 +116,10 @@ export interface CleanupStatus {
 
 export interface NowPlaying {
   sessionId: string;
-  /** Set for streams on an extra Jellyfin server (its id and name). */
+  /** Set for streams on an extra media server (its id, name and type). */
   server?: string;
   serverName?: string;
+  serverType?: MediaServerType;
   user: { id?: string; name: string; imageTag?: string };
   client?: string;
   device?: string;
@@ -446,16 +449,22 @@ export interface ArrInstanceRef {
   primary: boolean;
 }
 
-/** A Jellyfin server as listed in /api/config (only when there are several). */
+export type MediaServerType = 'jellyfin' | 'emby' | 'plex';
+
+/** A media server as listed in /api/config (only when there are several). */
 export interface JellyfinServerRef {
   id: string;
+  type: MediaServerType;
   name: string;
   primary: boolean;
 }
 
-/** An extra Jellyfin server as shown on the Settings page. */
-export interface JellyfinServerView {
+/** An extra media server (Jellyfin, Emby or Plex) as shown on the Settings page. */
+export interface MediaServerView {
   id: string;
+  type: MediaServerType;
+  /** Always true: the media server chosen at setup. */
+  main?: boolean;
   name: string;
   url: string;
   publicUrl: string;
@@ -465,15 +474,14 @@ export interface JellyfinServerView {
   createdAt: string;
 }
 
-/** A Jellyfin server found on the local network. */
+/** A media server found on the local network. */
 export interface DiscoveredServer {
   id: string;
+  type?: MediaServerType;
   name: string;
   url: string;
   version?: string;
   reachable: boolean;
-  /** Settings only: already the main server or an extra one. */
-  added?: boolean;
 }
 
 /** An extra instance as shown on the Settings page. */
@@ -546,7 +554,7 @@ export interface AutoImportStatus {
 
 /* ------------------------------ notifications ----------------------------- */
 
-export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending' | 'playback_alert' | 'weekly_digest' | 'rule' | 'update_available';
+export type NotifyEvent = 'service_down' | 'service_up' | 'disk_low' | 'import_done' | 'import_failed' | 'download_removed' | 'request_pending' | 'playback_alert' | 'weekly_digest' | 'rule' | 'update_available' | 'kometa_error' | 'kometa_run';
 export type ChannelType = 'discord' | 'ntfy' | 'pushover' | 'webhook' | 'webpush';
 
 export interface NotifyChannel {
@@ -596,6 +604,10 @@ export interface MissingPage {
 
 export interface PlaybackStats {
   days: number;
+  /** Every media server, with its plays in the range; a filter shows when there's more than one. */
+  servers: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; plays: number }[];
+  /** The server the figures are narrowed to, if any. */
+  server?: string;
   source: 'recorder' | 'activity' | 'mixed';
   recording: boolean;
   recordingSince?: string;
@@ -604,7 +616,7 @@ export interface PlaybackStats {
   /** [weekday Mon..Sun][hour 0..23] → plays started. */
   heatmap: number[][];
   topUsers: { name: string; plays: number; hours: number }[];
-  topTitles: { name: string; plays: number; hours: number }[];
+  topTitles: { name: string; plays: number; hours: number; link?: string }[];
   topClients: { name: string; plays: number; hours: number }[];
 }
 
@@ -639,6 +651,10 @@ export interface LibraryHealth {
   hasSonarr: boolean;
   hasRadarr: boolean;
   hasJellyfin: boolean;
+  /** What the cross-checks compare with: "Plex", "Jellyfin", "Emby", or "your media servers". */
+  server?: string;
+  /** Media servers that couldn't be read this time. */
+  unreachable?: string[];
   incomplete?: Section;
   upgrades: { instance: string; instanceName?: string; kind: ArrKind; name: string; count: number }[];
   notInJellyfin?: Section;

@@ -13,7 +13,8 @@ interface MoonfinSettings {
 }
 
 /** Offer to open titles in Moonfin, a Jellyfin client, instead of Jellyfin's web app. */
-export function MoonfinSection() {
+/** `grouped`: shown inside a Settings group, so a smaller heading. */
+export function MoonfinSection({ grouped = false }: { grouped?: boolean } = {}) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings', 'moonfin'], queryFn: () => api<MoonfinSettings>('/settings/moonfin') });
   const save = useMutation({
@@ -28,11 +29,11 @@ export function MoonfinSection() {
   if (!d) return null;
   const st = d.status;
   return (
-    <section className="mt-8" aria-labelledby="moonfin-h">
-      <h2 id="moonfin-h" className="mb-1 flex items-center gap-2 text-lg font-semibold tracking-tight">
+    <section className={grouped ? 'pt-1' : 'mt-8'} aria-labelledby="moonfin-h">
+      <h2 id="moonfin-h" className={cn('mb-1 flex items-center gap-2 font-semibold tracking-tight', grouped ? 'px-1 text-[14px]' : 'text-lg')}>
         <Moon className="size-4 text-brand" /> Moonfin
       </h2>
-      <p className="mb-3 text-xs text-ink-3">
+      <p className={cn('mb-3 text-xs text-ink-3', grouped && 'px-1')}>
         Moonfin is a Jellyfin app for phones, TVs, desktops and the web. Switch it on and Play buttons offer to open titles in Moonfin. Each device asks once and can remember the answer.
       </p>
       <Card>

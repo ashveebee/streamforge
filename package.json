@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.8.0",
   "type": "module",
-  "description": "A unified control centre for your Jellyfin media server ecosystem.",
+  "description": "A unified control centre for your Jellyfin, Plex or Emby media server ecosystem.",
   "license": "GPL-2.0-only",
   "repository": {
     "type": "git",
@@ -47,6 +47,7 @@
     "clsx": "^2.1.1",
     "concurrently": "^10.0.7",
     "lucide-react": "^1.78.0",
+    "marked": "18.2.0",
     "motion": "^14.14.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",

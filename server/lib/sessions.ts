@@ -8,12 +8,16 @@ export interface Session {
   userName: string;
   isAdmin: boolean;
   primaryImageTag?: string;
-  /** Jellyfin access token. Never leaves the server. */
+  /** Jellyfin access token, or the Plex account token for Plex sign-ins. Never leaves the server. */
   token: string;
+  /** Plex sign-ins: this user's token for the main Plex server. */
+  serverToken?: string;
+  /** Plex sign-ins: the account's avatar on plex.tv (proxied, never sent to the browser). */
+  avatarUrl?: string;
   deviceId: string;
   serverId?: string;
   /** How the user signed in. */
-  method?: 'password' | 'oidc';
+  method?: 'password' | 'oidc' | 'plex' | 'emby';
   createdAt: number;
   expiresAt: number;
   lastValidatedAt: number;
@@ -109,7 +113,7 @@ class SessionStore {
     return [...this.sessions.values()].filter((s) => s.expiresAt > Date.now());
   }
 
-  /** Signs everyone out (e.g. after switching to a different Jellyfin server). */
+  /** Signs everyone out (e.g. after switching to a different main server). */
   clear() {
     this.sessions.clear();
     db.prepare('DELETE FROM sessions').run();

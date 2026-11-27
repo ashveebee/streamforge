@@ -10,18 +10,19 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { ChartTooltip, timeLabel } from '@/components/ui/Chart';
-import { SERVICES, ServiceIcon } from '@/components/ui/ServiceIcon';
+import { healthMeta, ServiceIcon } from '@/components/ui/ServiceIcon';
 import { StatTile } from '@/components/ui/Stat';
 import { STATUS_META, StatusBadge } from '@/components/ui/Status';
 import { EmptyState, Skeleton } from '@/components/ui/States';
 import { CleanupCard } from '@/components/widgets/CleanupCard';
 import { StorageForecastCard } from '@/components/widgets/StorageForecastCard';
 import { DownloadsWidget } from '@/components/widgets/DownloadsWidget';
+import { KometaCard } from '@/components/widgets/KometaCard';
 import { StorageWidget, VolumeRow } from '@/components/widgets/StorageWidget';
 import { SystemResourcesWidget } from '@/components/widgets/SystemResources';
 
 function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
-  const meta = SERVICES[s.kind];
+  const meta = healthMeta(s);
   const data = s.history.map((h) => ({ t: h.t, ms: h.ms }));
   const errors = s.issues.filter((i) => i.level === 'error').length;
   const warnings = s.issues.filter((i) => i.level === 'warning').length;
@@ -33,7 +34,7 @@ function ServiceRow({ s, index }: { s: ServiceHealth; index: number }) {
       className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-3 px-5 py-4 md:grid-cols-[minmax(200px,1.2fr)_minmax(110px,0.8fr)_repeat(3,minmax(80px,0.6fr))_minmax(160px,1.2fr)]"
     >
       <Link to={s.instance ? `${meta.path}?instance=${encodeURIComponent(s.instance)}` : meta.path} className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
-        <ServiceIcon id={s.kind} size={36} />
+        <ServiceIcon id={meta.iconId} size={36} />
         <div className="min-w-0">
           <div className="truncate font-medium">{s.name}</div>
           <div className="truncate text-[11px] text-ink-4">{s.version ? `v${s.version}` : meta.tagline}</div>
@@ -183,6 +184,10 @@ export default function SystemPage() {
       <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-2 [&>*]:min-w-0">
         <StorageForecastCard />
         <CleanupCard />
+      </div>
+
+      <div className="mt-5 empty:hidden">
+        <KometaCard />
       </div>
 
       {host.data?.filesystems && host.data.filesystems.length > 0 && (

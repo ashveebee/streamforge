@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, BarChart3, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
+import { Activity, BarChart3, History, Images, Download, LayoutDashboard, Newspaper, Stethoscope, LogOut, PanelLeftClose, PanelLeftOpen, PlayCircle, ScrollText, Search, Settings, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUpdates } from '@/hooks/useUpdates';
-import { useCanSee, useHealth, useNowPlaying, useServiceConfig } from '@/hooks/queries';
+import { useCanSee, useHealth, useJellyfinServers, useMainServer, useNowPlaying, useServiceConfig } from '@/hooks/queries';
 import { jfUserImage } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import type { ServiceId } from '@/lib/types';
+import type { MediaServerType, ServiceHealth, ServiceId } from '@/lib/types';
 import { Avatar } from '../ui/Image';
-import { SERVICES } from '../ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '../ui/ServiceIcon';
 import { StatusDot } from '../ui/Status';
 import { LogoMark } from './Logo';
 
@@ -92,6 +92,16 @@ export function Sidebar({
   // Services switched off in Settings are hidden from navigation.
   const shown = SERVICE_ORDER.filter((id) => config.data?.enabled?.[id] ?? true);
   const streams = playing.data?.length ?? 0;
+  // Emby and Plex get their own entries, right after Jellyfin, once a server of that kind is added.
+  const servers = useJellyfinServers();
+  const main = useMainServer();
+  const mediaOn = config.data?.enabled?.jellyfin ?? true;
+  // The sign-in server's kind comes first; Jellyfin only shows when there's a Jellyfin server.
+  const mediaTypes = [main.type, ...(['jellyfin', 'emby', 'plex'] as MediaServerType[]).filter((t) => t !== main.type)];
+  const shownTypes = mediaTypes.filter((t) => mediaOn && (t === 'jellyfin' ? !main.other || servers.some((s) => s.type === 'jellyfin') : servers.some((s) => s.type === t)));
+  const RANK: Record<ServiceHealth['status'], number> = { offline: 3, degraded: 2, unconfigured: 1, healthy: 0 };
+  const worstOf = (type: MediaServerType) =>
+    health.data?.services.filter((s) => s.serverType === type).sort((a, b) => RANK[b.status] - RANK[a.status])[0];
 
   return (
     <aside
@@ -164,6 +174,7 @@ export function Sidebar({
         />}
         <NavItem to="/digest" icon={Newspaper} label="This week" collapsed={collapsed} onNavigate={onNavigate} />
         {canSee('stats') && <NavItem to="/stats" icon={BarChart3} label="Stats" collapsed={collapsed} onNavigate={onNavigate} />}
+        {user?.isAdmin && <NavItem to="/history" icon={History} label="Watch history" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('library') && <NavItem to="/library" icon={Stethoscope} label="Library health" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('downloads') && config.data?.downloadClients && <NavItem to="/downloads" icon={Download} label="Downloads" collapsed={collapsed} onNavigate={onNavigate} />}
         {canSee('system') && <NavItem to="/system" icon={Activity} label="System Status" collapsed={collapsed} onNavigate={onNavigate} />}
@@ -175,10 +186,10 @@ export function Sidebar({
           Services
         </div>
         {collapsed && <div className="mx-auto my-3 h-px w-6 bg-line-strong" />}
-        {shown.map((id) => {
+        {shown.flatMap((id) => {
           const s = byId.get(id);
           const meta = SERVICES[id];
-          return (
+          const item = (
             <NavItem
               key={id}
               to={meta.path}
@@ -190,7 +201,30 @@ export function Sidebar({
               trailing={s ? <StatusDot status={s.status} size={6} pulse={s.status === 'offline'} /> : undefined}
             />
           );
+          if (id !== 'jellyfin') return [item];
+          return [
+            ...shownTypes.map((t) => {
+              if (t === 'jellyfin' && !main.other) return item;
+              const m = MEDIA_SERVERS[t];
+              const h = worstOf(t);
+              return (
+                <NavItem
+                  key={t}
+                  to={m.path}
+                  icon={m.icon}
+                  label={m.name}
+                  color={m.color}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                  trailing={h ? <StatusDot status={h.status} size={6} pulse={h.status === 'offline'} /> : undefined}
+                />
+              );
+            }),
+          ];
         })}
+        {config.data?.kometa && (
+          <NavItem to="/kometa" icon={Images} label="Kometa" color="#f59e0b" collapsed={collapsed} onNavigate={onNavigate} />
+        )}
       </nav>
 
       <div className="mt-3 border-t border-line pt-3">

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Sparkles, Star } from 'lucide-react';
-import { useLatest } from '@/hooks/queries';
+import { useLatest, useMainServer } from '@/hooks/queries';
 import { jfImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { Card, CardHeader } from '../ui/Card';
@@ -9,12 +9,16 @@ import { FadeImage } from '../ui/Image';
 import { QueryState, Skeleton } from '../ui/States';
 import { EmptyState } from '../ui/States';
 import { TitleLink } from '@/components/ui/TitleLink';
+import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
+import type { MediaServerType } from '@/lib/types';
 
-/** `server` picks an extra Jellyfin server; the main one by default. */
-export function RecentlyAddedWidget({ server }: { server?: string } = {}) {
+/** `server` picks an extra media server; the main one by default. */
+export function RecentlyAddedWidget({ server, serverType: given }: { server?: string; serverType?: MediaServerType } = {}) {
+  const main = useMainServer();
+  const serverType = given ?? main.type;
   const q = useLatest(server);
-  // Title pages read the main server, so an extra server's titles don't link.
-  const linkTo = (id: string) => (server && server !== 'jellyfin' ? undefined : `/media/jellyfin/${id}`);
+  // Title pages read the main Jellyfin server, so other servers' titles don't link.
+  const linkTo = (id: string) => ((server && server !== 'jellyfin') || main.other ? undefined : `/media/jellyfin/${id}`);
   const scroller = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: 'smooth' });
 
@@ -22,9 +26,9 @@ export function RecentlyAddedWidget({ server }: { server?: string } = {}) {
     <Card className="h-full">
       <CardHeader
         icon={Sparkles}
-        accent="var(--color-jellyfin)"
+        accent={MEDIA_SERVERS[serverType].color}
         title="Recently added"
-        subtitle="Fresh in your Jellyfin libraries"
+        subtitle={`Fresh in your ${MEDIA_SERVERS[serverType].name} libraries`}
         action={
           <div className="flex gap-1">
             <button onClick={() => scroll(-1)} className="grid size-8 place-items-center rounded-lg border border-line text-ink-3 transition hover:bg-white/5 hover:text-ink" aria-label="Scroll left"><ChevronLeft className="size-4" /></button>

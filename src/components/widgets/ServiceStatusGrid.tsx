@@ -4,13 +4,13 @@ import { useHealth } from '@/hooks/queries';
 import { relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { ServiceHealth } from '@/lib/types';
-import { SERVICES, ServiceIcon } from '../ui/ServiceIcon';
+import { healthMeta, ServiceIcon } from '../ui/ServiceIcon';
 import { Sparkline } from '../ui/Sparkline';
 import { STATUS_META, StatusBadge } from '../ui/Status';
 import { Skeleton } from '../ui/States';
 
 export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number }) {
-  const meta = SERVICES[s.kind];
+  const meta = healthMeta(s);
   const color = STATUS_META[s.status].color;
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
@@ -26,7 +26,7 @@ export function ServiceTile({ s, index = 0 }: { s: ServiceHealth; index?: number
           style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
         />
         <div className="flex items-center gap-3">
-          <ServiceIcon id={s.kind} size={34} />
+          <ServiceIcon id={meta.iconId} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold">{s.name}</div>
             <div className="truncate text-[11px] text-ink-4">{s.version ? `v${s.version}` : meta.tagline}</div>

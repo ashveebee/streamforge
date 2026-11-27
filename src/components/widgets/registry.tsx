@@ -46,10 +46,10 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'plays', title: 'Playback activity', description: 'Plays per day', component: PlaysWidget, defaultSize: 'md', requires: ['jellyfin'] },
   { id: 'upcoming', title: 'Upcoming', description: 'Calendar from Sonarr and Radarr', component: UpcomingWidget, defaultSize: 'sm', requires: ['sonarr', 'radarr'] },
   { id: 'requests', title: 'Requests', description: 'Seerr request summary', component: RequestsWidget, defaultSize: 'sm', requires: ['seerr'] },
-  { id: 'library', title: 'Library', description: 'Jellyfin library statistics', component: LibraryWidget, defaultSize: 'sm', requires: ['jellyfin'] },
+  { id: 'library', title: 'Library', description: 'Media server library statistics', component: LibraryWidget, defaultSize: 'sm', requires: ['jellyfin'] },
   { id: 'recent', title: 'Recently added', description: 'Latest additions', component: RecentlyAddedWidget, defaultSize: 'full', requires: ['jellyfin'] },
   { id: 'indexers', title: 'Indexers', description: 'Prowlarr indexer health', component: IndexersWidget, defaultSize: 'md', requires: ['prowlarr'] },
-  { id: 'activity', title: 'Server activity', description: 'Jellyfin activity log', component: ActivityWidget, defaultSize: 'md', requires: ['jellyfin'] },
+  { id: 'activity', title: 'Server activity', description: 'Media server activity', component: ActivityWidget, defaultSize: 'md', requires: ['jellyfin'] },
 ];
 
 export const WIDGET_MAP = new Map(WIDGETS.map((w) => [w.id, w]));

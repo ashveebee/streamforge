@@ -17,7 +17,7 @@ export interface MenuItem {
  * clip it; opens upwards when there isn't room below. Closes on outside
  * click, Escape, scroll or selection.
  */
-export function Menu({ items, label = 'Actions', busy, trigger }: { items: MenuItem[]; label?: string; busy?: boolean; trigger?: ReactNode }) {
+export function Menu({ items, label = 'Actions', busy, trigger, buttonClassName }: { items: MenuItem[]; label?: string; busy?: boolean; trigger?: ReactNode; buttonClassName?: string }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
@@ -64,7 +64,7 @@ export function Menu({ items, label = 'Actions', busy, trigger }: { items: MenuI
         aria-expanded={open}
         disabled={busy}
         onClick={toggle}
-        className="grid size-7 place-items-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink disabled:opacity-50"
+        className={buttonClassName ?? 'grid size-7 place-items-center rounded-lg text-ink-4 transition hover:bg-white/[0.06] hover:text-ink disabled:opacity-50'}
       >
         {trigger ?? <MoreHorizontal className="size-4" />}
       </button>

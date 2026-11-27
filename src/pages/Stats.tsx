@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
+import { useAuth } from '@/hooks/useAuth';
 import { BarChart3, Clock, MonitorSmartphone, Play, Repeat2, Users } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { usePlaybackStats } from '@/hooks/queries';
+import { useMainServer, usePlaybackStats } from '@/hooks/queries';
 import { cn } from '@/lib/cn';
+import { SERVER_COLOR } from '@/components/ui/ServerTag';
 import { pct } from '@/lib/format';
 import type { PlaybackStats } from '@/lib/types';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -20,20 +23,17 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const shortDate = (d: string | number) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-function DailyChart({ d }: { d: PlaybackStats }) {
+function DailyChart({ d, accent }: { d: PlaybackStats; accent: string }) {
+  const main = useMainServer();
   const hasMethod = d.daily.some((x) => x.direct || x.transcode);
   return (
     <Card>
       <CardHeader
         icon={BarChart3}
-        accent={SERIES.plays}
+        accent={accent}
         title="Plays per day"
-        subtitle={hasMethod ? 'Split by how the stream was delivered' : 'From the Jellyfin activity log'}
-        action={
-          hasMethod ? (
-            <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} />
-          ) : undefined
-        }
+        subtitle={hasMethod ? 'Split by how the stream was delivered' : main.plex ? 'From Plex watch history' : `From the ${main.name} activity log`}
+        action={hasMethod ? <Legend items={[{ label: 'Direct', color: DIRECT }, { label: 'Transcode', color: TRANSCODE }]} /> : undefined}
       />
       <CardBody>
         <div className="h-56">
@@ -49,7 +49,7 @@ function DailyChart({ d }: { d: PlaybackStats }) {
                   <Bar dataKey="transcode" name="Transcode" stackId="m" fill={TRANSCODE} radius={[4, 4, 0, 0]} stroke="var(--color-surface)" strokeWidth={1} />
                 </>
               ) : (
-                <Bar dataKey="plays" name="Plays" fill={SERIES.plays} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="plays" name="Plays" fill={accent} radius={[4, 4, 0, 0]} />
               )}
             </BarChart>
           </ResponsiveContainer>
@@ -59,11 +59,11 @@ function DailyChart({ d }: { d: PlaybackStats }) {
   );
 }
 
-function Heatmap({ d }: { d: PlaybackStats }) {
+function Heatmap({ d, accent }: { d: PlaybackStats; accent: string }) {
   const max = Math.max(1, ...d.heatmap.flat());
   return (
     <Card>
-      <CardHeader icon={Clock} accent={SERIES.plays} title="When people watch" subtitle="Plays started, by weekday and hour" />
+      <CardHeader icon={Clock} accent={accent} title="When people watch" subtitle="Plays started, by weekday and hour" />
       <CardBody>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] table-fixed border-separate border-spacing-[2px] text-[10px] text-ink-4">
@@ -85,7 +85,7 @@ function Heatmap({ d }: { d: PlaybackStats }) {
                       key={h}
                       title={`${DAYS[w]} ${h}:00–${h + 1}:00 · ${n} play${n === 1 ? '' : 's'}`}
                       className="h-5 rounded-[3px]"
-                      style={{ background: n ? `color-mix(in oklab, ${SERIES.plays} ${Math.round(15 + (n / max) * 85)}%, transparent)` : 'rgb(255 255 255 / 0.03)' }}
+                      style={{ background: n ? `color-mix(in oklab, ${accent} ${Math.round(15 + (n / max) * 85)}%, transparent)` : 'rgb(255 255 255 / 0.03)' }}
                     >
                       <span className="sr-only">{n}</span>
                     </td>
@@ -97,7 +97,7 @@ function Heatmap({ d }: { d: PlaybackStats }) {
         </div>
         <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-ink-4">
           Fewer
-          {[15, 40, 70, 100].map((p) => <span key={p} className="size-3 rounded-[3px]" style={{ background: `color-mix(in oklab, ${SERIES.plays} ${p}%, transparent)` }} />)}
+          {[15, 40, 70, 100].map((p) => <span key={p} className="size-3 rounded-[3px]" style={{ background: `color-mix(in oklab, ${accent} ${p}%, transparent)` }} />)}
           More
         </div>
       </CardBody>
@@ -105,7 +105,21 @@ function Heatmap({ d }: { d: PlaybackStats }) {
   );
 }
 
-function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Users; rows: PlaybackStats['topUsers']; hours: boolean }) {
+function TopList({
+  title,
+  icon,
+  rows,
+  hours,
+  linkFor,
+  accent,
+}: {
+  title: string;
+  icon: typeof Users;
+  rows: (PlaybackStats['topUsers'][number] & { link?: string })[];
+  hours: boolean;
+  linkFor?: (r: { name: string; link?: string }) => string | undefined;
+  accent: string;
+}) {
   const max = Math.max(1, ...rows.map((r) => (hours ? r.hours : r.plays)));
   return (
     <Card className="h-full">
@@ -118,13 +132,17 @@ function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Use
               return (
                 <li key={r.name}>
                   <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="truncate">{r.name}</span>
+                    {linkFor?.(r) ? (
+                      <Link to={linkFor(r)!} className="truncate transition hover:text-brand focus-visible:text-brand">{r.name}</Link>
+                    ) : (
+                      <span className="truncate">{r.name}</span>
+                    )}
                     <span className="shrink-0 text-xs text-ink-3 tabular">
                       {hours ? `${r.hours} h · ` : ''}{r.plays} play{r.plays === 1 ? '' : 's'}
                     </span>
                   </div>
                   <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.05]">
-                    <div className="h-full rounded-full" style={{ width: `${(v / max) * 100}%`, background: SERIES.plays }} />
+                    <div className="h-full rounded-full" style={{ width: `${(v / max) * 100}%`, background: accent }} />
                   </div>
                 </li>
               );
@@ -141,10 +159,14 @@ function TopList({ title, icon, rows, hours }: { title: string; icon: typeof Use
 export default function StatsPage() {
   const [days, setDays] = useState<number>(30);
   const q = usePlaybackStats(days);
+  const main = useMainServer();
+  // The media server's colour: purple Jellyfin, amber Plex, green Emby.
+  const accent = SERVER_COLOR[main.type];
+  const { user } = useAuth();
   return (
     <>
       <PageHeader
-        eyebrow="Jellyfin"
+        eyebrow={main.name}
         title="Playback stats"
         description="Who watches what, when, and how it gets to them."
         actions={
@@ -172,13 +194,13 @@ export default function StatsPage() {
                 <p className="rounded-xl border border-line bg-white/[0.02] px-4 py-3 text-xs text-ink-3">
                   {!d.recording
                     ? 'Add a Jellyfin API key in Settings to record watch time and direct-play vs transcode. Until then these figures come from the Jellyfin activity log.'
-                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString() : 'now'} onwards; earlier days come from the Jellyfin activity log.`}
+                    : `Watch time and transcode figures are recorded from ${d.recordingSince ? new Date(d.recordingSince).toLocaleDateString() : 'now'} onwards; earlier days come from ${main.plex ? 'Plex watch history' : `the ${main.name} activity log`}.`}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile label="Plays" value={d.totals.plays} icon={Play} accent={SERIES.plays} />
-                <StatTile label="Watch time" value={d.totals.hours ?? 0} icon={Clock} accent={SERIES.plays} format={(n) => (hours ? `${Math.round(n)} h` : '—')} />
-                <StatTile label="Viewers" value={d.totals.users} icon={Users} accent={SERIES.plays} />
+                <StatTile label="Plays" value={d.totals.plays} icon={Play} accent={accent} />
+                <StatTile label="Watch time" value={d.totals.hours ?? 0} icon={Clock} accent={accent} format={(n) => (hours ? `${Math.round(n)} h` : '—')} />
+                <StatTile label="Viewers" value={d.totals.users} icon={Users} accent={accent} />
                 <StatTile
                   label="Transcoded"
                   value={(d.totals.transcodeShare ?? 0) * 100}
@@ -188,13 +210,13 @@ export default function StatsPage() {
                   hint="Share of plays that transcoded"
                 />
               </div>
-              <DailyChart d={d} />
+              <DailyChart d={d} accent={accent} />
               <div className="grid gap-5 xl:grid-cols-3">
-                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} />
-                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} />
-                <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} />
+                <TopList title="Top viewers" icon={Users} rows={d.topUsers} hours={hours} accent={accent} linkFor={user?.isAdmin ? (r) => `/history?user=${encodeURIComponent(r.name)}&days=${d.days}` : undefined} />
+                <TopList title="Most watched" icon={Play} rows={d.topTitles} hours={hours} accent={accent} linkFor={(r) => r.link} />
+                <TopList title="Clients" icon={MonitorSmartphone} rows={d.topClients} hours={hours} accent={accent} />
               </div>
-              <Heatmap d={d} />
+              <Heatmap d={d} accent={accent} />
             </div>
           );
         }}

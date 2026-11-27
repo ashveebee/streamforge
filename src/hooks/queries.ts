@@ -6,9 +6,9 @@ import type {
   Area,
   MemberAccess,
   ArrInstanceView,
-  DiscoveredServer,
   JellyfinServerRef,
-  JellyfinServerView,
+  MediaServerType,
+  MediaServerView,
   ArrKind,
   ChannelInput,
   MissingPage,
@@ -58,9 +58,29 @@ export const useServiceConfig = () =>
   useQuery({
     queryKey: ['config'],
     queryFn: () =>
-      api<{ services: Record<ServiceId, boolean>; enabled: Record<ServiceId, boolean>; instances: ArrInstanceRef[]; jellyfinServers?: JellyfinServerRef[]; access: Area[] | null; downloadClients?: boolean; moonfin?: { openIn: 'web' | 'app'; web?: string } }>('/config'),
+      api<{
+        services: Record<ServiceId, boolean>;
+        enabled: Record<ServiceId, boolean>;
+        instances: ArrInstanceRef[];
+        jellyfinServers?: JellyfinServerRef[];
+        /** The server people sign in with. */
+        mainServer?: 'jellyfin' | 'plex' | 'emby';
+        kometa?: boolean;
+        access: Area[] | null;
+        downloadClients?: boolean;
+        moonfin?: { openIn: 'web' | 'app'; web?: string };
+      }>('/config'),
     staleTime: Infinity,
   });
+
+/** The server people sign in with, and its name for labels ("Plex", "Jellyfin"). */
+export function useMainServer() {
+  const { data } = useServiceConfig();
+  const type = data?.mainServer ?? 'jellyfin';
+  const name = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[type];
+  /** `other`: the sign-in server is Plex or Emby, so Jellyfin-only features are off. */
+  return { type, name, plex: type === 'plex', emby: type === 'emby', other: type !== 'jellyfin' };
+}
 
 export function useConfigured(id: ServiceId) {
   const { data } = useServiceConfig();
@@ -87,13 +107,13 @@ export const useNowPlaying = () => {
   const on = useCanSee()('now-playing');
   return useQuery(poll<NowPlaying[]>(['jellyfin', 'now-playing'], '/jellyfin/now-playing', 5 * SECOND, on));
 };
-/** Jellyfin servers, main first. Empty when there's only the main one. */
+/** Media servers (Jellyfin, Emby, Plex), main first. Empty when there's only the main one. */
 export function useJellyfinServers(): JellyfinServerRef[] {
   const { data } = useServiceConfig();
   return data?.jellyfinServers ?? [];
 }
 
-/** `?instance=` for an extra Jellyfin server; nothing for the main one. */
+/** `?instance=` for an extra media server; nothing for the main one. */
 const jfq = (server?: string) => (server && server !== 'jellyfin' ? `?instance=${encodeURIComponent(server)}` : '');
 const jfKey = (server?: string) => server && server !== 'jellyfin' ? server : 'main';
 
@@ -180,6 +200,56 @@ function useSettingsChanged() {
     // Give the server's immediate re-check a moment before refreshing health.
     setTimeout(() => void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'settings' }), 1500);
   };
+}
+
+/* ----------------------- first-run setup: your apps ----------------------- */
+
+export type SetupAppId = 'sonarr' | 'radarr' | 'prowlarr' | 'seerr' | 'bazarr' | 'lidarr' | 'readarr';
+
+/** An app found on the network (no key: those are entered, or imported server-side). */
+export interface FoundApp {
+  service: SetupAppId;
+  name: string;
+  url: string;
+  via: 'docker' | 'host' | 'domain';
+  configured: boolean;
+}
+
+/** An app another connected app (Seerr, Prowlarr) can fill in. */
+export interface ImportableApp {
+  service: SetupAppId;
+  from: 'seerr' | 'prowlarr';
+  url: string;
+}
+
+/** Whether the admin has finished (or skipped) setting up apps. */
+export const useSetupState = (enabled: boolean) =>
+  useQuery({ queryKey: ['settings', 'setup'], queryFn: ({ signal }) => api<{ appsDone: boolean }>('/settings/setup', { signal }), enabled, staleTime: 5 * 60_000 });
+
+export function useFinishSetup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ appsDone: boolean; disabled: ServiceId[] }>('/settings/setup', { method: 'PUT', body: { appsDone: true } }),
+    onSuccess: (d) => {
+      qc.setQueryData(['settings', 'setup'], { appsDone: d.appsDone });
+      // Skipped apps were switched off: refresh the sidebar, settings and health.
+      void qc.invalidateQueries({ predicate: (q) => !(q.queryKey[0] === 'settings' && q.queryKey[1] === 'setup') });
+    },
+  });
+}
+
+/** Looks for Sonarr, Radarr, Seerr and the rest around the media server (a few seconds). */
+export const useDiscoverApps = () =>
+  useMutation({ mutationFn: () => api<{ found: FoundApp[]; importable: ImportableApp[] }>('/settings/apps/discover', { method: 'POST' }) });
+
+/** Connects apps with the details Seerr or Prowlarr already have. */
+export function useImportApps() {
+  const changed = useSettingsChanged();
+  return useMutation({
+    mutationFn: (services?: SetupAppId[]) =>
+      api<{ results: { service: SetupAppId; from: 'seerr' | 'prowlarr'; url: string; ok: boolean; message?: string }[] }>('/settings/apps/import', { method: 'POST', body: services ? { services } : {} }),
+    onSuccess: changed,
+  });
 }
 
 type SaveResult = { service: ServiceSettingsView; signedOut: boolean };
@@ -273,46 +343,30 @@ export function useRemoveInstance() {
   });
 }
 
-/* ------------------------- extra Jellyfin servers ------------------------- */
+/* --------------------------- extra media servers --------------------------- */
 
-export const useJellyfinServerSettings = () =>
+export const useMediaServerSettings = () =>
   useQuery({
-    queryKey: ['settings', 'jellyfin-servers'],
-    queryFn: ({ signal }) => api<{ servers: JellyfinServerView[] }>('/settings/jellyfin-servers', { signal }),
+    queryKey: ['settings', 'media-servers'],
+    queryFn: ({ signal }) => api<{ servers: MediaServerView[]; ignored: { id: string; type: MediaServerType; name: string }[] }>('/settings/media-servers', { signal }),
   });
 
-export type JellyfinServerInput = { name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
+export type MediaServerInput = { type?: MediaServerType; name?: string; url?: string; publicUrl?: string; apiKey?: string; enabled?: boolean };
 
-export const useTestJellyfinServer = () =>
+export const useTestMediaServer = () =>
   useMutation({
-    mutationFn: (input: JellyfinServerInput & { id?: string }) =>
-      api<ConnectionTest>('/settings/jellyfin-servers/test', { method: 'POST', body: input }),
+    mutationFn: (input: MediaServerInput & { id?: string }) =>
+      api<ConnectionTest>('/settings/media-servers/test', { method: 'POST', body: input }),
   });
 
-export function useSaveJellyfinServer() {
+export function useSaveMediaServer() {
   const changed = useSettingsChanged();
   return useMutation({
-    mutationFn: ({ id, ...input }: JellyfinServerInput & { id?: string }) =>
-      id
-        ? api<{ server: JellyfinServerView }>(`/settings/jellyfin-servers/${id}`, { method: 'PUT', body: input })
-        : api<{ server: JellyfinServerView }>('/settings/jellyfin-servers', { method: 'POST', body: input }),
+    mutationFn: ({ id, ...input }: MediaServerInput & { id: string }) => api<{ server: MediaServerView }>(`/settings/media-servers/${id}`, { method: 'PUT', body: input }),
     onSuccess: changed,
   });
 }
 
-export function useRemoveJellyfinServer() {
-  const changed = useSettingsChanged();
-  return useMutation({
-    mutationFn: (id: string) => api<{ ok: true }>(`/settings/jellyfin-servers/${id}`, { method: 'DELETE' }),
-    onSuccess: changed,
-  });
-}
-
-/** Searches the local network for Jellyfin servers (takes a few seconds). */
-export const useDiscoverJellyfin = () =>
-  useMutation({
-    mutationFn: () => api<{ servers: DiscoveredServer[] }>('/settings/jellyfin/discover', { method: 'POST' }),
-  });
 
 /* ------------------------------ queue actions ----------------------------- */
 
@@ -418,8 +472,11 @@ export function useSessionControl() {
   });
 }
 
-export const usePlaybackStats = (days: number) =>
-  useQuery({ ...poll<PlaybackStats>(['jellyfin', 'stats', String(days)], `/jellyfin/stats?days=${days}`, 5 * 60 * SECOND), placeholderData: (p) => p });
+export const usePlaybackStats = (days: number, server = '') =>
+  useQuery({
+    ...poll<PlaybackStats>(['jellyfin', 'stats', String(days), server], `/jellyfin/stats?days=${days}${server ? `&server=${encodeURIComponent(server)}` : ''}`, 5 * 60 * SECOND),
+    placeholderData: (p) => p,
+  });
 
 /* ---------------------------- storage forecast ---------------------------- */
 

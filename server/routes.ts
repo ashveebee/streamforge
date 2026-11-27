@@ -16,17 +16,24 @@ import { moonfinClientConfig } from './services/moonfin.js';
 import { hostSnapshot } from './host.js';
 import * as jellyfin from './services/jellyfin.js';
 import { anyInstance, arrInstances } from './services/instances.js';
-import { jellyfinServer, jellyfinServers, type JellyfinServer } from './services/jellyfinServers.js';
+import { mediaServer, mediaServers, type MediaServer } from './services/mediaServers.js';
+import * as plex from './services/plex.js';
+import { kometaSettings, kometaStatus } from './services/kometa.js';
+import { collectionDetail, collectionList, collectionSettings, createCollection, deleteCollection, updateCollection } from './services/kometaCollections.js';
+import { mainEmby, mainExtra, mainPlex, mainType, mediaReady, notJellyfinMain } from './services/mainServer.js';
+import { sessions } from './lib/sessions.js';
 import { playbackStats } from './services/playStats.js';
-import { keepItem, reclaim, reclaimSuggestions, UNWATCHED_DAYS } from './services/reclaim.js';
+import { excludedUsers, keepItem, reclaim, reclaimSuggestions, setExcludedUsers, UNWATCHED_DAYS, watchedByEveryone } from './services/reclaim.js';
 import { buildDigest, digestSettings, sendDigest, updateDigest } from './services/digest.js';
 import { ACTION_TYPES, CONDITION_TYPES, removeRule, RuleError, rulesStatus, runRule, saveRule } from './services/rules.js';
 import { arrTitleSearch, jellyfinEpisodes, jellyfinMedia, mediaDetails, seasonEpisodes } from './services/media.js';
 import { myOverview, myRequests } from './services/me.js';
-import { addToArr, requestMedia, search } from './services/search.js';
+import { requestMedia, search } from './services/search.js';
+import { addItems, addOptions, checkItems } from './services/arrAdd.js';
 import { guardStatus, updateGuard } from './services/playbackGuard.js';
 import { scanAll, scanLibrary, scheduledTasks, startTask, stopTask, TASK_ID_RE } from './services/jellyfinTasks.js';
 import { libraryHealth } from './services/libraryHealth.js';
+import { HISTORY_DAYS, watchHistory } from './services/history.js';
 import { checkNow, updateStatus } from './services/updates.js';
 import { deviceReport, PlayabilityError, playabilityStatus, titlePlayability } from './services/playability/index.js';
 import { DiagnosisError, diagnosisStatus, explain, updateDiagnosisPrefs } from './services/diagnosis/index.js';
@@ -47,21 +54,20 @@ api.get('/config', (req, res) => {
   res.json({
     // Sonarr/Radarr count as configured when any instance is set up.
     services: Object.fromEntries(
-      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : isConfigured(id))]),
+      // `jellyfin` stands for the media server area: true with Plex as the sign-in server too.
+      SERVICE_IDS.map((id) => [id, canSee(req, id) && (id === 'sonarr' || id === 'radarr' ? anyInstance(id) : id === 'jellyfin' ? mediaReady() : isConfigured(id))]),
     ),
     // A service the user can't see counts as switched off for them.
     enabled: Object.fromEntries(SERVICE_IDS.map((id) => [id, isEnabled(id) && canSee(req, id)])),
     instances: arrInstances()
       .filter((i) => canSee(req, i.kind))
       .map((i) => ({ id: i.id, kind: i.kind, name: i.name, primary: i.primary })),
-    /** Jellyfin servers, main one first; only listed when there's more than one. */
-    jellyfinServers:
-      canSee(req, 'jellyfin') && jellyfinServers().length
-        ? [
-            { id: 'jellyfin', name: mainServerName(), primary: true },
-            ...jellyfinServers().map((s) => ({ id: s.id, name: s.name, primary: false })),
-          ]
-        : [],
+    /** Media servers (Jellyfin, Emby, Plex), the main one first and marked `primary`. */
+    jellyfinServers: canSee(req, 'jellyfin') ? mediaServerList() : [],
+    /** Which kind of server people sign in with; its data backs the dashboard, stats and your page. */
+    mainServer: mainType(),
+    /** Kometa is set up (webhooks or collections): show its page. */
+    kometa: canSee(req, 'system') && (kometaSettings().enabled || !!collectionSettings().configDir),
     /** Areas this user can open; null means everything (admins). */
     access: allowedAreas(req) ? [...allowedAreas(req)!] : null,
     downloadClients: hasClients() && canSee(req, 'downloads'),
@@ -76,12 +82,37 @@ api.post('/health/recheck', handle(null, async (req) => {
 }));
 api.get('/system/host', (_req, res) => res.set('Cache-Control', 'no-store').json(hostSnapshot()));
 api.get('/downloads', (_req, res) => res.set('Cache-Control', 'no-store').json(downloadSnapshot()));
+api.get(
+  '/history',
+  requireAdmin,
+  handle(null, (req) => {
+    const d = Number(req.query.days);
+    const user = typeof req.query.user === 'string' && req.query.user.length <= 128 ? req.query.user : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 100) : undefined;
+    const server = typeof req.query.server === 'string' && req.query.server.length <= 64 ? req.query.server : undefined;
+    return watchHistory(ctxOf(req.session!), { days: (HISTORY_DAYS as readonly number[]).includes(d) ? d : 30, user, q, server });
+  }),
+);
 api.get('/library/health', handle(null, (req) => libraryHealth(ctxOf(req.session!))));
 api.get(
   '/library/reclaim',
   handle('jellyfin', (req) => {
     const d = Number(req.query.days);
     return reclaimSuggestions(ctxOf(req.session!), (UNWATCHED_DAYS as readonly number[]).includes(d) ? d : 365);
+  }),
+);
+api.get('/library/watched-by-everyone', handle('jellyfin', (req) => watchedByEveryone(ctxOf(req.session!))));
+api.put(
+  '/library/watched-by-everyone/users',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ id: z.string().max(64), counted: z.boolean() }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const ex = excludedUsers();
+    if (b.data.counted) ex.delete(b.data.id);
+    else ex.add(b.data.id);
+    setExcludedUsers([...ex]);
+    return { ok: true };
   }),
 );
 const reclaimBody = z
@@ -146,6 +177,72 @@ api.post(
   }),
 );
 
+/* --------------------------------- kometa -------------------------------- */
+
+api.get('/kometa/status', (_req, res) => res.set('Cache-Control', 'no-store').json(kometaStatus()));
+
+const collectionBody = z
+  .object({
+    name: z.string().trim().min(1, 'Give the collection a name').max(120),
+    library: z.object({ server: z.string().max(64), id: z.string().max(64) }).strict(),
+    source: z
+      .object({
+        type: z.enum(['tmdb_list', 'imdb_list', 'trakt_list', 'tmdb_trending_weekly', 'tmdb_popular', 'tmdb_keyword', 'manual']),
+        value: z.string().trim().max(500).optional(),
+        ids: z.array(z.number().int().positive()).max(500).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .strict(),
+    schedule: z.union([z.literal('always'), z.object({ from: z.string().max(5), to: z.string().max(5) }).strict()]),
+    order: z.enum(['custom', 'release', 'alpha']),
+    addMissing: z.boolean(),
+    visibleHome: z.boolean(),
+  })
+  .strict();
+
+const parseCollection = (req: Request) => {
+  const b = collectionBody.safeParse(req.body ?? {});
+  if (!b.success) throw new HttpError(400, b.error.issues[0]?.message ?? 'Invalid collection', b.error.issues[0]?.path[0]?.toString());
+  return b.data;
+};
+
+api.get('/kometa/collections', handle(null, (req) => collectionList(ctxOf(req.session!))));
+api.get(
+  '/kometa/collections/:id',
+  handle(null, (req) => {
+    const id = String(req.params.id);
+    if (!/^[\w~-]{1,200}$/.test(id)) throw new HttpError(400, 'Invalid id');
+    return collectionDetail(id, ctxOf(req.session!));
+  }),
+);
+api.post(
+  '/kometa/collections',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = await createCollection(parseCollection(req), ctxOf(req.session!), req.session!.userName);
+    audit(req, `[kometa] collection “${c.name}” added to ${c.library.serverName} · ${c.library.name}`);
+    return c;
+  }),
+);
+api.put(
+  '/kometa/collections/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = await updateCollection(String(req.params.id), parseCollection(req), ctxOf(req.session!));
+    audit(req, `[kometa] collection “${c.name}” changed`);
+    return c;
+  }),
+);
+api.delete(
+  '/kometa/collections/:id',
+  requireAdmin,
+  handle(null, async (req) => {
+    const c = deleteCollection(String(req.params.id));
+    audit(req, `[kometa] collection “${c.name}” removed`);
+    return { ok: true };
+  }),
+);
+
 /* -------------------------------- jellyfin ------------------------------ */
 
 /** The main server's name as Jellyfin reports it, for tabs and labels. */
@@ -155,26 +252,48 @@ function mainServerName() {
   return name || 'Main server';
 }
 
+/** Every media server, main one first. Empty when the main Jellyfin server is the only one. */
+function mediaServerList() {
+  const main = mainExtra();
+  const rest = mediaServers()
+    .filter((s) => s.id !== main?.id)
+    .map((s) => ({ id: s.id, type: s.type, name: s.name, primary: false }));
+  if (main) return [{ id: main.id, type: main.type, name: main.name, primary: true }, ...rest];
+  return rest.length ? [{ id: 'jellyfin', type: 'jellyfin' as const, name: mainServerName(), primary: true }, ...rest] : [];
+}
+
 /**
- * The extra Jellyfin server a request addresses with `instance` (query or
- * body), or undefined for the main server.
+ * The media server a request addresses with `instance` (query or body). With
+ * none given, the main server: undefined for the main Jellyfin server, or the
+ * main Plex or Emby server when that is the sign-in server.
  */
-function extraServer(req: Request): JellyfinServer | undefined {
+function extraServer(req: Request): MediaServer | undefined {
   const raw = (req.body as { instance?: unknown } | undefined)?.instance ?? req.query.instance ?? req.query.server;
-  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return undefined;
-  const srv = jellyfinServer(raw);
-  if (!srv) throw new HttpError(404, 'Unknown Jellyfin server', 'not_found');
+  if (typeof raw !== 'string' || !raw || raw === 'jellyfin') return raw === 'jellyfin' ? undefined : mainExtra();
+  const srv = mediaServer(raw);
+  if (!srv) throw new HttpError(404, 'Unknown media server', 'not_found');
   return srv;
 }
+
+/** Jellyfin-only features (title pages, scheduled tasks) answer this when Plex or Emby is the sign-in server. */
+function needJellyfin() {
+  if (notJellyfinMain() && !isConfigured('jellyfin')) throw new HttpError(404, 'This needs a Jellyfin server.', 'not_configured');
+}
+
+/* Calls for an extra server, by type. Emby speaks Jellyfin's API. */
+const remoteNowPlaying = (srv: MediaServer) => (srv.type === 'plex' ? plex.nowPlaying(srv) : jellyfin.remoteNowPlaying(srv));
+const remoteOverview = (srv: MediaServer) => (srv.type === 'plex' ? plex.overview(srv) : jellyfin.remoteOverview(srv));
+const remoteLatest = (srv: MediaServer) => (srv.type === 'plex' ? plex.latest(srv) : jellyfin.remoteLatest(srv));
+const remoteActivity = (srv: MediaServer) => (srv.type === 'plex' ? plex.activity(srv) : jellyfin.remoteActivity(srv));
 
 /* Streams from the main server and every extra one. An extra server that's down doesn't hide the rest. */
 api.get(
   '/jellyfin/now-playing',
   handle('jellyfin', async (req) => {
-    const extras = jellyfinServers();
+    const extras = mediaServers();
     const [main, ...rest] = await Promise.allSettled([
-      jellyfin.nowPlaying(ctxOf(req.session!)),
-      ...extras.map((srv) => jellyfin.remoteNowPlaying(srv)),
+      isConfigured('jellyfin') ? jellyfin.nowPlaying(ctxOf(req.session!)) : Promise.resolve([] as jellyfin.NowPlaying[]),
+      ...extras.map(remoteNowPlaying),
     ]);
     if (main!.status === 'rejected' && (!extras.length || rest.every((r) => r.status === 'rejected'))) throw main!.reason;
     const streams = [
@@ -188,29 +307,37 @@ api.get(
   '/jellyfin/overview',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteOverview(srv) : jellyfin.overview(ctxOf(req.session!));
+    return srv ? remoteOverview(srv) : jellyfin.overview(ctxOf(req.session!));
   }),
 );
 api.get(
   '/jellyfin/latest',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteLatest(srv) : jellyfin.latest(ctxOf(req.session!));
+    return srv ? remoteLatest(srv) : jellyfin.latest(ctxOf(req.session!));
   }),
 );
 api.get(
   '/jellyfin/activity',
   handle('jellyfin', (req) => {
     const srv = extraServer(req);
-    return srv ? jellyfin.remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
+    return srv ? remoteActivity(srv) : jellyfin.activity(ctxOf(req.session!));
   }),
 );
-api.get('/jellyfin/plays', handle('jellyfin', (req) => jellyfin.playbackHistory(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/plays',
+  handle('jellyfin', (req) => {
+    const p = mainPlex();
+    const e = mainEmby();
+    return p ? plex.playsPerDay(p) : e ? jellyfin.remotePlaybackHistory(e) : jellyfin.playbackHistory(ctxOf(req.session!));
+  }),
+);
 api.get(
   '/jellyfin/stats',
   handle('jellyfin', (req) => {
     const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
-    return playbackStats(ctxOf(req.session!), days);
+    const server = typeof req.query.server === 'string' && req.query.server.length <= 64 ? req.query.server : undefined;
+    return playbackStats(ctxOf(req.session!), days, server);
   }),
 );
 
@@ -218,7 +345,7 @@ const sessionBody = z
   .object({
     command: z.enum(['pause', 'unpause', 'stop', 'message']),
     text: z.string().trim().max(500).optional(),
-    /** An extra Jellyfin server's id, for streams playing there. */
+    /** An extra media server's id, for streams playing there. */
     instance: z.string().max(64).optional(),
   })
   .strict();
@@ -231,12 +358,19 @@ api.post(
     if (!jellyfin.SESSION_ID_RE.test(id) || !b.success) throw new HttpError(400, 'Invalid request');
     if (b.data.command === 'message' && !b.data.text) throw new HttpError(400, 'Enter a message');
     const srv = extraServer(req);
-    const send = (command: jellyfin.SessionCommand, text?: string) =>
-      srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
-    // A stop can carry a message explaining why, shown before playback ends.
-    if (b.data.command === 'stop' && b.data.text) await send('message', b.data.text);
-    await send(b.data.command, b.data.text);
-    audit(req, `[jellyfin] stream ${id}${srv ? ` on ${srv.name}` : ''}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
+    const tag = srv ? srv.type : 'jellyfin';
+    if (srv?.type === 'plex') {
+      // Plex can only end streams from the server; the reason is shown to the viewer.
+      if (b.data.command !== 'stop') throw new HttpError(400, 'Plex can only stop streams, not pause them or send messages.');
+      await plex.stopSession(srv, id, b.data.text);
+    } else {
+      const send = (command: jellyfin.SessionCommand, text?: string) =>
+        srv ? jellyfin.controlRemoteSession(srv, id, command, text) : jellyfin.controlSession(ctxOf(req.session!), id, command, text);
+      // A stop can carry a message explaining why, shown before playback ends.
+      if (b.data.command === 'stop' && b.data.text) await send('message', b.data.text);
+      await send(b.data.command, b.data.text);
+    }
+    audit(req, `[${tag}] stream ${id}${srv ? ` on ${srv.name}` : ''}: ${b.data.command}${b.data.text ? ` (“${b.data.text}”)` : ''}`);
     return { ok: true };
   }),
 );
@@ -264,7 +398,14 @@ api.put(
 );
 
 /* Scheduled tasks and library scans (admins). */
-api.get('/jellyfin/tasks', requireAdmin, handle('jellyfin', (req) => scheduledTasks(ctxOf(req.session!))));
+api.get(
+  '/jellyfin/tasks',
+  requireAdmin,
+  handle('jellyfin', (req) => {
+    needJellyfin();
+    return scheduledTasks(ctxOf(req.session!));
+  }),
+);
 api.post(
   '/jellyfin/tasks/:id/:op',
   requireAdmin,
@@ -282,11 +423,20 @@ api.post(
   '/jellyfin/scan',
   requireAdmin,
   handle('jellyfin', async (req) => {
-    const b = z.object({ library: z.string().optional(), name: z.string().max(120).optional(), full: z.boolean().optional() }).strict().safeParse(req.body ?? {});
-    if (!b.success || (b.data.library && !jellyfin.isValidId(b.data.library))) throw new HttpError(400, 'Invalid request');
-    if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
-    else await scanAll(ctxOf(req.session!));
-    audit(req, `[jellyfin] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}`);
+    const b = z
+      .object({ library: z.string().max(64).optional(), name: z.string().max(120).optional(), full: z.boolean().optional(), instance: z.string().max(64).optional() })
+      .strict()
+      .safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const srv = extraServer(req);
+    if (srv?.type === 'plex') await plex.scan(srv, b.data.library, !!b.data.full);
+    else if (srv) await jellyfin.remoteScan(srv, b.data.library, !!b.data.full);
+    else {
+      if (b.data.library && !jellyfin.isValidId(b.data.library)) throw new HttpError(400, 'Invalid request');
+      if (b.data.library) await scanLibrary(ctxOf(req.session!), b.data.library, !!b.data.full);
+      else await scanAll(ctxOf(req.session!));
+    }
+    audit(req, `[${srv ? srv.type : 'jellyfin'}] ${b.data.full ? 'metadata refresh' : 'library scan'}: ${b.data.library ? (b.data.name ?? b.data.library) : 'all libraries'}${srv ? ` on ${srv.name}` : ''}`);
     return { ok: true };
   }),
 );
@@ -298,7 +448,7 @@ function imageOpts(req: Request) {
 }
 
 /** The extra server an image lives on (`?server=`); null after answering 404 for an unknown one. */
-function imageServer(req: Request, res: Response): JellyfinServer | undefined | null {
+function imageServer(req: Request, res: Response): MediaServer | undefined | null {
   try {
     return extraServer(req);
   } catch {
@@ -310,23 +460,41 @@ function imageServer(req: Request, res: Response): JellyfinServer | undefined | 
 api.get('/jellyfin/image/items/:id/:type', (req, res) => {
   const id = String(req.params.id);
   const type = String(req.params.type);
-  if (!jellyfin.isValidId(id) || !jellyfin.isValidImageType(type)) {
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  const validId = !srv ? jellyfin.isValidId(id) : srv.type === 'plex' ? plex.isValidId(id) : jellyfin.isValidRemoteId(id);
+  if (!validId || !jellyfin.isValidImageType(type)) {
     res.status(400).end();
     return;
   }
-  const srv = imageServer(req, res);
-  if (srv === null) return;
-  void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Items', id, type, imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Items', id, type, imageOpts(req)));
+  const opts = imageOpts(req);
+  void pipeImage(
+    res,
+    !srv
+      ? jellyfin.image(ctxOf(req.session!), 'Items', id, type, opts)
+      : srv.type === 'plex'
+        ? plex.image(srv, id, type, opts)
+        : jellyfin.remoteImage(srv, 'Items', id, type, opts),
+  );
 });
 
 api.get('/jellyfin/image/users/:id', (req, res) => {
   const id = String(req.params.id);
+  const srv = imageServer(req, res);
+  if (srv === null) return;
+  // Plex avatars live on plex.tv; they're proxied from addresses Plex gave us.
+  if (srv?.type === 'plex') {
+    if (!/^\d{1,12}$/.test(id)) {
+      res.status(400).end();
+      return;
+    }
+    void pipeImage(res, plex.avatar(id, sessions.forUser(id)[0]?.avatarUrl));
+    return;
+  }
   if (!jellyfin.isValidId(id)) {
     res.status(400).end();
     return;
   }
-  const srv = imageServer(req, res);
-  if (srv === null) return;
   void pipeImage(res, srv ? jellyfin.remoteImage(srv, 'Users', id, 'Primary', imageOpts(req)) : jellyfin.image(ctxOf(req.session!), 'Users', id, 'Primary', imageOpts(req)));
 });
 
@@ -401,6 +569,7 @@ for (const kind of ['lidarr', 'readarr'] as BookOrMusic[]) {
 api.get(
   '/media/jellyfin/:id',
   handle('jellyfin', async (req) => {
+    needJellyfin();
     const id = String(req.params.id);
     if (!jellyfin.isValidId(id)) throw new HttpError(400, 'Invalid id');
     return jellyfinMedia(ctxOf(req.session!), id, !!req.session!.isAdmin);
@@ -409,6 +578,7 @@ api.get(
 api.get(
   '/media/jellyfin/:id/seasons/:season/episodes',
   handle('jellyfin', async (req) => {
+    needJellyfin();
     const id = String(req.params.id);
     const season = String(req.params.season);
     if (!jellyfin.isValidId(id) || !jellyfin.isValidId(season)) throw new HttpError(400, 'Invalid id');
@@ -421,7 +591,8 @@ api.get(
     const tmdbId = Number(req.params.tmdbId);
     const season = Number(req.params.season);
     if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !Number.isInteger(season) || season < 0 || season > 1000) throw new HttpError(400, 'Invalid season');
-    return seasonEpisodes(ctxOf(req.session!), tmdbId, season, { isAdmin: !!req.session!.isAdmin, can: (a) => canSee(req, a as never) });
+    const se = req.session!;
+    return seasonEpisodes(ctxOf(se), tmdbId, season, { isAdmin: !!se.isAdmin, can: (a) => canSee(req, a as never), me: { userId: se.userId, userName: se.userName, isAdmin: !!se.isAdmin } });
   }),
 );
 api.get(
@@ -457,8 +628,9 @@ api.post(
 
 /* ---------------------------------- me ---------------------------------- */
 
-api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!))));
+api.get('/me/overview', handle('jellyfin', (req) => myOverview(ctxOf(req.session!), req.session!.serverToken, req.session!.userName)));
 api.get('/me/requests', handle(null, (req) => myRequests(ctxOf(req.session!))));
+
 
 /* --------------------------------- digest -------------------------------- */
 
@@ -528,8 +700,73 @@ api.post(
   handle(null, async (req) => {
     const b = addBody.safeParse(req.body ?? {});
     if (!b.success) throw new HttpError(400, 'Invalid request');
-    const r = await addToArr(b.data.kind, b.data, b.data.instance);
-    audit(req, `[search] added ${r.title} to ${r.instance}`);
+    // Quick add from search: the choices last used for this instance (or its defaults).
+    const opts = await addOptions(b.data.kind, b.data.instance);
+    const d = opts.defaults;
+    if (!d.qualityProfileId || !d.rootFolderPath) throw new HttpError(400, 'Set up a quality profile and root folder in Sonarr/Radarr first.');
+    const r = await addItems(b.data.kind, opts.instance, [{ tmdbId: b.data.tmdbId, tvdbId: b.data.tvdbId, title: b.data.title }], { ...d, qualityProfileId: d.qualityProfileId, rootFolderPath: d.rootFolderPath }, false);
+    const one = r.results[0]!;
+    if (one.status === 'skipped') throw new HttpError(409, `${one.title} is already in ${one.message?.replace('Already in ', '') ?? r.instance}.`);
+    if (one.status === 'failed') throw new HttpError(502, one.message ?? 'Couldn’t add it');
+    audit(req, `[search] added ${one.title} to ${r.instance}`);
+    return { ok: true, title: one.title, instance: r.instance };
+  }),
+);
+
+/* ------------------------ add to Sonarr/Radarr (bulk) ------------------------ */
+
+const kindParam = z.enum(['sonarr', 'radarr']);
+const itemSchema = z.object({ tmdbId: z.number().int().positive().optional(), tvdbId: z.number().int().positive().optional(), title: z.string().max(200).optional(), year: z.number().int().optional() }).strict();
+
+api.get(
+  '/arr/add-options',
+  requireAdmin,
+  handle(null, async (req) => {
+    const kind = kindParam.safeParse(req.query.kind);
+    if (!kind.success) throw new HttpError(400, 'Invalid request');
+    return addOptions(kind.data, typeof req.query.instance === 'string' ? req.query.instance : undefined);
+  }),
+);
+
+api.post(
+  '/arr/add-check',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z.object({ kind: kindParam, items: z.array(itemSchema).min(1).max(200) }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    return { items: await checkItems(b.data.kind, b.data.items) };
+  }),
+);
+
+api.post(
+  '/arr/add',
+  requireAdmin,
+  handle(null, async (req) => {
+    const b = z
+      .object({
+        kind: kindParam,
+        instance: z.string().max(64).optional(),
+        items: z.array(itemSchema).min(1).max(200),
+        choices: z
+          .object({
+            qualityProfileId: z.number().int().positive(),
+            rootFolderPath: z.string().min(1).max(500),
+            minimumAvailability: z.enum(['announced', 'inCinemas', 'released']).optional(),
+            seriesMonitor: z.enum(['all', 'future', 'missing', 'existing', 'firstSeason', 'lastSeason', 'pilot', 'none']).optional(),
+            monitored: z.boolean(),
+            search: z.boolean(),
+            tag: z.boolean(),
+          })
+          .strict(),
+        /** Where the titles came from, for the audit log. */
+        from: z.string().max(120).optional(),
+      })
+      .strict()
+      .safeParse(req.body ?? {});
+    if (!b.success) throw new HttpError(400, 'Invalid request');
+    const r = await addItems(b.data.kind, b.data.instance, b.data.items, b.data.choices);
+    const n = r.results.filter((x) => x.status === 'added').length;
+    if (n) audit(req, `[${b.data.kind}] added ${n} title${n === 1 ? '' : 's'} to ${r.instance}${b.data.from ? ` from ${b.data.from}` : ''}: ${r.results.filter((x) => x.status === 'added').map((x) => x.title).slice(0, 20).join(', ')}`);
     return r;
   }),
 );

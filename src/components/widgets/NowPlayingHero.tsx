@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight, Laptop, MonitorSmartphone, Pause, Play, Smartphone, Sparkles, Tv } from 'lucide-react';
-import { useLatest, useNowPlaying } from '@/hooks/queries';
+import { useLatest, useMainServer, useNowPlaying } from '@/hooks/queries';
 import { useNow } from '@/hooks/useNow';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { clock, duration } from '@/lib/format';
@@ -14,6 +14,7 @@ import { Pill } from '../ui/Status';
 import { ErrorState, Skeleton } from '../ui/States';
 import { deviceIcon, streamKey, streamTitlePath, kindLabel, livePosition, methodLabel, subtitleOf, titleOf } from './playback';
 import { TitleLink } from '../ui/TitleLink';
+import { SERVER_COLOR, SERVER_NAME, ServerTag } from '../ui/ServerTag';
 
 const DEVICE_ICONS = { tv: Tv, phone: Smartphone, web: MonitorSmartphone, desktop: Laptop };
 
@@ -101,7 +102,19 @@ function HeroStream({ s, fetchedAt }: { s: NowPlaying; fetchedAt: number }) {
           {s.item.resolution && <Pill>{s.item.resolution}</Pill>}
           {s.item.hdr && <Pill tone="warn">{s.item.hdr}</Pill>}
           <Pill tone={method === 'Transcode' ? 'warn' : 'ok'}>{method}</Pill>
-          {s.serverName && <Pill tone="brand">{s.serverName}</Pill>}
+          {s.serverName && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+              style={{
+                color: SERVER_COLOR[s.serverType ?? 'jellyfin'],
+                borderColor: `color-mix(in oklab, ${SERVER_COLOR[s.serverType ?? 'jellyfin']} 45%, transparent)`,
+                background: `color-mix(in oklab, ${SERVER_COLOR[s.serverType ?? 'jellyfin']} 14%, transparent)`,
+              }}
+            >
+              <i className="size-[6px] rounded-full bg-current" />
+              {s.serverType && s.serverType !== 'jellyfin' ? `${SERVER_NAME[s.serverType]} · ${s.serverName}` : s.serverName}
+            </span>
+          )}
         </div>
 
         <div>
@@ -167,7 +180,10 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
             <FadeImage src={jfImage(s.item.thumb ?? s.item.backdrop ?? s.item.poster, 200)} alt="" className="h-10 w-16 shrink-0 rounded-md" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-medium text-ink">{titleOf(s)}</div>
-              <div className="truncate text-[11px] text-ink-3">{s.user.name} · {s.serverName ?? s.device}</div>
+              <div className="flex min-w-0 items-center gap-1 truncate text-[11px] text-ink-3">
+                {s.user.name} ·{' '}
+                {s.serverName ? <ServerTag type={s.serverType ?? 'jellyfin'} name={s.serverName} className="min-w-0 truncate" /> : s.device}
+              </div>
               <div className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-brand" style={{ width: `${p * 100}%` }} />
               </div>
@@ -182,6 +198,7 @@ function Switcher({ streams, active, onSelect, fetchedAt }: { streams: NowPlayin
 
 function IdleHero() {
   const latest = useLatest();
+  const main = useMainServer();
   const feature = useMemo(() => latest.data?.find((i) => i.backdrop), [latest.data]);
   return (
     <div className="relative flex h-full items-end p-6 sm:p-8">
@@ -194,7 +211,7 @@ function IdleHero() {
           {feature ? (
             <>Recently added to your library: <span className="font-medium text-ink">{feature.title}</span>{feature.year ? ` (${feature.year})` : ''}</>
           ) : (
-            'Active streams from every Jellyfin client will appear here in real time.'
+            `Active streams from every ${main.name} app will appear here in real time.`
           )}
         </p>
       </div>

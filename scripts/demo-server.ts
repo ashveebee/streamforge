@@ -13,6 +13,7 @@ import { analyse, findIncidents } from '../server/services/diagnosis/analyse.js'
 import { demoTicks } from './demo-diagnosis.js';
 import { demoLibrary, demoProfiles } from './demo-playability.js';
 import { parseNotes } from '../server/services/updates.js';
+import { VERSION as APP_VERSION } from '../server/version.js';
 import { libraryReport, statusOf, titleReport } from '../server/services/playability/report.js';
 import type {
   ActivityEntry,
@@ -42,6 +43,13 @@ import type {
 } from '../src/lib/types.js';
 
 const PORT = Number(process.env.DEMO_PORT ?? 4010);
+// Each install watches one media server, so the demo shows one: Jellyfin by
+// default, or Plex/Emby with DEMO_MAIN. (Leftover multi-server data below is
+// filtered out by SINGLE.)
+const SINGLE = true;
+// DEMO_APPS=1 shows setup step 2 ("Set up your apps") partway through.
+const APPS_SETUP = process.env.DEMO_APPS === '1';
+const APPS_CONNECTED = new Set<ServiceId>(['jellyfin', 'sonarr', 'seerr']);
 const START = Date.now();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -116,6 +124,8 @@ const byTitle = new Map(ALL.map((t) => [slug(t.title), t]));
 const find = (title: string) => byTitle.get(slug(title))!;
 /** Fictional TMDB ids for the demo catalogue. */
 const tmdbOf = (title: string) => 1000 + ALL.findIndex((t) => slug(t.title) === slug(title));
+/** A demo title's details page, when it's in the demo catalogue. */
+const titleLink = (title: string) => (byTitle.has(slug(title)) ? `/media/${find(title).kind === 'series' ? 'tv' : 'movie'}/${tmdbOf(title)}` : undefined);
 
 const USERS = [
   { id: 'u-alex', name: 'Alex', isAdmin: true },
@@ -207,7 +217,13 @@ interface Stream {
   videoCodec: string;
   audio: string;
   transcode?: NowPlaying['transcode'];
+  /** Set for streams on an extra media server. */
+  server?: { id: string; name: string; type: 'emby' | 'plex' };
 }
+
+/** Extra media servers in the demo: an Emby and a Plex server next to the main Jellyfin one. */
+const EMBY = { id: 'emby-office', name: 'Office', type: 'emby' as const };
+const PLEX = { id: 'plex-cabin', name: 'Cabin', type: 'plex' as const };
 
 const STREAMS: Stream[] = [
   {
@@ -261,20 +277,49 @@ const STREAMS: Stream[] = [
     videoCodec: 'HEVC',
     audio: 'AAC 2.0',
   },
+  {
+    user: USERS[4]!,
+    title: 'Low Tide',
+    episode: { season: 3, number: 4, name: 'Undertow' },
+    runtimeMin: 52,
+    startedMinAgo: 18,
+    client: 'Plex for Apple TV',
+    device: 'Cabin Apple TV',
+    resolution: '4K',
+    hdr: 'HDR10',
+    videoCodec: 'HEVC',
+    audio: 'EAC3 5.1',
+    server: PLEX,
+  },
+  {
+    user: USERS[5]!,
+    title: 'Northbound',
+    runtimeMin: 112,
+    startedMinAgo: 64,
+    client: 'Emby Theater',
+    device: 'Office PC',
+    resolution: '1080p',
+    videoCodec: 'H264',
+    audio: 'AC3 5.1',
+    server: EMBY,
+  },
 ];
 
 function nowPlaying(): NowPlaying[] {
-  return STREAMS.map((s, i) => {
+  const order = [STREAMS[0]!, STREAMS[3]!, STREAMS[1]!, STREAMS[4]!, STREAMS[2]!];
+  return order.map((s, i) => {
     const t = find(s.title);
     const runtimeMs = s.runtimeMin * MIN;
     const elapsed = s.paused ? s.startedMinAgo * MIN : s.startedMinAgo * MIN + (Date.now() - START);
     const positionMs = elapsed % runtimeMs;
+    const art = (type: 'Primary' | 'Backdrop' | 'Thumb') => ({ ...jfArt(t.title, type), ...(s.server ? { server: s.server.id } : {}) });
     return {
       sessionId: `demo-session-${i}`,
+      ...(s.server ? { server: s.server.id, serverName: s.server.name, serverType: s.server.type } : {}),
       user: { id: s.user.id, name: s.user.name },
       client: s.client,
       device: s.device,
-      appVersion: '10.11.2',
+      appVersion: s.server?.type === 'plex' ? '8.45' : s.server ? '3.0.20' : '10.11.2',
       lastActivity: iso(5_000),
       item: {
         id: `${slug(s.title)}${s.episode ? `-s${s.episode.season}e${s.episode.number}` : ''}`,
@@ -294,9 +339,9 @@ function nowPlaying(): NowPlaying[] {
         hdr: s.hdr,
         videoCodec: s.videoCodec,
         audio: s.audio,
-        poster: jfArt(t.title, 'Primary'),
-        backdrop: jfArt(t.title, 'Backdrop'),
-        thumb: jfArt(t.title, 'Thumb'),
+        poster: art('Primary'),
+        backdrop: art('Backdrop'),
+        thumb: art('Thumb'),
       },
       state: {
         positionMs,
@@ -308,6 +353,46 @@ function nowPlaying(): NowPlaying[] {
       transcode: s.transcode,
     };
   });
+}
+
+/** The extra server a demo request asks for with `?instance=`, if any. */
+function demoServer(req: express.Request) {
+  const id = req.query.instance;
+  return id === EMBY.id ? EMBY : id === PLEX.id ? PLEX : undefined;
+}
+
+function extraOverview(srv: typeof EMBY | typeof PLEX): JellyfinOverview {
+  const plex = srv.type === 'plex';
+  const streams = STREAMS.filter((s) => s.server?.id === srv.id).length;
+  return {
+    server: plex
+      ? { name: 'Cabin', version: '1.41.2', os: 'Linux 6.8', hasUpdateAvailable: true, hasPendingRestart: false }
+      : { name: 'Office', version: '4.8.10', os: 'Windows 11', architecture: 'X64', hasUpdateAvailable: false, hasPendingRestart: false },
+    counts: plex
+      ? { movies: 412, series: 64, episodes: 2310, albums: 0, songs: 0, artists: 0, books: 0, musicVideos: 0, collections: 0 }
+      : { movies: 236, series: 31, episodes: 1180, albums: 52, songs: 690, artists: 40, books: 0, musicVideos: 0, collections: 12 },
+    libraries: plex
+      ? [
+          { id: '1', name: 'Films', type: 'movies', locations: ['/data/films'], itemCount: 412, refreshing: false, image: jfArt('Saltwind', 'Backdrop') },
+          { id: '2', name: 'Television', type: 'tvshows', locations: ['/data/tv'], itemCount: 64, refreshing: false, image: jfArt('Low Tide', 'Backdrop') },
+        ]
+      : [
+          { id: '101', name: 'Movies', type: 'movies', locations: ['D:\\Movies'], itemCount: 236, refreshing: false, image: jfArt('Northbound', 'Backdrop') },
+          { id: '102', name: 'Shows', type: 'tvshows', locations: ['D:\\Shows'], itemCount: 31, refreshing: false, image: jfArt('Kitchen Brigade', 'Backdrop') },
+          { id: '103', name: 'Music', type: 'music', locations: ['D:\\Music'], itemCount: 52, refreshing: false, image: jfArt('Velvet Static', 'Backdrop') },
+        ],
+    users: {
+      total: plex ? 3 : 2,
+      active24h: plex ? 2 : 1,
+      list: (plex ? [USERS[0]!, USERS[4]!, USERS[1]!] : [USERS[5]!, USERS[0]!]).map((u, i) => ({
+        id: u.id,
+        name: u.name,
+        isAdmin: i === 0,
+        lastActivity: iso([5, 18, 30 * 60][i]! * MIN),
+      })),
+    },
+    sessions: { active: streams + 1, streams, transcoding: 0, directPlay: streams },
+  };
 }
 
 function jellyfinOverview(): JellyfinOverview {
@@ -325,14 +410,15 @@ function jellyfinOverview(): JellyfinOverview {
       active24h: 4,
       list: USERS.map((u, i) => ({ id: u.id, name: u.name, isAdmin: u.isAdmin, lastActivity: iso([2, 1, 1, 3, 26 * 60, 9 * 60][i]! * MIN) })),
     },
-    sessions: { active: 5, streams: STREAMS.length, transcoding: 1, directPlay: 2 },
+    sessions: { active: 5, streams: STREAMS.filter((s) => !s.server).length, transcoding: 1, directPlay: 2 },
   };
 }
 
 const LATEST_ORDER = ['Iron Bloom', 'Atlas Station', 'The Last Lighthouse', 'Velvet Static', 'Kitchen Brigade', 'The Glass Meridian', 'Saltwind', 'Starfall Academy', 'Northbound', 'Small Hours', 'Neon Harbor', 'Low Tide'];
 
-function latest(): LatestItem[] {
-  return LATEST_ORDER.map((name, i) => {
+function latest(server?: string): LatestItem[] {
+  const names = server === PLEX.id ? ['Saltwind', 'Low Tide', 'Neon Harbor', 'Iron Bloom', 'Atlas Station', 'Small Hours'] : server === EMBY.id ? ['Northbound', 'Kitchen Brigade', 'Velvet Static', 'The Glass Meridian', 'Starfall Academy'] : LATEST_ORDER;
+  return names.map((name, i) => {
     const t = find(name);
     return {
       id: slug(name),
@@ -347,6 +433,24 @@ function latest(): LatestItem[] {
       thumb: jfArt(name, 'Thumb'),
     };
   });
+}
+
+function extraActivity(srv: typeof EMBY | typeof PLEX): ActivityEntry[] {
+  const e: [string, string, string, number, string?][] =
+    srv.type === 'plex'
+      ? [
+          ['Leo watched Low Tide S3·E4', 'VideoPlayback', 'Information', 18, 'u-leo'],
+          ['Alex watched Saltwind', 'VideoPlayback', 'Information', 5 * 60, 'u-alex'],
+          ['Maya watched Atlas Station S1·E3', 'VideoPlayback', 'Information', 30 * 60, 'u-maya'],
+          ['Leo watched Low Tide S3·E3', 'VideoPlayback', 'Information', 26 * 60, 'u-leo'],
+        ]
+      : [
+          ['Sam is playing Northbound on Office PC', 'VideoPlayback', 'Information', 64, 'u-sam'],
+          ['Sam successfully authenticated', 'AuthenticationSucceeded', 'Information', 66, 'u-sam'],
+          ['Kitchen Brigade - S2E1 was added to Shows', 'ItemAdded', 'Information', 7 * 60],
+          ['Scan Media Library completed', 'TaskCompleted', 'Information', 8 * 60],
+        ];
+  return e.map(([name, type, severity, minAgo, userId], i) => ({ id: 500 - i, name, type, severity, date: iso(minAgo * MIN), userId }));
 }
 
 function activity(): ActivityEntry[] {
@@ -803,7 +907,7 @@ function settings(): ServiceSettingsView[] {
     id,
     name: id === 'infinidisk' ? 'Infinidisk' : id[0]!.toUpperCase() + id.slice(1),
     source: id === 'infinidisk' ? 'environment' : 'database',
-    configured: true,
+    configured: !APPS_SETUP || APPS_CONNECTED.has(id),
     enabled: !disabledServices.has(id),
     canDisable: id !== 'jellyfin',
     envAvailable: id === 'infinidisk',
@@ -827,6 +931,95 @@ const json = (fn: () => unknown) => (_req: express.Request, res: express.Respons
 
 const demoUser = { id: 'u-alex', name: 'Alex', isAdmin: true, expiresAt: ahead(12 * HOUR) };
 
+// DEMO_SETUP=1 shows the first-run screen of a fresh install instead of a signed-in dashboard.
+const FRESH = process.env.DEMO_SETUP === '1';
+if (FRESH) {
+  app.get('/api/auth/me', (_req, res) => res.status(401).json({ error: 'unauthenticated', message: 'Sign in' }));
+  app.get('/api/auth/server', json(() => ({ online: false, configured: false })));
+  app.post('/api/auth/setup/discover', (req, res, next) => (req.query.type === 'emby' ? next('route') : next()), json(() => ({
+    servers: [
+      { id: 'a1', name: 'Homelab', url: 'http://192.168.1.10:8096', version: '10.11.2', reachable: true },
+      { id: 'a2', name: 'Basement', url: 'http://192.168.1.22:8096', version: '10.10.7', reachable: true },
+    ],
+  })));
+}
+// DEMO_MAIN=plex or DEMO_MAIN=emby shows a household that only runs that server: people sign in with it and every page reads it.
+const MAIN_KIND = process.env.DEMO_MAIN === 'plex' || process.env.DEMO_MAIN === 'emby' ? process.env.DEMO_MAIN : undefined;
+const PLEX_ONLY = !!MAIN_KIND;
+const MAIN_NAME = MAIN_KIND === 'emby' ? 'Emby' : 'Plex';
+const MAIN_VERSION = MAIN_KIND === 'emby' ? '4.8.10' : '1.41.2';
+const PLEX_HOME = { id: `${MAIN_KIND ?? 'plex'}-home`, name: 'Home', type: (MAIN_KIND ?? 'plex') as 'plex' | 'emby' };
+// An Emby household's second server is Emby too.
+const SECOND = MAIN_KIND === 'emby' ? { id: 'emby-cabin', name: 'Cabin', type: 'emby' as const } : PLEX;
+// DEMO_SIGNED_OUT=1 shows the sign-in screen of a set-up install.
+if (process.env.DEMO_SIGNED_OUT === '1') app.get('/api/auth/me', (_req, res) => res.status(401).json({ error: 'unauthenticated', message: 'Sign in' }));
+if (MAIN_KIND) {
+  if (FRESH) {
+    app.post('/api/auth/plex/start', json(() => ({ handle: 'demo-handle-0123456789abcdef', authUrl: 'about:blank' })));
+    app.post('/api/auth/plex/poll', json(() => ({ servers: [{ id: 'm1', name: 'Home', version: '1.41.2' }, { id: 'm2', name: 'Cabin', version: '1.41.2' }] })));
+    app.post('/api/auth/setup/discover', (req, res, next) =>
+      req.query.type === 'emby'
+        ? res.json({ servers: [{ id: 'e1', name: 'Home', url: 'http://192.168.1.10:8096', version: '4.8.10', reachable: true }, { id: 'e2', name: 'Cabin', url: 'http://192.168.1.40:8096', version: '4.8.10', reachable: true }] })
+        : next(),
+    );
+  } else {
+    app.get('/api/auth/server', json(() => ({ type: MAIN_KIND, name: 'Home', version: MAIN_VERSION, online: true, configured: true })));
+  }
+  const plexStream = (s: NowPlaying): NowPlaying => {
+    const second = s.serverType === 'plex';
+    const server = second ? SECOND.id : PLEX_HOME.id;
+    return {
+      ...s,
+      server,
+      serverName: second ? SECOND.name : PLEX_HOME.name,
+      serverType: PLEX_HOME.type,
+      client: s.client?.replace('Jellyfin', MAIN_KIND === 'emby' ? 'Emby for' : 'Plex for').replace('Plex for Apple TV', MAIN_KIND === 'emby' ? 'Emby for Apple TV' : 'Plex for Apple TV'),
+      appVersion: MAIN_KIND === 'emby' ? '3.0.20' : '8.45',
+      item: {
+        ...s.item,
+        poster: s.item.poster && { ...s.item.poster, server },
+        backdrop: s.item.backdrop && { ...s.item.backdrop, server },
+        thumb: s.item.thumb && { ...s.item.thumb, server },
+      },
+    };
+  };
+  // One server: the streams that were on the demo's second server are left out.
+  app.get('/api/jellyfin/now-playing', json(() => nowPlaying().filter((s) => !s.serverType).map(plexStream)));
+  const home = (req: express.Request) => !req.query.instance || req.query.instance === PLEX_HOME.id;
+  app.get('/api/jellyfin/overview', (req, res) => {
+    if (!home(req)) return res.json(extraOverview(PLEX));
+    const o = jellyfinOverview();
+    res.json({
+      ...o,
+      server: { ...o.server, name: 'Home', version: MAIN_VERSION, os: MAIN_KIND === 'emby' ? 'Windows 11' : 'Linux 6.8', architecture: MAIN_KIND === 'emby' ? 'X64' : undefined },
+      libraries: o.libraries.map((l) => ({ ...l, image: l.image && { ...l.image, server: PLEX_HOME.id } })),
+    });
+  });
+  app.get('/api/jellyfin/latest', (req, res) => res.json(home(req) ? latest().map((i) => ({ ...i, poster: i.poster && { ...i.poster, server: PLEX_HOME.id } })) : latest(PLEX.id)));
+  app.get('/api/jellyfin/activity', (req, res) => {
+    if (!home(req)) return res.json(extraActivity(PLEX));
+    if (MAIN_KIND === 'emby') return res.json(activity());
+    res.json(
+      STREAMS.filter((s) => !s.server)
+        .map((s, i) => ({ id: 900 - i, name: `${s.user.name} watched ${s.title}${s.episode ? ` S${s.episode.season}·E${s.episode.number}` : ''}`, type: 'VideoPlayback', severity: 'Information', date: iso(s.startedMinAgo * MIN), userId: s.user.id })),
+    );
+  });
+  app.get('/api/health', json(() => {
+    const h = enabledHealth();
+    const jf = h.services.find((s) => s.id === 'jellyfin')!;
+    const row = (id: string, name: string, ms: number): ServiceHealth => ({ ...jf, id, instance: id, serverType: PLEX_HOME.type, name: `${MAIN_NAME} · ${name}`, version: MAIN_VERSION, latencyMs: ms, meta: { server: name } });
+    const rest = h.services.filter((s) => s.id !== 'jellyfin' && !s.serverType);
+    return { ...h, services: [row(PLEX_HOME.id, 'Home', 34), ...rest] };
+  }));
+  const port = MAIN_KIND === 'emby' ? 8096 : 32400;
+  app.get('/api/settings/media-servers', json(() => ({
+    servers: [
+      { id: PLEX_HOME.id, type: PLEX_HOME.type, name: 'Home', url: `http://192.168.1.10:${port}`, publicUrl: '', enabled: true, apiKeySet: true, apiKeyHint: '••••K2pa', createdAt: '2026-08-01T10:00:00.000Z', main: true },
+    ],
+    ignored: [],
+  })));
+}
+
 app.get('/api/auth/me', json(() => ({ user: demoUser })));
 app.post('/api/auth/login', json(() => ({ user: demoUser })));
 app.post('/api/auth/logout', json(() => ({ ok: true })));
@@ -840,6 +1033,14 @@ app.get('/api/config', json(() => ({
     { id: 'radarr', kind: 'radarr', name: 'Radarr', primary: true },
     { id: 'radarr-4k', kind: 'radarr', name: '4K', primary: false },
   ].filter((i) => !disabledServices.has(i.kind as ServiceId)),
+  jellyfinServers: PLEX_ONLY
+    ? [{ ...PLEX_HOME, primary: true }]
+    : [
+        { id: 'jellyfin', type: 'jellyfin', name: 'Homelab', primary: true },
+        ...(SINGLE ? [] : [{ ...EMBY, primary: false }, { ...PLEX, primary: false }]),
+      ],
+  mainServer: MAIN_KIND ?? 'jellyfin',
+  kometa: true,
   access: null,
   downloadClients: true,
   moonfin: moonfin.enabled ? { openIn: moonfin.openIn, web: 'https://jellyfin.example.com/Moonfin/Web/' } : undefined,
@@ -860,17 +1061,38 @@ const enabledHealth = () => {
   const h = health();
   const radarr = h.services.find((s) => s.id === 'radarr')!;
   const extra: ServiceHealth = { ...radarr, id: 'radarr-4k', instance: 'radarr-4k', name: 'Radarr · 4K', latencyMs: 83, publicUrl: undefined };
-  return { ...h, services: [...h.services, extra].filter((s) => !disabledServices.has(s.kind)) };
+  const jf = h.services.find((s) => s.id === 'jellyfin')!;
+  const emby: ServiceHealth = { ...jf, id: EMBY.id, instance: EMBY.id, serverType: 'emby', name: 'Emby · Office', version: '4.8.10', latencyMs: 46, meta: { server: 'Office' }, publicUrl: 'http://192.168.1.31:8096' };
+  const plex: ServiceHealth = {
+    ...jf,
+    id: PLEX.id,
+    instance: PLEX.id,
+    serverType: 'plex',
+    name: 'Plex · Cabin',
+    version: '1.41.2',
+    latencyMs: 61,
+    meta: { server: 'Cabin' },
+    publicUrl: 'http://192.168.1.40:32400/web',
+  };
+  // Extra media servers listed right after the main Jellyfin server.
+  const [main, ...rest] = h.services;
+  return { ...h, services: [main!, ...(SINGLE ? [] : [emby, plex]), ...rest, extra].filter((s) => !disabledServices.has(s.kind)) };
 };
 app.get('/api/health', json(enabledHealth));
 app.post('/api/health/recheck', json(enabledHealth));
 app.get('/api/system/host', json(host));
 app.get('/api/downloads', json(downloads));
 
-app.get('/api/jellyfin/now-playing', json(nowPlaying));
-app.get('/api/jellyfin/overview', json(jellyfinOverview));
-app.get('/api/jellyfin/latest', json(latest));
-app.get('/api/jellyfin/activity', json(activity));
+app.get('/api/jellyfin/now-playing', json(() => (SINGLE ? nowPlaying().filter((x) => !x.server || x.server === 'jellyfin') : nowPlaying())));
+app.get('/api/jellyfin/overview', (req, res) => {
+  const srv = demoServer(req);
+  res.json(srv ? extraOverview(srv) : jellyfinOverview());
+});
+app.get('/api/jellyfin/latest', (req, res) => res.json(latest(demoServer(req)?.id)));
+app.get('/api/jellyfin/activity', (req, res) => {
+  const srv = demoServer(req);
+  res.json(srv ? extraActivity(srv) : activity());
+});
 app.get('/api/jellyfin/plays', json(plays));
 app.get('/api/sonarr/overview', json(sonarr));
 const radarrAutoImport: AutoImportStatus = { ...autoImport, settings: { enabled: false, intervalMinutes: 30 }, nextRun: undefined, stuck: 0, log: [] };
@@ -880,6 +1102,145 @@ app.put('/api/radarr/auto-import', (req, res) => {
   res.json(radarrAutoImport);
 });
 app.post('/api/radarr/auto-import/run', (_req, res) => res.json({ results: [], status: radarrAutoImport }));
+// Kometa: last night's run, one error and some collection changes, as its webhooks would report them.
+const kometaRun = (daysAgo: number, errors: number, id: number) => ({
+  id,
+  at: iso(daysAgo * DAY + 3 * HOUR),
+  event: 'run_end',
+  startTime: '2026-11-25 03:00:00',
+  endTime: '2026-11-25 03:14:12',
+  runTime: `0:${12 + (id % 5)}:${String(10 + id * 7).slice(-2)}`,
+  created: daysAgo ? 0 : 2,
+  modified: 14 - (id % 4),
+  deleted: daysAgo ? 0 : 1,
+  added: 48 - id,
+  removed: 7,
+  toRadarr: daysAgo ? 0 : 3,
+  toSonarr: 0,
+  errors,
+});
+app.get('/api/kometa/status', json(() => ({
+  enabled: true,
+  waiting: false,
+  running: false,
+  lastRun: kometaRun(0, 1, 14),
+  runs: Array.from({ length: 14 }, (_, i) => kometaRun(i, i === 0 || i === 5 ? 1 : 0, 14 - i)),
+  errors: [{ id: 99, at: iso(3 * HOUR + 7 * MIN), event: 'error', error: 'Collection Error: TMDb list 8273 not found', critical: false, library: 'Movies', collection: 'Staff Picks' }],
+  version: { current: '2.1.0', latest: '2.2.1' },
+  changes: [
+    { id: 98, at: iso(3 * HOUR), event: 'changes', library: 'Movies', collection: 'Oscar Winners', created: true, addedCount: 24, removedCount: 0 },
+    { id: 97, at: iso(3 * HOUR), event: 'changes', library: 'Movies', collection: 'Trending This Week', addedCount: 6, removedCount: 5 },
+    { id: 96, at: iso(3 * HOUR), event: 'changes', library: 'TV Shows', collection: 'New Episodes', addedCount: 9, removedCount: 11 },
+    { id: 95, at: iso(3 * HOUR), event: 'delete', message: 'Collection “Halloween 2025” deleted', library: 'Movies' },
+  ],
+})));
+// Collections made in StreamForge and on the server, for the Kometa page.
+const demoLibraries = [
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-movies', name: 'Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-movies.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-shows', name: 'TV Shows', kind: 'show', kometaFile: 'config/streamforge/jellyfin-homelab-tv-shows.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-kids', name: 'Kids Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-kids-movies.yml' },
+  { server: 'jellyfin', serverType: 'jellyfin', serverName: 'Homelab', id: 'lib-4k', name: '4K Movies', kind: 'movie', kometaFile: 'config/streamforge/jellyfin-homelab-4k-movies.yml' },
+];
+const colArt = (t: string, server?: string) => ({ itemId: slug(t), type: 'Primary', tag: 'demo', ...(server ? { server } : {}) });
+const demoCollections = [
+  { id: 'sf-oscars', name: 'Oscar Winners', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '28' }, schedule: 'always', count: 8, poster: colArt('Lanterns Over Kessa'), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
+  { id: 'sf-trending', name: 'Trending This Week', managed: true, library: demoLibraries[0], source: { type: 'tmdb_trending_weekly', limit: 30 }, schedule: 'always', count: 22, poster: colArt('Neon Harbor'), builtAt: Date.now() - 3 * HOUR, createdBy: 'Alex', status: 'built' },
+  { id: 'sf-staff', name: 'Staff Picks', managed: true, library: demoLibraries[2], source: { type: 'tmdb_list', value: '8273' }, schedule: 'always', poster: colArt('Paper Kingdoms'), status: 'error', error: 'TMDb list 8273 not found', createdBy: 'Sam', updatedAt: iso(9 * DAY) },
+  { id: 'sf-xmas', name: 'Christmas Movies', managed: true, library: demoLibraries[2], source: { type: 'imdb_list', value: 'https://www.imdb.com/list/ls000096828/' }, schedule: { from: '12/01', to: '12/31' }, status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(20 * MIN) },
+  { id: 'sf-family', name: 'Family Night', managed: true, library: demoLibraries[3], source: { type: 'manual', ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] }, schedule: 'always', status: 'waiting', waitingForRun: true, createdBy: 'Alex', updatedAt: iso(15 * MIN) },
+  { id: 'srv~jellyfin~~bx1', name: 'New Episodes', managed: false, library: { ...demoLibraries[1], id: '', name: 'Collections' }, count: 41, poster: colArt('Atlas Station'), status: 'built' },
+];
+app.get('/api/kometa/collections', json(() => ({
+  settings: { configDir: '/kometa', runTimes: ['03:00'], tmdbKeySet: false, tmdbKeyFromKometa: true, folder: { ok: true, hasConfig: true } },
+  nextRun: (() => { const d = new Date(); d.setHours(27, 0, 0, 0); return d.toISOString(); })(),
+  libraries: demoLibraries,
+  collections: demoCollections,
+})));
+const OSCAR_TITLES = ['Velvet Static', 'Iron Bloom', 'The Last Lighthouse', 'Saltwind', 'Northbound', 'Quiet Orbit', 'Small Hours', 'Neon Harbor', 'The Glass Meridian', 'Paper Kingdoms', 'Lanterns Over Kessa', 'Atlas Station'];
+app.get('/api/kometa/collections/:id', (req, res) => {
+  const c = demoCollections.find((x) => x.id === req.params.id) ?? demoCollections[0]!;
+  const missing = new Set(['Northbound', 'Paper Kingdoms', 'Small Hours', 'Quiet Orbit']);
+  const titles = OSCAR_TITLES.map((t, i) => ({
+    tmdbId: 1000 + i,
+    title: t,
+    year: find(t).year,
+    poster: colArt(t),
+    inLibrary: !missing.has(t),
+    inCollection: !missing.has(t),
+    new: i < 3,
+  }));
+  res.json({
+    id: c.id,
+    name: c.name,
+    managed: c.managed,
+    collection: c.managed ? { ...c, order: 'custom', addMissing: false, visibleHome: true, createdAt: iso(53 * DAY), updatedAt: iso(53 * DAY) } : undefined,
+    library: c.library,
+    kometaFile: c.library.kometaFile,
+    yaml: c.managed ? `collections:\n  "${c.name}":\n    tmdb_list: "28"\n    collection_order: custom\n    sync_mode: sync\n    visible_home: true` : undefined,
+    poster: c.poster,
+    openUrl: 'https://plex.example.com/web/index.html',
+    status: c.status,
+    nextRun: iso(-14 * HOUR),
+    sourceKnown: true,
+    counts: { onList: titles.length, inLibrary: titles.filter((x) => x.inLibrary).length, missing: titles.filter((x) => !x.inLibrary).length, inCollection: titles.filter((x) => x.inCollection).length },
+    titles,
+    history: [
+      { at: iso(3 * HOUR), event: 'changes', addedCount: 3, removedCount: 1, additions: ['Velvet Static', 'Iron Bloom', 'The Last Lighthouse'] },
+      { at: iso(2 * DAY + 3 * HOUR), event: 'changes', addedCount: 1, removedCount: 0, additions: ['Saltwind'] },
+      { at: iso(5 * DAY + 3 * HOUR), event: 'error', error: 'TMDb didn’t answer; kept the existing titles' },
+      { at: iso(52 * DAY), event: 'changes', created: true, addedCount: 95, removedCount: 0, additions: [] },
+    ],
+  });
+});
+app.get('/api/arr/add-options', (req, res) => {
+  const radarr = req.query.kind !== 'sonarr';
+  res.json({
+    kind: radarr ? 'radarr' : 'sonarr',
+    instance: radarr ? (req.query.instance === 'radarr-4k' ? 'radarr-4k' : 'radarr') : 'sonarr',
+    instances: radarr ? [{ id: 'radarr', name: 'Radarr', primary: true }, { id: 'radarr-4k', name: '4K', primary: false }] : [{ id: 'sonarr', name: 'Sonarr', primary: true }],
+    profiles: [{ id: 1, name: 'Any' }, { id: 4, name: 'HD-1080p' }, { id: 5, name: 'Ultra-HD' }],
+    roots: [{ path: radarr ? '/media/movies' : '/media/tv', freeSpace: 14.4e12, accessible: true }],
+    defaults: { qualityProfileId: 4, rootFolderPath: radarr ? '/media/movies' : '/media/tv', minimumAvailability: radarr ? 'released' : undefined, seriesMonitor: radarr ? undefined : 'all', monitored: true, search: true, tag: false },
+  });
+});
+app.post('/api/arr/add-check', (req, res) => {
+  const items = (req.body as { items: { tmdbId?: number; title?: string; year?: number }[] }).items;
+  res.json({ items: items.map((i, n) => ({ key: `tmdb:${i.tmdbId}`, title: i.title, year: i.year, status: n === items.length - 1 && items.length > 2 ? 'exists' : 'new', instance: n === items.length - 1 && items.length > 2 ? '4K' : undefined })) });
+});
+app.post('/api/arr/add', (req, res) => {
+  const items = (req.body as { items: { tmdbId?: number; title?: string }[] }).items;
+  res.json({ instance: 'Radarr', searching: true, results: items.map((i) => ({ key: `tmdb:${i.tmdbId}`, title: i.title, status: 'added' })) });
+});
+app.get('/api/settings/kometa', json(() => ({
+  enabled: true,
+  path: '/api/hooks/kometa/k7Qe2mXv9TzLwR4nB8sYc1Pd',
+  collections: { configDir: '/kometa', runTimes: ['03:00'], tmdbKeySet: false, tmdbKeyFromKometa: true, folder: { ok: true, hasConfig: true } },
+})));
+
+// With Jellyfin, the media server lives in the service settings: no Plex/Emby server stored.
+app.get('/api/settings/media-servers', json(() => ({ servers: [], ignored: [] })));
+app.post('/api/settings/media-servers/test', (req, res) =>
+  res.json({ ok: true, version: (req.body as { type?: string })?.type === 'plex' ? '1.41.2' : '4.8.10', latencyMs: 42, issues: [] }),
+);
+app.put('/api/settings/media-servers/:id', (_req, res) => res.status(403).json({ error: 'demo', message: 'Changes are switched off in the demo.' }));
+
+/* Setup step 2: your apps. DEMO_APPS=1 shows it partway through. */
+app.get('/api/settings/setup', json(() => ({ appsDone: !APPS_SETUP })));
+app.put('/api/settings/setup', json(() => ({ appsDone: true, disabled: [] })));
+app.post('/api/settings/apps/discover', async (_req, res) => {
+  await new Promise((r) => setTimeout(r, 600));
+  res.json({
+    found: [
+      { service: 'sonarr', name: 'Sonarr', url: 'http://sonarr:8989', via: 'docker' },
+      { service: 'radarr', name: 'Radarr', url: 'http://radarr:7878', via: 'docker' },
+      { service: 'seerr', name: 'Jellyseerr', url: 'http://jellyseerr:5055', via: 'docker' },
+      { service: 'prowlarr', name: 'Prowlarr', url: 'http://prowlarr:9696', via: 'docker' },
+      { service: 'bazarr', name: 'Bazarr', url: 'https://bazarr.example.com', via: 'domain' },
+    ].map((f) => ({ ...f, configured: !APPS_SETUP || APPS_CONNECTED.has(f.service as ServiceId) })),
+    importable: APPS_SETUP ? [{ service: 'radarr', from: 'seerr', url: 'http://radarr:7878' }] : [],
+  });
+});
+app.post('/api/settings/apps/import', json(() => ({ results: [{ service: 'radarr', from: 'seerr', url: 'http://radarr:7878', ok: true }] })));
 app.get('/api/settings/instances', json(() => ({
   instances: [{ id: 'radarr-4k', kind: 'radarr', name: '4K', url: 'https://radarr-4k.example.com', enabled: true, apiKeySet: true, apiKeyHint: '••••77ab', createdAt: iso(20 * DAY) }],
 })));
@@ -1062,7 +1423,18 @@ const demoReleases = [
     notes: parseNotes('### Features\n\n* explain why a stream buffered ([1908fb4](x))'),
   },
 ];
-const updates = () => ({ enabled: true, current: '1.6.0', latest: '1.8.0', available: '1.8.0', releases: demoReleases, checkedAt: Date.now() - 2 * 3600_000, repoUrl: 'https://github.com/ashveebee/streamforge/releases' });
+// The newest demo release only counts as an update while the app itself is older.
+const DEMO_LATEST = demoReleases[0]!.version;
+const newer = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true }) > 0;
+const updates = () => ({
+  enabled: true,
+  current: APP_VERSION,
+  latest: DEMO_LATEST,
+  available: newer(DEMO_LATEST, APP_VERSION) ? DEMO_LATEST : undefined,
+  releases: demoReleases,
+  checkedAt: Date.now() - 2 * 3600_000,
+  repoUrl: 'https://github.com/ashveebee/streamforge/releases',
+});
 app.get('/api/updates', json(updates));
 app.post('/api/updates/check', json(updates));
 
@@ -1174,6 +1546,100 @@ app.get('/api/library/reclaim', json(() => ({
     { key: 'd', kind: 'movie', instance: 'radarr', arrId: 4, title: 'Lanterns Over Kessa', year: 2024, size: 33 * GB, added: iso(480 * DAY), poster: poster('Lanterns Over Kessa') },
   ],
 })));
+const demoCounted = new Map([['u-alex', true], ['u-sam', true], ['u-maya', true], ['u-guest', false]]);
+app.get('/api/library/watched-by-everyone', json(() => {
+  const items = [
+    { key: 'w1', kind: 'movie', instance: 'radarr-4k', instanceName: '4K', arrId: 11, title: 'Neon Harbor', year: 2024, size: 71 * GB, added: iso(410 * DAY), poster: poster('Neon Harbor') },
+    { key: 'w2', kind: 'series', instance: 'sonarr', arrId: 12, title: 'Saltwind', year: 2021, size: 58 * GB, added: iso(900 * DAY), poster: poster('Saltwind'), ended: true },
+    { key: 'w3', kind: 'movie', instance: 'radarr', arrId: 13, title: 'The Glass Meridian', year: 2025, size: 24 * GB, added: iso(200 * DAY), poster: poster('The Glass Meridian') },
+    { key: 'w4', kind: 'movie', instance: 'radarr', arrId: 14, title: 'Iron Bloom', year: 2023, size: 19 * GB, added: iso(300 * DAY), poster: poster('Iron Bloom') },
+    { key: 'w5', kind: 'movie', instance: 'radarr', arrId: 15, title: 'Atlas Station', year: 2022, size: 12 * GB, added: iso(520 * DAY), poster: poster('Atlas Station') },
+  ];
+  return {
+    supported: true,
+    users: [
+      { id: 'u-alex', name: 'Alex', admin: true, watched: 412, counted: demoCounted.get('u-alex') },
+      { id: 'u-sam', name: 'Sam', admin: false, watched: 233, counted: demoCounted.get('u-sam') },
+      { id: 'u-maya', name: 'Maya', admin: false, watched: 187, counted: demoCounted.get('u-maya') },
+      { id: 'u-guest', name: 'Guest', admin: false, watched: 0, counted: demoCounted.get('u-guest') },
+    ],
+    total: items.length,
+    reclaimable: items.reduce((n, i) => n + i.size, 0),
+    kept: 0,
+    items,
+    checkedAt: iso(2 * MIN),
+  };
+}));
+app.put('/api/library/watched-by-everyone/users', (req, res) => {
+  const b = req.body as { id: string; counted: boolean };
+  demoCounted.set(b.id, b.counted);
+  res.json({ ok: true });
+});
+/* Watch history for every user (demo). */
+const HIST_SERVERS = {
+  homelab: { id: 'jellyfin', name: 'Homelab', type: 'jellyfin' as const },
+  cabin: { id: PLEX.id, name: PLEX.name, type: 'plex' as const },
+  office: { id: EMBY.id, name: EMBY.name, type: 'emby' as const },
+};
+const HIST_USERS = [
+  { name: 'Alex', id: 'u-alex', client: 'Jellyfin Web', device: 'Firefox', servers: [HIST_SERVERS.homelab, HIST_SERVERS.homelab, HIST_SERVERS.cabin] },
+  { name: 'Sam', id: 'u-sam', client: 'Android TV', device: 'Shield TV', servers: [HIST_SERVERS.homelab] },
+  { name: 'Maya', id: 'u-maya', client: 'Swiftfin', device: 'iPad', servers: [HIST_SERVERS.homelab, HIST_SERVERS.office] },
+  { name: 'Jordan', id: 'u-jordan', client: 'Plex for LG', device: 'Living room TV', servers: [HIST_SERVERS.cabin] },
+];
+const HIST_TITLES: [string, string | undefined, number][] = [
+  ['Copper Valley', 'S02E04 · The Ridge', 52], ['Neon Harbor', undefined, 118], ['The Long Winter', 'S01E07 · Thaw', 47], ['Saltwind', 'S03E01 · Undertow', 55],
+  ['Iron Bloom', undefined, 104], ['Copper Valley', 'S02E03 · Old Roads', 49], ['Atlas Station', undefined, 131], ['Quiet Orbit', undefined, 96],
+  ['The Long Winter', 'S01E06 · White Out', 51], ['Velvet Static', undefined, 109], ['Saltwind', 'S02E10 · Low Tide', 58], ['Small Hours', undefined, 92],
+];
+const histRows = (() => {
+  const rows = [];
+  let t = Date.now() - 50 * MIN;
+  for (let i = 0; i < 46; i++) {
+    const u = HIST_USERS[(i * 7 + (i >> 2)) % HIST_USERS.length]!;
+    const [title, subtitle, mins] = HIST_TITLES[(i * 5) % HIST_TITLES.length]!;
+    const srv = SINGLE ? HIST_SERVERS.homelab : u.servers[i % u.servers.length]!;
+    const client = srv.type === 'plex' ? (u.name === 'Jordan' ? 'Plex for LG' : 'Plex Web') : SINGLE && u.name === 'Jordan' ? 'Jellyfin for LG' : srv.type === 'emby' ? 'Emby Theater' : u.client;
+    rows.push({ id: `h${i}`, user: u.name, at: new Date(t).toISOString(), title, subtitle, type: subtitle ? 'episode' : 'movie', client, device: u.device, serverId: srv.id, serverType: srv.type, serverName: srv.name, poster: { itemId: slug(title), ...(srv.id === 'jellyfin' ? {} : { server: srv.id }) }, link: titleLink(title), method: i % 6 === 2 ? 'Transcode' : 'DirectPlay', watchedMs: Math.round(mins * (0.7 + ((i * 13) % 30) / 100)) * 60_000, source: 'recorded' });
+    t -= (3 + ((i * 11) % 17)) * HOUR;
+  }
+  return rows;
+})();
+app.get('/api/history', (req, res) => {
+  const days = Number(req.query.days ?? 30);
+  const user = String(req.query.user ?? '').toLowerCase();
+  const q = String(req.query.q ?? '').toLowerCase();
+  const server = String(req.query.server ?? '');
+  const since = days ? Date.now() - days * DAY : 0;
+  const ranged = histRows.filter((r) => Date.parse(r.at) >= since);
+  const servers = Object.values(HIST_SERVERS).map((x) => ({ ...x, plays: ranged.filter((r) => r.serverId === x.id).length })).filter((x) => x.plays).sort((a, b) => b.plays - a.plays);
+  const inRange = ranged.filter((r) => !server || r.serverId === server);
+  const rows = inRange.filter((r) => (!user || r.user.toLowerCase() === user) && (!q || `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q)));
+  const top = new Map<string, { title: string; plays: number; type: string; link?: string }>();
+  for (const r of rows) top.set(r.title, { title: r.title, type: r.type, link: r.link, plays: (top.get(r.title)?.plays ?? 0) + 1 });
+  res.json({
+    days,
+    servers,
+    users: HIST_USERS.map((u) => {
+      const mine = inRange.filter((r) => r.user === u.name);
+      return { name: u.name, id: u.id, plays: mine.length, watchedMs: mine.reduce((n, r) => n + r.watchedMs, 0), lastAt: mine[0]?.at };
+    }),
+    summary: {
+      plays: rows.length,
+      watchedMs: rows.reduce((n, r) => n + r.watchedMs, 0),
+      titles: top.size,
+      movies: rows.filter((r) => r.type === 'movie').length,
+      episodes: rows.filter((r) => r.type === 'episode').length,
+      transcodePct: rows.length ? Math.round((rows.filter((r) => r.method === 'Transcode').length / rows.length) * 100) : undefined,
+      top: [...top.values()].sort((a, b) => b.plays - a.plays).slice(0, 4),
+      device: user ? `${rows[0]?.client} · ${rows[0]?.device}` : undefined,
+    },
+    rows,
+    total: rows.length,
+    recordingSince: Date.now() - 140 * DAY,
+    serverHistory: 'jellyfin',
+  });
+});
 app.get('/api/settings/sso', json(() => ({
   enabled: true,
   issuer: 'https://auth.example.com/application/o/streamforge/',
@@ -1303,7 +1769,7 @@ app.get('/api/media/:type/:id', (req, res) => {
       })()
     : undefined;
   const pending = seerr().recent.filter((q) => q.title === t.title);
-  res.json({
+  const body = {
     type: tv ? 'tv' : 'movie',
     tmdbId: Number(req.params.id),
     title: t.title,
@@ -1324,6 +1790,13 @@ app.get('/api/media/:type/:id', (req, res) => {
     seasons,
     availability: !inLib ? (pending.length ? 'requested' : 'none') : tv && seasons!.some((x) => x.status !== 'available') ? 'partial' : 'available',
     jellyfin: inLib ? { itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' } : undefined,
+    // The same title on the main server and, for movies, on the Plex server too.
+    availableOn: inLib
+      ? [
+          { server: 'jellyfin', type: 'jellyfin', name: 'Homelab', main: true, itemId: slug(t.title), url: 'https://jellyfin.example.com/web/#/details?id=demo' },
+          ...(t.kind === 'movie' ? [{ server: PLEX.id, type: 'plex', name: 'Cabin', main: false, itemId: '4512', url: 'https://plex.example.com/web/index.html' }] : []),
+        ]
+      : [],
     library: inLib
       ? {
           itemId: slug(t.title),
@@ -1407,6 +1880,33 @@ app.get('/api/media/:type/:id', (req, res) => {
     requests: pending.map((q) => ({ id: q.id, status: q.status, requestedBy: q.requestedBy, createdAt: q.createdAt, is4k: q.is4k, seasons: q.seasons })),
     can: { request: !inLib || (tv && seasons!.some((x) => x.status !== 'available')), add: !inLib, search: inLib, approve: true },
     sources: { seerr: true, jellyfin: inLib },
+  };
+  // Three servers: the movie is on Homelab (two copies) and Cabin, not on Office.
+  if (SINGLE) body.availableOn = body.availableOn.slice(0, 1);
+  if (inLib && !tv) {
+    const [jfOn, plexOn] = body.availableOn as Record<string, unknown>[];
+    Object.assign(jfOn!, { files: body.library?.files, added: body.library?.added, plays: 5 });
+    if (plexOn) Object.assign(plexOn, {
+      added: iso(55 * DAY),
+      plays: 2,
+      files: [{ id: 'p1', container: 'mkv', size: 9.8 * GB, bitrate: 14_000_000, video: { codec: 'HEVC', resolution: '1080p', width: 1920, height: 804, range: 'HDR10', bitDepth: 10, fps: 23.98 }, audio: [{ language: 'eng', codec: 'EAC3', channels: '5.1', isDefault: true }], subtitles: [{ language: 'eng', codec: 'SRT', forced: false, external: true, sdh: false, isDefault: false }] }],
+    });
+  }
+  res.json({
+    ...body,
+    servers: [
+      { id: 'jellyfin', name: 'Homelab', type: 'jellyfin', main: true },
+      ...(SINGLE ? [] : [{ id: PLEX.id, name: PLEX.name, type: 'plex', main: false }, { id: EMBY.id, name: EMBY.name, type: 'emby', main: false }]),
+    ],
+    watchers: inLib
+      ? [
+          { user: 'Alex', at: iso(3 * DAY), plays: 2, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', client: 'Jellyfin Android TV', device: 'Living Room TV', watchedMs: 43 * MIN, source: 'recorded' },
+          SINGLE
+            ? { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', client: 'Jellyfin for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' }
+            : { user: 'Jordan', at: iso(14 * DAY), plays: 1, serverId: PLEX.id, serverName: PLEX.name, serverType: 'plex', client: 'Plex for LG', device: 'Living room TV', watchedMs: 110 * MIN, source: 'recorded' },
+          { user: 'Sam', at: iso(61 * DAY), plays: 1, serverId: 'jellyfin', serverName: 'Homelab', serverType: 'jellyfin', source: 'server' },
+        ]
+      : undefined,
   });
 });
 app.post('/api/media/search', (_req, res) => res.json({ ok: true, instance: 'Radarr' }));
@@ -1443,25 +1943,48 @@ app.get('/api/:kind/missing', (req, res) => {
 app.post('/api/:kind/search', (_req, res) => res.json({ ok: true }));
 app.post('/api/seerr/requests/:id/:decision', (_req, res) => res.json({ ok: true }));
 app.post('/api/jellyfin/sessions/:id/control', (_req, res) => res.json({ ok: true }));
+const STAT_SERVERS = [
+  { id: 'jellyfin', name: 'Homelab', type: 'jellyfin' as const, share: 0.6, clients: ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Findroid'], users: ['Alex', 'Maya', 'Leo', 'Sam'] },
+  { id: PLEX.id, name: PLEX.name, type: 'plex' as const, share: 0.28, clients: ['Plex for LG', 'Plex Web', 'Plex for iOS'], users: ['Priya', 'Alex', 'Jordan'] },
+  { id: EMBY.id, name: EMBY.name, type: 'emby' as const, share: 0.12, clients: ['Emby Theater', 'Emby for Android'], users: ['Maya', 'Sam'] },
+];
 app.get('/api/jellyfin/stats', (req, res) => {
   const days = Number(req.query.days) || 30;
-  const r = rng(`stats${days}`);
+  const statServers = SINGLE ? [{ ...STAT_SERVERS[0]!, share: 1, clients: ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Findroid'] }] : STAT_SERVERS;
+  const pickedServer = SINGLE ? undefined : STAT_SERVERS.find((x) => x.id === req.query.server);
+  const share = pickedServer?.share ?? 1;
+  const r = rng(`stats${days}${pickedServer?.id ?? ''}`);
   const daily = Array.from({ length: days }, (_, i) => {
     const d = new Date(Date.now() - (days - 1 - i) * DAY);
     const weekend = d.getDay() === 0 || d.getDay() === 6;
-    const direct = Math.round(r() * 6 + (weekend ? 5 : 2));
-    const transcode = Math.round(r() * 3);
+    const direct = Math.round((r() * 6 + (weekend ? 5 : 2)) * share);
+    const transcode = Math.round(r() * 3 * share);
     return { date: d.toISOString().slice(0, 10), plays: direct + transcode, direct, transcode, hours: Math.round((direct + transcode) * 0.8 * 10) / 10 };
   });
   const heatmap = Array.from({ length: 7 }, (_, w) =>
-    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r())),
+    Array.from({ length: 24 }, (_, h) => Math.round((h >= 18 && h <= 23 ? 6 : h >= 12 ? 2 : h < 2 ? 2 : 0) * (w >= 4 ? 1.6 : 1) * r() * share)),
   );
   const plays = daily.reduce((a, d) => a + d.plays, 0);
   const tc = daily.reduce((a, d) => a + d.transcode, 0);
-  const users = ['Alex', 'Maya', 'Leo', 'Priya', 'Sam'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
-  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
-  const clients = ['Jellyfin Android TV', 'Jellyfin Web', 'Swiftfin', 'Infuse'].map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
-  res.json({ days, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays, hours: Math.round(plays * 0.8), users: 5, transcodeShare: tc / plays }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
+  const users = (pickedServer?.users ?? ['Alex', 'Maya', 'Leo', 'Priya', 'Sam']).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 8) / 10 }));
+  const titles = ['Signal Fire', 'Low Tide', 'Atlas Station', 'Iron Bloom', 'Kitchen Brigade', 'Starfall Academy'].map((name, i) => ({ name, link: titleLink(name), plays: Math.round(plays / (i + 3)), hours: Math.round((plays / (i + 3)) * 7) / 10 }));
+  const clients = (pickedServer?.clients ?? (SINGLE ? statServers[0]!.clients : ['Jellyfin Android TV', 'Jellyfin Web', 'Plex for LG', 'Swiftfin', 'Emby Theater'])).map((name, i) => ({ name, plays: Math.round(plays / (i + 2)), hours: Math.round((plays / (i + 2)) * 9) / 10 }));
+  // Server plays add up to the all-servers total for the same range.
+  // The all-servers total, worked out the same way without a server picked.
+  const ra = rng(`stats${days}`);
+  const allPlays = Array.from({ length: days }, (_, i) => {
+    const d = new Date(Date.now() - (days - 1 - i) * DAY);
+    const weekend = d.getDay() === 0 || d.getDay() === 6;
+    return Math.round(ra() * 6 + (weekend ? 5 : 2)) + Math.round(ra() * 3);
+  }).reduce((a, b) => a + b, 0);
+  const servers = statServers.map((x, i) => {
+    // Shares rounded so the servers add up to the total exactly.
+    const before = statServers.slice(0, i).reduce((n, y) => n + Math.round(allPlays * y.share), 0);
+    return { id: x.id, name: x.name, type: x.type, plays: i === statServers.length - 1 ? allPlays - before : Math.round(allPlays * x.share) };
+  });
+  // The picked server's total matches its count in the filter.
+  const shown = pickedServer ? servers.find((x) => x.id === pickedServer.id)!.plays : plays;
+  res.json({ days, servers, server: pickedServer?.id, source: 'recorder', recording: true, recordingSince: iso(400 * DAY), totals: { plays: shown, hours: Math.round(shown * 0.8), users: users.length, transcodeShare: plays ? tc / plays : undefined }, daily, heatmap, topUsers: users, topTitles: titles, topClients: clients });
 });
 const cleanup: CleanupStatus = {
   settings: { enabled: true, stalledHours: 6, failed: true, action: 'blocklist-search' },

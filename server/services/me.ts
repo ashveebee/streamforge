@@ -2,6 +2,9 @@ import { db } from '../lib/db.js';
 import { cache } from '../lib/cache.js';
 import { isConfigured } from '../settings.js';
 import { jf, type JfCtx } from './jellyfin.js';
+import { mainEmby, mainPlex } from './mainServer.js';
+import { remote } from './jellyfin.js';
+import * as plex from './plex.js';
 import { userRequests } from './seerr.js';
 
 /* The signed-in user's own activity: what to watch next, history and requests. */
@@ -57,7 +60,25 @@ function card(i: JfItem) {
 
 const FIELDS = 'PrimaryImageAspectRatio,ParentBackdropItemId,ParentBackdropImageTags,BackdropImageTags';
 
-export async function myOverview(ctx: JfCtx) {
+/** Continue watching and next up: from Plex's On Deck when Plex is the sign-in server. */
+async function upNext(ctx: JfCtx, serverToken?: string) {
+  const p = mainPlex();
+  if (p) return plex.onDeck(p, ctx.userId, serverToken).catch(() => ({ resume: [], nextUp: [] }));
+  // Emby speaks Jellyfin's API: the same calls, with the user's own Emby token.
+  const e = mainEmby();
+  if (e) {
+    const as = { ...e, apiKey: ctx.token };
+    const [resume, nextUp] = await Promise.all([
+      cache.get(`jfx:${e.id}:resume:${ctx.userId}`, 30_000, () =>
+        remote<{ Items: JfItem[] }>(as, `/Users/${ctx.userId}/Items/Resume`, { Limit: 12, MediaTypes: 'Video', Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
+      ).catch(() => ({ Items: [] as JfItem[] })),
+      cache.get(`jfx:${e.id}:nextup:${ctx.userId}`, 60_000, () =>
+        remote<{ Items: JfItem[] }>(as, '/Shows/NextUp', { UserId: ctx.userId, Limit: 12, Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
+      ).catch(() => ({ Items: [] as JfItem[] })),
+    ]);
+    const onEmby = (c: ReturnType<typeof card>) => ({ ...c, image: c.image && { ...c.image, server: e.id } });
+    return { resume: (resume.Items ?? []).map(card).map(onEmby), nextUp: (nextUp.Items ?? []).map(card).map(onEmby) };
+  }
   const [resume, nextUp] = await Promise.all([
     cache.get(`jf:resume:${ctx.userId}`, 30_000, () =>
       jf<{ Items: JfItem[] }>(`/Users/${ctx.userId}/Items/Resume`, ctx.token, ctx.deviceId, { Limit: 12, MediaTypes: 'Video', Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
@@ -66,26 +87,34 @@ export async function myOverview(ctx: JfCtx) {
       jf<{ Items: JfItem[] }>('/Shows/NextUp', ctx.token, ctx.deviceId, { UserId: ctx.userId, Limit: 12, Fields: FIELDS, EnableImageTypes: 'Primary,Backdrop,Thumb' }),
     ).catch(() => ({ Items: [] })),
   ]);
+  return { resume: (resume.Items ?? []).map(card), nextUp: (nextUp.Items ?? []).map(card) };
+}
+
+export async function myOverview(ctx: JfCtx, serverToken?: string, userName = '') {
+  const { resume, nextUp } = await upNext(ctx, serverToken);
 
   // History comes from StreamForge's own recorder (needs a Jellyfin API key).
   const since = Date.now() - 30 * 86_400_000;
   const rows = db
-    .prepare('SELECT title, series, type, client, device, method, started_at, watched_ms FROM plays WHERE user_id = ? ORDER BY started_at DESC LIMIT 40')
-    .all(ctx.userId) as { title: string; series: string | null; type: string | null; client: string | null; device: string | null; method: string; started_at: number; watched_ms: number }[];
-  const month = db.prepare('SELECT COUNT(*) AS plays, COALESCE(SUM(watched_ms), 0) AS ms FROM plays WHERE user_id = ? AND started_at >= ? AND watched_ms >= 60000').get(ctx.userId, since) as {
+    // Plays on other servers carry that server's user id, so the user's name matches them too.
+    .prepare('SELECT title, series, type, client, device, method, started_at, watched_ms, server_name FROM plays WHERE user_id = ? OR (user_name IS NOT NULL AND lower(user_name) = lower(?)) ORDER BY started_at DESC LIMIT 40')
+    .all(ctx.userId, userName) as { title: string; series: string | null; type: string | null; client: string | null; device: string | null; method: string; started_at: number; watched_ms: number; server_name: string | null }[];
+  const month = db
+    .prepare('SELECT COUNT(*) AS plays, COALESCE(SUM(watched_ms), 0) AS ms FROM plays WHERE (user_id = ? OR (user_name IS NOT NULL AND lower(user_name) = lower(?))) AND started_at >= ? AND watched_ms >= 60000')
+    .get(ctx.userId, userName, since) as {
     plays: number;
     ms: number;
   };
 
   return {
-    resume: (resume.Items ?? []).map(card),
-    nextUp: (nextUp.Items ?? []).map(card),
+    resume,
+    nextUp,
     history: rows
       .filter((r) => r.watched_ms >= 60_000)
       .map((r) => ({
         title: r.series ?? r.title,
         subtitle: r.series ? r.title : undefined,
-        client: [r.client, r.device].filter(Boolean).join(' · ') || undefined,
+        client: [r.client, r.device, r.server_name].filter(Boolean).join(' · ') || undefined,
         transcoded: r.method === 'Transcode',
         at: new Date(r.started_at).toISOString(),
         watchedMs: r.watched_ms,

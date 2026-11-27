@@ -1,6 +1,7 @@
 import { readPref, writePref } from '../lib/db.js';
 import { emit } from './notify.js';
-import { controlSessionAsServer, serverNowPlaying, type NowPlaying } from './jellyfin.js';
+import type { NowPlaying } from './jellyfin.js';
+import { controlMainSession, mainNowPlaying, plexMode } from './mainServer.js';
 
 /*
  * Playback guard: watches active streams (needs the Jellyfin API key) and
@@ -65,7 +66,7 @@ async function check() {
   if (!settings.enabled) return;
   let streams: NowPlaying[] | undefined;
   try {
-    streams = await serverNowPlaying();
+    streams = await mainNowPlaying();
   } catch (err) {
     last = { ...last, error: (err as Error).message };
     return;
@@ -98,7 +99,8 @@ async function check() {
       if (messaged.has(key)) continue;
       messaged.add(key);
       alert('4k', '4K is being transcoded', `${label(s)} (${s.transcode?.reasons.join(', ') || 'client can’t play it directly'})`);
-      if (settings.fourK === 'message') await controlSessionAsServer(s.sessionId, 'message', settings.message).catch(() => undefined);
+      // Plex can't show a message, so it only gets the alert.
+      if (settings.fourK === 'message' && !plexMode()) await controlMainSession(s.sessionId, 'message', settings.message).catch(() => undefined);
     }
     const live = new Set(streams.map((s) => `${s.sessionId}:${s.item.id}`));
     for (const k of messaged) if (!live.has(k)) messaged.delete(k);

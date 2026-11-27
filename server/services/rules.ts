@@ -7,7 +7,8 @@ import { healthSnapshot } from '../health.js';
 import { adapterFor, clientsSnapshot, enabledClients } from './clients/index.js';
 import { runCleanup, stalledMap } from './cleanup.js';
 import { arrInstances } from './instances.js';
-import { jf, serverApiKey, serverNowPlaying, type JfCtx } from './jellyfin.js';
+import { jf, serverApiKey, type JfCtx } from './jellyfin.js';
+import { mainNowPlaying, notJellyfinMain } from './mainServer.js';
 import { emit } from './notify.js';
 import { reclaimSuggestions } from './reclaim.js';
 import { seerr } from './seerr.js';
@@ -83,6 +84,8 @@ const offlineSince = new Map<string, number>();
 
 /** A context for Jellyfin calls with the server API key and an admin's id. */
 async function serverCtx(): Promise<JfCtx | undefined> {
+  // With Plex as the sign-in server, library reads use the main Plex server's own token.
+  if (notJellyfinMain()) return { token: '', deviceId: 'streamforge-server', userId: '' };
   const key = serverApiKey();
   if (!key) return undefined;
   const users = await cache.get('jf:users:admins', 60 * 60_000, () => jf<{ Id: string; Policy?: { IsAdministrator?: boolean } }[]>('/Users', key, 'streamforge-server'));
@@ -124,7 +127,7 @@ async function evaluate(r: Rule): Promise<Result> {
       return { matched: c.pending >= n, summary: `${c.pending} request${c.pending === 1 ? '' : 's'} waiting` };
     }
     case 'active_streams': {
-      const streams = await serverNowPlaying();
+      const streams = await mainNowPlaying();
       if (!streams) return { matched: false, summary: 'Needs a Jellyfin API key' };
       return { matched: streams.length >= n, summary: `${streams.length} stream${streams.length === 1 ? '' : 's'} playing` };
     }

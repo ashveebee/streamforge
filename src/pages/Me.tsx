@@ -1,4 +1,5 @@
 import { Clock, History, Inbox, LaptopMinimal, ListVideo, LoaderCircle, LogOut, PlayCircle, Repeat, SkipForward } from 'lucide-react';
+import { useMainServer } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { useEndSession, useMe, useMyRequests, useMySessions, type MeCard } from '@/hooks/useMe';
 import { jfImage, jfUserImage } from '@/lib/api';
@@ -77,6 +78,7 @@ function Devices() {
 
 export default function MePage() {
   const { user } = useAuth();
+  const main = useMainServer();
   const q = useMe();
   const reqs = useMyRequests(!!q.data?.requestsAvailable);
   return (
@@ -112,7 +114,7 @@ export default function MePage() {
                     {!reqs.data ? (
                       <SkeletonRows rows={3} />
                     ) : !reqs.data.linked ? (
-                      <EmptyState icon={Inbox} title="Not linked to Seerr" description="Sign in to Seerr once with your Jellyfin account and your requests will show up here." />
+                      <EmptyState icon={Inbox} title="Not linked to Seerr" description={`Sign in to Seerr once with your ${main.name} account and your requests will show up here.`} />
                     ) : !reqs.data.requests.length ? (
                       <EmptyState icon={Inbox} title="No requests yet" />
                     ) : (
@@ -138,7 +140,7 @@ export default function MePage() {
                 <CardHeader icon={History} accent="var(--color-brand)" title="Watch history" subtitle="Recorded by StreamForge" />
                 <CardBody>
                   {!d.history.length ? (
-                    <EmptyState icon={History} title="No history yet" description="StreamForge records plays when a Jellyfin API key is set in Settings." />
+                    <EmptyState icon={History} title="No history yet" description={main.other ? 'Your plays will show up here as you watch.' : 'StreamForge records plays when a Jellyfin API key is set in Settings.'} />
                   ) : (
                     <ul className="max-h-[480px] divide-y divide-line overflow-y-auto">
                       {d.history.map((h, n) => (

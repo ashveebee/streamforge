@@ -3,7 +3,9 @@ import { db, readPref, writePref } from '../lib/db.js';
 import { HttpError } from '../lib/handle.js';
 import { coverUrl } from './arr.js';
 import { arrInstance, arrInstances, type ArrInstance } from './instances.js';
-import { jf, libraryItems, serverToken, type JfCtx } from './jellyfin.js';
+import { jf, serverToken, type JfCtx } from './jellyfin.js';
+import { allLibraryItems, idKeys, mainEmby, mainPlex, notJellyfinMain } from './mainServer.js';
+import * as plex from './plex.js';
 
 /*
  * Cleanup suggestions: big movies and series that nobody has watched in a
@@ -56,6 +58,14 @@ interface JfPlayed {
 
 /** Jellyfin item id (movie or series) → last time anyone played it. */
 async function lastPlayed(ctx: JfCtx) {
+  // Plex: the owner's library listing carries when each title was last watched.
+  const p = mainPlex();
+  if (p) {
+    const items = await plex.libraryItems(p);
+    return new Map(items.filter((i) => i.lastPlayed).map((i) => [i.id, i.lastPlayed!] as const));
+  }
+  // Emby: per-user watch data needs each user's token, so StreamForge's own play records stand in.
+  if (mainEmby()) return new Map<string, number>();
   return cache.get('jf:lastplayed', 30 * 60_000, async () => {
     const token = serverToken(ctx);
     const users = await jf<{ Id: string; Policy?: { IsDisabled?: boolean } }[]>('/Users', token, ctx.deviceId);
@@ -127,18 +137,19 @@ export interface Suggestion {
 export async function reclaimSuggestions(ctx: JfCtx, days: number) {
   return cache.get(`reclaim:${days}`, 10 * 60_000, async () => {
     const cutoff = Date.now() - days * 86_400_000;
-    const [jfItems, played] = await Promise.all([libraryItems(ctx), lastPlayed(ctx)]);
+    // Every server counts: a title watched on any of them isn't "unwatched".
+    const [lib, played] = await Promise.all([allLibraryItems(ctx), lastPlayed(ctx)]);
     const recorded = recordedPlays();
-    const byTmdb = new Map<string, string>();
-    const byTvdb = new Map<string, string>();
-    const byImdb = new Map<string, string>();
-    for (const i of jfItems) {
-      if (i.tmdb) byTmdb.set(i.tmdb, i.id);
-      if (i.tvdb) byTvdb.set(i.tvdb, i.id);
-      if (i.imdb) byImdb.set(i.imdb, i.id);
+    const watchedByKey = new Map<string, number>();
+    for (const i of lib.items) {
+      // The main server's own play data is keyed by its item id; Plex servers report it per item.
+      const t = Math.max(i.server.main ? (played.get(i.id) ?? 0) : 0, i.lastPlayed ?? 0);
+      if (!t) continue;
+      for (const k of idKeys(i)) if (t > (watchedByKey.get(k) ?? 0)) watchedByKey.set(k, t);
     }
     const keep = keepList();
-    const watchedAt = (jfId: string | undefined, title: string) => Math.max(jfId ? (played.get(jfId) ?? 0) : 0, recorded.get(title.toLowerCase()) ?? 0) || undefined;
+    const watchedAt = (ids: { tmdb?: number; tvdb?: number; imdb?: string }, title: string) =>
+      Math.max(...idKeys(ids).map((k) => watchedByKey.get(k) ?? 0), recorded.get(title.toLowerCase()) ?? 0) || undefined;
 
     const out: Suggestion[] = [];
     let kept = 0;
@@ -159,8 +170,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
           const movies = await cache.get(`${inst.id}:movies`, 60_000, () => inst.client.get<Movie[]>('/api/v3/movie')).catch(() => [] as Movie[]);
           for (const m of movies) {
             if (!m.hasFile) continue;
-            const jfId = (m.tmdbId && byTmdb.get(String(m.tmdbId))) || (m.imdbId && byImdb.get(m.imdbId)) || undefined;
-            const t = watchedAt(jfId, m.title);
+            const t = watchedAt({ tmdb: m.tmdbId, imdb: m.imdbId }, m.title);
             consider(
               {
                 key: `${inst.id}:movie:${m.id}`,
@@ -182,8 +192,7 @@ export async function reclaimSuggestions(ctx: JfCtx, days: number) {
         } else {
           const series = await cache.get(`${inst.id}:series`, 60_000, () => inst.client.get<Series[]>('/api/v3/series')).catch(() => [] as Series[]);
           for (const s of series) {
-            const jfId = (s.tvdbId && byTvdb.get(String(s.tvdbId))) || (s.imdbId && byImdb.get(s.imdbId)) || undefined;
-            const t = watchedAt(jfId, s.title);
+            const t = watchedAt({ tvdb: s.tvdbId, imdb: s.imdbId }, s.title);
             consider(
               {
                 key: `${inst.id}:series:${s.id}`,
@@ -232,4 +241,104 @@ export async function reclaim(kind: 'movie' | 'series', instanceId: string, id: 
   cache.delete(`${inst.id}:`);
   cache.delete('reclaim:');
   return { title: item.title, instance: inst.name };
+}
+
+/*
+ * Watched by everyone: movies and series that every chosen Jellyfin user has
+ * finished, so removing them frees space without taking away something
+ * someone still means to watch. Uses Jellyfin's own per-user watched state
+ * (a series counts once every episode is watched). Admins can leave out
+ * accounts that never watch anything, such as an admin or test account.
+ */
+
+const EXCLUDED = 'watchedByAllExcluded';
+
+interface JfWatched {
+  Id: string;
+  Type: string;
+  ProviderIds?: Record<string, string>;
+}
+
+/** Each enabled Jellyfin user and the movies and series they've finished. */
+async function usersWatched(ctx: JfCtx) {
+  return cache.get('jf:watchedbyuser', 30 * 60_000, async () => {
+    const token = serverToken(ctx);
+    const users = await jf<{ Id: string; Name: string; Policy?: { IsDisabled?: boolean; IsAdministrator?: boolean } }[]>('/Users', token, ctx.deviceId);
+    return Promise.all(
+      users
+        .filter((u) => !u.Policy?.IsDisabled)
+        .map(async (u) => {
+          const res = await jf<{ Items: JfWatched[] }>('/Items', token, ctx.deviceId, {
+            userId: u.Id,
+            Recursive: true,
+            IncludeItemTypes: 'Movie,Series',
+            Filters: 'IsPlayed',
+            Fields: 'ProviderIds',
+            EnableImages: false,
+            EnableUserData: false,
+            EnableTotalRecordCount: false,
+          });
+          const keys = new Set<string>();
+          for (const i of res.Items) {
+            const p = i.ProviderIds ?? {};
+            const ids = { tmdb: Number(p.Tmdb) || undefined, tvdb: Number(p.Tvdb) || undefined, imdb: p.Imdb || undefined };
+            for (const k of idKeys(ids)) keys.add(`${i.Type === 'Series' ? 'series' : 'movie'}:${k}`);
+          }
+          return { id: u.Id, name: u.Name, admin: !!u.Policy?.IsAdministrator, keys, count: res.Items.length };
+        }),
+    );
+  });
+}
+
+export function excludedUsers() {
+  return new Set(readPref<string[]>(EXCLUDED, []));
+}
+
+export function setExcludedUsers(ids: string[]) {
+  writePref(EXCLUDED, [...new Set(ids)].slice(0, 500));
+  cache.delete('reclaim:everyone');
+}
+
+export async function watchedByEveryone(ctx: JfCtx) {
+  if (notJellyfinMain()) return { supported: false as const, users: [], total: 0, reclaimable: 0, kept: 0, items: [] as Suggestion[], checkedAt: new Date().toISOString() };
+  return cache.get('reclaim:everyone', 10 * 60_000, async () => {
+    const all = await usersWatched(ctx);
+    const excluded = excludedUsers();
+    const counted = all.filter((u) => !excluded.has(u.id));
+    const users = all.map((u) => ({ id: u.id, name: u.name, admin: u.admin, watched: u.count, counted: !excluded.has(u.id) }));
+    const byAll = (kind: 'movie' | 'series', ids: { tmdb?: number; tvdb?: number; imdb?: string }) => {
+      const keys = idKeys(ids).map((k) => `${kind}:${k}`);
+      return counted.length > 0 && keys.length > 0 && counted.every((u) => keys.some((k) => u.keys.has(k)));
+    };
+    const keep = keepList();
+    const out: Suggestion[] = [];
+    let kept = 0;
+    const push = (s: Suggestion) => {
+      if (!s.size) return;
+      if (keep.has(s.key)) {
+        kept++;
+        return;
+      }
+      out.push(s);
+    };
+    await Promise.all(
+      arrInstances().map(async (inst: ArrInstance) => {
+        if (inst.kind === 'radarr') {
+          const movies = await cache.get(`${inst.id}:movies`, 60_000, () => inst.client.get<Movie[]>('/api/v3/movie')).catch(() => [] as Movie[]);
+          for (const m of movies) {
+            if (!m.hasFile || !byAll('movie', { tmdb: m.tmdbId, imdb: m.imdbId })) continue;
+            push({ key: `${inst.id}:movie:${m.id}`, kind: 'movie', instance: inst.id, instanceName: inst.primary ? undefined : inst.name, arrId: m.id, title: m.title, year: m.year, size: m.sizeOnDisk ?? 0, added: m.added, poster: coverUrl(inst, m.images), tmdbId: m.tmdbId });
+          }
+        } else if (inst.kind === 'sonarr') {
+          const series = await cache.get(`${inst.id}:series`, 60_000, () => inst.client.get<Series[]>('/api/v3/series')).catch(() => [] as Series[]);
+          for (const s of series) {
+            if (!byAll('series', { tvdb: s.tvdbId, tmdb: s.tmdbId, imdb: s.imdbId })) continue;
+            push({ key: `${inst.id}:series:${s.id}`, kind: 'series', instance: inst.id, instanceName: inst.primary ? undefined : inst.name, arrId: s.id, title: s.title, year: s.year, size: s.statistics?.sizeOnDisk ?? 0, added: s.added, poster: coverUrl(inst, s.images), ended: s.status === 'ended', tmdbId: s.tmdbId });
+          }
+        }
+      }),
+    );
+    out.sort((a, b) => b.size - a.size);
+    return { supported: true as const, users, total: out.length, reclaimable: out.reduce((n, s) => n + s.size, 0), kept, items: out.slice(0, 200), checkedAt: new Date().toISOString() };
+  });
 }

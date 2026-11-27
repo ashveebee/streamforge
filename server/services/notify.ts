@@ -31,6 +31,8 @@ export const EVENT_TYPES = [
   'weekly_digest',
   'rule',
   'update_available',
+  'kometa_error',
+  'kometa_run',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -232,6 +234,8 @@ const COLORS: Record<EventType | 'test', number> = {
   weekly_digest: 0x22d3ee,
   rule: 0xa78bfa,
   update_available: 0x818cf8,
+  kometa_error: 0xfb7185,
+  kometa_run: 0x34d399,
   test: 0xa78bfa,
 };
 const TAGS: Record<EventType | 'test', string> = {
@@ -246,6 +250,8 @@ const TAGS: Record<EventType | 'test', string> = {
   weekly_digest: 'newspaper',
   rule: 'robot',
   update_available: 'sparkles',
+  kometa_error: 'warning',
+  kometa_run: 'framed_picture',
   test: 'wave',
 };
 

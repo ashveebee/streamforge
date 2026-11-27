@@ -1,4 +1,4 @@
-import { Clapperboard, Film, LoaderCircle, MonitorPlay, RefreshCw, Repeat, ScanSearch, Users } from 'lucide-react';
+import { Clapperboard, Film, Plus, LoaderCircle, MonitorPlay, RefreshCw, Repeat, ScanSearch, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLibraryScan } from '@/hooks/useServices';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,11 @@ import { useJellyfin } from '@/hooks/queries';
 import { jfImage, jfUserImage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { ServiceHeader } from '@/components/layout/ServiceHeader';
-import { JellyfinServerTabs, useSelectedJellyfinServer } from '@/components/layout/InstanceTabs';
+import { MediaServerTabs, useSelectedMediaServer, useServersOfType } from '@/components/layout/InstanceTabs';
+import { Link } from 'react-router';
+import { MEDIA_SERVERS } from '@/components/ui/ServiceIcon';
+import { EmptyState } from '@/components/ui/States';
+import type { MediaServerType } from '@/lib/types';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Avatar, FadeImage } from '@/components/ui/Image';
 import { KV, StatTile } from '@/components/ui/Stat';
@@ -20,23 +24,58 @@ import { PlaysWidget } from '@/components/widgets/PlaysWidget';
 import { RecentlyAddedWidget } from '@/components/widgets/RecentlyAddedWidget';
 import { PageLoader } from '@/components/ui/Loader';
 
-export default function JellyfinPage() {
-  const server = useSelectedJellyfinServer();
+/** Emby and Plex pages before any server of that kind has been added. */
+function NoServers({ type }: { type: MediaServerType }) {
+  const { user } = useAuth();
+  const name = MEDIA_SERVERS[type].name;
+  return (
+    <>
+      <ServiceHeader id="jellyfin" media={type} />
+      <Card>
+        <EmptyState
+          icon={MEDIA_SERVERS[type].icon}
+          title={`No ${name} servers yet`}
+          description={`Add a ${name} server under Settings → Services → ${name} to see its streams, libraries and health here.`}
+          action={
+            user?.isAdmin ? (
+              <Link to="/settings" className="inline-flex h-9 items-center gap-2 rounded-xl border border-line-strong px-3 text-sm font-medium text-ink-2 hover:bg-white/[0.06]">
+                <Plus className="size-3.5" /> Add a {name} server
+              </Link>
+            ) : undefined
+          }
+        />
+      </Card>
+    </>
+  );
+}
+
+/** The Jellyfin, Emby or Plex page: one tab per server of that kind. */
+export default function MediaServerPage({ type = 'jellyfin' }: { type?: MediaServerType }) {
+  const server = useSelectedMediaServer(type);
+  if (!server) return <NoServers type={type} />;
+  return <ServerView key={server} type={type} server={server} />;
+}
+
+function ServerView({ type, server }: { type: MediaServerType; server: string }) {
   const extra = server !== 'jellyfin' ? server : undefined;
+  // The sign-in server (main Jellyfin, or main Plex) gets scans and play history.
+  const isMain = useServersOfType(type).find((s) => s.id === server)?.primary ?? server === 'jellyfin';
+  const typeName = MEDIA_SERVERS[type].name;
+  const accent = MEDIA_SERVERS[type].color;
   const q = useJellyfin(server);
   const { user } = useAuth();
   // Scans, tasks and play history are only available for the main server.
-  const admin = !!user?.isAdmin && !extra;
+  const admin = !!user?.isAdmin && isMain;
   const scan = useLibraryScan();
   return (
     <>
-      <ServiceHeader id="jellyfin" instance={extra} />
-      <JellyfinServerTabs />
-      <QueryState key={server} query={q} skeleton={<PageLoader label="Loading Jellyfin" hint="Fetching libraries, users and server details…" />}>
+      <ServiceHeader id="jellyfin" instance={extra} media={type} />
+      <MediaServerTabs type={type} />
+      <QueryState key={server} query={q} skeleton={<PageLoader label={`Loading ${typeName}`} hint="Fetching libraries, users and server details…" />}>
         {(d) => (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Active streams" value={d.sessions.streams} icon={MonitorPlay} accent="var(--color-jellyfin)" hint={`${d.sessions.active} connected sessions`} />
+              <StatTile label="Active streams" value={d.sessions.streams} icon={MonitorPlay} accent={accent} hint={`${d.sessions.active} connected sessions`} />
               <StatTile label="Transcoding" value={d.sessions.transcoding} icon={Repeat} accent="var(--color-warn)" hint={`${d.sessions.directPlay} direct`} />
               <StatTile label="Users" value={d.users.total} icon={Users} accent="var(--color-seerr)" hint={`${d.users.active24h} active in 24h`} />
               <StatTile label="Titles" value={d.counts.movies + d.counts.series} icon={Film} accent="var(--color-radarr)" hint={`${d.counts.movies.toLocaleString()} movies · ${d.counts.series.toLocaleString()} series`} />
@@ -46,7 +85,7 @@ export default function JellyfinPage() {
               <Card className="xl:col-span-2">
                 <CardHeader
                   icon={Clapperboard}
-                  accent="var(--color-jellyfin)"
+                  accent={accent}
                   title="Libraries"
                   subtitle={scan.error ? <span className="text-bad">{(scan.error as Error).message}</span> : `${d.libraries.length} libraries`}
                   action={
@@ -63,7 +102,7 @@ export default function JellyfinPage() {
                       const Icon = LIBRARY_ICONS[l.type] ?? Clapperboard;
                       return (
                         <div key={l.id} className="group relative overflow-hidden rounded-2xl border border-line">
-                          <FadeImage src={jfImage(l.image, 600)} alt="" className="aspect-video" imgClassName="transition-transform duration-700 group-hover:scale-105" fallback={<div className="size-full bg-gradient-to-br from-jellyfin/30 to-surface-3" />} />
+                          <FadeImage src={jfImage(l.image, 600)} alt="" className="aspect-video" imgClassName="transition-transform duration-700 group-hover:scale-105" fallback={<div className="size-full" style={{ background: `linear-gradient(135deg, color-mix(in oklab, ${accent} 30%, transparent), var(--color-surface-3))` }} />} />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
                           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
                             <div className="min-w-0">
@@ -115,11 +154,11 @@ export default function JellyfinPage() {
               </Card>
             </div>
 
-            <RecentlyAddedWidget server={server} />
+            <RecentlyAddedWidget server={server} serverType={type} />
 
             <div className="grid gap-5 xl:grid-cols-3">
-              {!extra && <div className="xl:col-span-2"><PlaysWidget /></div>}
-              <Card className={extra ? 'xl:col-span-3' : undefined}>
+              {isMain && <div className="xl:col-span-2"><PlaysWidget /></div>}
+              <Card className={!isMain ? 'xl:col-span-3' : undefined}>
                 <CardHeader icon={Users} title="Users" subtitle="Most recently active first" />
                 <CardBody>
                   <ul className="space-y-1">
@@ -137,8 +176,8 @@ export default function JellyfinPage() {
                 </CardBody>
               </Card>
             </div>
-            {admin && <JellyfinTasks />}
-            <ActivityWidget limit={15} server={server} />
+            {admin && type === 'jellyfin' && <JellyfinTasks />}
+            <ActivityWidget limit={15} server={server} serverType={type} />
           </div>
         )}
       </QueryState>

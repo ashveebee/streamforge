@@ -1,8 +1,8 @@
 import { cache } from '../lib/cache.js';
-import { isConfigured } from '../settings.js';
 import { coverUrl } from './arr.js';
 import { arrInstances, type ArrInstance } from './instances.js';
-import * as jellyfin from './jellyfin.js';
+import type * as jellyfin from './jellyfin.js';
+import { allLibraryItems, idKeys, mainName, mediaReady } from './mainServer.js';
 
 /*
  * Library health: things that are quietly wrong across Sonarr, Radarr and
@@ -75,7 +75,7 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
   const [seriesLists, movieLists, jf] = await Promise.all([
     Promise.all(sonarrs.map((i) => cache.get(`${i.id}:series`, 60_000, () => i.client.get<Series[]>('/api/v3/series')).then((list) => ({ i, list })))),
     Promise.all(radarrs.map((i) => cache.get(`${i.id}:movies`, 60_000, () => i.client.get<Movie[]>('/api/v3/movie')).then((list) => ({ i, list })))),
-    isConfigured('jellyfin') ? jellyfin.libraryItems(ctx).catch(() => undefined) : Promise.resolve(undefined),
+    mediaReady() ? allLibraryItems(ctx).catch(() => undefined) : Promise.resolve(undefined),
   ]);
   const tag = (i: ArrInstance) => ({ instance: i.id, instanceName: i.primary ? undefined : i.name });
 
@@ -108,13 +108,12 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
   /* cross-checks with Jellyfin */
   let notInJellyfin: HealthItem[] | undefined;
   let unmanaged: HealthItem[] | undefined;
-  if (jf) {
+  // Compared with every media server: a download is only "missing" when no server has it.
+  const lib = jf && jf.servers.length && jf.failed.length < jf.servers.length ? jf.items : undefined;
+  const several = (jf?.servers.length ?? 0) > 1;
+  if (lib) {
     const ids = new Set<string>();
-    for (const j of jf) {
-      if (j.tvdb) ids.add(`tvdb:${j.tvdb}`);
-      if (j.tmdb) ids.add(`tmdb:${j.tmdb}`);
-      if (j.imdb) ids.add(`imdb:${j.imdb}`);
-    }
+    for (const j of lib) for (const k of idKeys(j)) ids.add(k);
     notInJellyfin = [];
     for (const { i, list } of seriesLists) {
       for (const s of list) {
@@ -141,17 +140,28 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
       if (m.imdbId) managed.add(`imdb:${m.imdbId}`);
     }
     unmanaged = [];
-    for (const j of jf) {
+    // The same title on several servers is listed once, naming where it is.
+    const seen = new Map<string, HealthItem & { where: string[] }>();
+    for (const j of lib) {
       // Only compare against apps that exist: no Radarr means movies can't be "unmanaged".
       if (j.type === 'Series' ? !sonarrs.length : !radarrs.length) continue;
-      const keys = [j.tvdb && `tvdb:${j.tvdb}`, j.tmdb && `tmdb:${j.tmdb}`, j.imdb && `imdb:${j.imdb}`].filter(Boolean) as string[];
+      const keys = idKeys(j);
       if (keys.some((k) => managed.has(k))) continue;
-      unmanaged.push({
+      const key = keys[0] ?? `${j.type}:${j.name.toLowerCase()}:${j.year ?? ''}`;
+      const cur = seen.get(key);
+      if (cur) {
+        if (!cur.where.includes(j.server.name)) cur.where.push(j.server.name);
+        continue;
+      }
+      const serverName = { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[j.server.type];
+      seen.set(key, {
         title: j.name,
         year: j.year,
-        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : 'No metadata ids — identify it in Jellyfin',
+        detail: keys.length ? `${j.type === 'Series' ? 'Series' : 'Movie'} not in ${j.type === 'Series' ? 'Sonarr' : 'Radarr'}` : `No metadata ids — identify it in ${serverName}`,
+        where: [j.server.name],
       });
     }
+    for (const { where, ...item } of seen.values()) unmanaged.push(several ? { ...item, detail: `${item.detail} · on ${where.join(', ')}` } : item);
     unmanaged.sort((a, b) => a.title.localeCompare(b.title));
     notInJellyfin.sort((a, b) => a.title.localeCompare(b.title));
   }
@@ -161,7 +171,11 @@ export async function libraryHealth(ctx: jellyfin.JfCtx) {
     checkedAt: new Date().toISOString(),
     hasSonarr: sonarrs.length > 0,
     hasRadarr: radarrs.length > 0,
-    hasJellyfin: !!jf,
+    hasJellyfin: !!lib,
+    /** What the library cross-checks compare with: one server's kind, or every media server. */
+    server: several ? 'your media servers' : jf?.servers[0] ? { jellyfin: 'Jellyfin', plex: 'Plex', emby: 'Emby' }[jf.servers[0].type] : mainName(),
+    /** Servers that couldn't be read, so their titles weren't compared. */
+    unreachable: jf?.failed.length ? jf.failed : undefined,
     incomplete: section(incomplete),
     upgrades,
     notInJellyfin: section(notInJellyfin),

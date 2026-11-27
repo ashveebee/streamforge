@@ -22,12 +22,12 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useCanSee, useServiceConfig } from '@/hooks/queries';
+import { useCanSee, useMainServer, useServiceConfig } from '@/hooks/queries';
 import { useAddMedia, useGlobalSearch, useRequestMedia, type SearchHit } from '@/hooks/useSearch';
 import { cn } from '@/lib/cn';
 import type { ServiceId } from '@/lib/types';
 import { FadeImage } from '../ui/Image';
-import { SERVICES } from '../ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '../ui/ServiceIcon';
 import { Pill } from '../ui/Status';
 
 interface PageCmd {
@@ -66,6 +66,12 @@ function usePages(): PageCmd[] {
     for (const id of Object.keys(SERVICES) as ServiceId[]) {
       if (cfg && !cfg.enabled[id]) continue;
       out.push({ key: `p:${SERVICES[id].path}`, label: SERVICES[id].name, path: SERVICES[id].path, icon: SERVICES[id].icon, keywords: SERVICES[id].tagline });
+    }
+    // Emby and Plex pages, once a server of that kind is set up.
+    for (const t of ['emby', 'plex'] as const) {
+      if (!cfg?.jellyfinServers?.some((s) => s.type === t) || (cfg && !cfg.enabled.jellyfin)) continue;
+      const m = MEDIA_SERVERS[t];
+      out.push({ key: `p:${m.path}`, label: m.name, path: m.path, icon: m.icon, keywords: m.tagline });
     }
     return out;
   }, [user?.isAdmin, canSee, cfg]);
@@ -165,6 +171,7 @@ class PaletteBoundary extends Component<{ children: React.ReactNode; onReset: ()
 }
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const main = useMainServer();
   const [text, setText] = useState('');
   const q = useDeferredValue(text.trim());
   const pages = usePages();
@@ -286,7 +293,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   {s.hits.map((h) => {
                     const i = ++idx;
                     const st = h.status ? STATUS[h.status] : undefined;
-                    const svc = SERVICES[h.source as ServiceId];
+                    const svc = h.source === 'plex' || h.source === 'emby' ? MEDIA_SERVERS[h.source] : SERVICES[h.source as ServiceId];
                     return (
                       <div key={h.key} id={`cmd-${i}`} role="option" aria-selected={active === i} onMouseMove={() => setActive(i)} onClick={() => go(i)} className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2', active === i ? 'bg-white/[0.07]' : '')}>
                         <FadeImage src={h.image} alt="" className="h-12 w-8 shrink-0 rounded-md ring-1 ring-white/10" />
@@ -321,7 +328,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               <span><kbd className="font-sans">↑↓</kbd> to move</span>
               <span><kbd className="font-sans">↵</kbd> to open</span>
               {d?.canRequest && <span className="hidden sm:inline"><kbd className="font-sans">⇧↵</kbd> to request</span>}
-              <span className="ml-auto">Searches Jellyfin, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
+              <span className="ml-auto">Searches {main.name}, your *arr apps{d?.canRequest ? ' and Seerr' : ''}</span>
             </div>
           </motion.div>
         </motion.div>

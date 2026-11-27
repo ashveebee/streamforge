@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AudioLines, Captions, Check, ChevronDown, CircleSlash, Clock, LoaderCircle, Play, Search, Star } from 'lucide-react';
-import { useJellyfinEpisodes, useSeasonEpisodes, useTitleSearch, type Episode, type EpisodeStatus, type SeasonEpisode } from '@/hooks/useMedia';
+import { useJellyfinEpisodes, useSeasonEpisodes, useTitleSearch, type Episode, type EpisodeStatus, type EpisodeWatch, type SeasonEpisode } from '@/hooks/useMedia';
+import { SERVER_COLOR, SERVER_NAME } from '@/components/ui/ServerTag';
 import { useAuth } from '@/hooks/useAuth';
 import { bytes, relative } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -19,6 +20,37 @@ const STATUS: Record<EpisodeStatus, { label: string; cls: string }> = {
 };
 
 type Filter = 'all' | 'have' | 'missing';
+
+/** "Plex · claudia: you watched it · also Reya, Dee" */
+function watchTitle(w: EpisodeWatch) {
+  const who = [w.me ? 'you watched it' : w.progress ? `you're ${w.progress}% in` : undefined, w.others ? (w.otherNames?.length ? `${w.me || w.progress ? 'also ' : 'watched by '}${w.otherNames.join(', ')}` : `${w.others} other${w.others === 1 ? '' : 's'}`) : undefined];
+  return `${SERVER_NAME[w.type]} · ${w.name}: ${who.filter(Boolean).join(' · ')}`;
+}
+
+/** A tick per server in its colour: solid when you've watched it there, outlined when only someone else has. */
+function WatchTicks({ list }: { list: EpisodeWatch[] }) {
+  const shown = list.filter((w) => w.me || w.others);
+  if (!shown.length) return null;
+  return (
+    <span className="absolute top-1 right-1 flex gap-0.5">
+      {shown.map((w) => (
+        <span
+          key={w.server}
+          title={watchTitle(w)}
+          aria-label={watchTitle(w)}
+          className="grid size-5 place-items-center rounded-full border-2 shadow-sm shadow-black/40"
+          style={
+            w.me
+              ? { background: SERVER_COLOR[w.type], borderColor: SERVER_COLOR[w.type], color: 'black' }
+              : { background: 'rgb(0 0 0 / 0.55)', borderColor: SERVER_COLOR[w.type], color: SERVER_COLOR[w.type] }
+          }
+        >
+          <Check className="size-3" strokeWidth={3} />
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   if (children === undefined || children === null || children === '' || children === false) return null;
@@ -45,7 +77,23 @@ function EpisodeDetail({ e, seriesId }: { e: SeasonEpisode; seriesId?: number })
         <Fact label="Runtime">{e.runtimeMin ? `${e.runtimeMin} min` : undefined}</Fact>
         <Fact label="Rating">{e.rating ? <><Star className="mr-1 inline size-3 fill-current text-warn" />{e.rating.toFixed(1)}</> : undefined}</Fact>
         <Fact label="Status">{STATUS[e.status].label}{e.monitored === false && e.status !== 'unmonitored' ? ' · not monitored' : ''}</Fact>
-        <Fact label="Watched">{w ? (w.played ? `Yes${w.playCount > 1 ? ` · ${w.playCount} times` : ''}` : w.progress ? `${w.progress}% · ${w.remainingMin ?? '?'} min left` : 'Not yet') : undefined}</Fact>
+        {e.watched ? (
+          <div className="col-span-2 min-w-0">
+            <dt className="text-[10.5px] tracking-wide text-ink-4 uppercase">Watched</dt>
+            <dd className="space-y-0.5 text-[13px] text-ink-2">
+              {e.watched.length
+                ? e.watched.map((x) => (
+                    <div key={x.server} className="flex items-center gap-1.5">
+                      <i className="size-[7px] shrink-0 rounded-full" style={{ background: SERVER_COLOR[x.type] }} />
+                      <span className="truncate">{watchTitle(x)}</span>
+                    </div>
+                  ))
+                : 'Not yet'}
+            </dd>
+          </div>
+        ) : (
+          <Fact label="Watched">{w ? (w.played ? `Yes${w.playCount > 1 ? ` · ${w.playCount} times` : ''}` : w.progress ? `${w.progress}% · ${w.remainingMin ?? '?'} min left` : 'Not yet') : undefined}</Fact>
+        )}
         <Fact label="Last played">{w?.lastPlayed ? relative(w.lastPlayed) : undefined}</Fact>
         <Fact label="Quality">{e.quality ?? v?.resolution}</Fact>
         <Fact label="Size">{e.size ? bytes(e.size) : undefined}</Fact>
@@ -113,17 +161,23 @@ function EpisodeItem({ e, seriesId }: { e: SeasonEpisode; seriesId?: number }) {
   const [open, setOpen] = useState(false);
   const w = e.jellyfin?.watch;
   const have = e.status === 'available';
+  // Your progress on whichever server you're partway through it.
+  const progress = e.watched ? e.watched.find((x) => x.progress)?.progress : w?.progress;
   return (
     <li className={cn('rounded-xl transition', open && 'bg-white/[0.03] ring-1 ring-line')}>
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full gap-3 rounded-xl p-2 text-left transition hover:bg-white/[0.04]">
         <div className={cn('relative w-28 shrink-0 sm:w-36', !have && 'opacity-60 grayscale-[60%]')}>
           <FadeImage src={e.still} alt="" className="aspect-video rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3 text-[11px] text-ink-4">E{e.number}</div>} />
-          {w?.played && (
-            <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label="Watched">
-              <Check className="size-3" strokeWidth={3} />
-            </span>
+          {e.watched ? (
+            <WatchTicks list={e.watched} />
+          ) : (
+            w?.played && (
+              <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-ok text-black" aria-label="Watched">
+                <Check className="size-3" strokeWidth={3} />
+              </span>
+            )
           )}
-          {w?.progress ? <ProgressBar value={w.progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label="Watched" /> : null}
+          {progress ? <ProgressBar value={progress / 100} height={3} glow={false} className="absolute inset-x-1.5 bottom-1.5 w-auto" label="Watched" /> : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
@@ -183,6 +237,13 @@ function EpisodeList({ episodes, seriesId, sonarr }: { episodes: SeasonEpisode[]
             </button>
           ))}
         </div>
+        {episodes.some((e) => e.watched?.length) && (
+          <div className="flex items-center gap-2.5 text-[11px] text-ink-4" aria-hidden>
+            <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full bg-ink-3 text-black"><Check className="size-2.5" strokeWidth={3} /></span>You</span>
+            {user?.isAdmin && <span className="inline-flex items-center gap-1"><span className="grid size-3.5 place-items-center rounded-full border-[1.5px] border-ink-3 text-ink-3"><Check className="size-2.5" strokeWidth={3} /></span>Someone else</span>}
+            <span>· in each server’s colour</span>
+          </div>
+        )}
         {user?.isAdmin && sonarr && missingIds.length > 0 && (
           <Button
             size="sm"

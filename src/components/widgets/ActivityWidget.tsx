@@ -1,6 +1,8 @@
 import { CircleAlert, History, Info, LogIn, Play, Square, TriangleAlert } from 'lucide-react';
-import { useActivity } from '@/hooks/queries';
+import { useActivity, useMainServer } from '@/hooks/queries';
 import { relative } from '@/lib/format';
+import type { MediaServerType } from '@/lib/types';
+import { MEDIA_SERVERS } from '../ui/ServiceIcon';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { EmptyState, QueryState, SkeletonRows } from '../ui/States';
 
@@ -13,12 +15,14 @@ function iconFor(type: string, severity: string) {
   return { Icon: Info, cls: 'text-ink-3' };
 }
 
-/** `server` picks an extra Jellyfin server; the main one by default. */
-export function ActivityWidget({ limit = 8, server }: { limit?: number; server?: string }) {
+/** `server` picks an extra media server; the main one by default. */
+export function ActivityWidget({ limit = 8, server, serverType: given }: { limit?: number; server?: string; serverType?: MediaServerType }) {
+  const main = useMainServer();
+  const serverType = given ?? main.type;
   const q = useActivity(server);
   return (
     <Card className="h-full">
-      <CardHeader icon={History} accent="var(--color-jellyfin)" title="Server activity" subtitle="Jellyfin activity log" />
+      <CardHeader icon={History} accent={MEDIA_SERVERS[serverType].color} title="Server activity" subtitle={serverType === 'plex' ? 'Recent plays from Plex watch history' : `${serverType === 'emby' ? 'Emby' : 'Jellyfin'} activity log`} />
       <CardBody>
         <QueryState
           query={q}

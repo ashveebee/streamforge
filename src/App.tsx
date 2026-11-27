@@ -4,7 +4,7 @@ import { createBrowserRouter, Navigate, Outlet, RouterProvider, useRouteError } 
 import { AnimatePresence } from 'motion/react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useCanSee } from '@/hooks/queries';
+import { useCanSee, useSetupState } from '@/hooks/queries';
 import type { Area } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/States';
@@ -14,7 +14,9 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 
 const NowPlaying = lazyPage(() => import('@/pages/NowPlaying'));
-const Jellyfin = lazyPage(() => import('@/pages/Jellyfin'));
+const MediaServer = lazyPage(() => import('@/pages/MediaServer'));
+const Kometa = lazyPage(() => import('@/pages/Kometa'));
+const KometaCollection = lazyPage(() => import('@/pages/KometaCollection'));
 const Sonarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.SonarrPage })));
 const Radarr = lazyPage(() => import('@/pages/Arr').then((m) => ({ default: m.RadarrPage })));
 const Prowlarr = lazyPage(() => import('@/pages/Prowlarr'));
@@ -26,6 +28,7 @@ const Infinidisk = lazyPage(() => import('@/pages/Infinidisk'));
 const System = lazyPage(() => import('@/pages/System'));
 const Stats = lazyPage(() => import('@/pages/Stats'));
 const LibraryHealth = lazyPage(() => import('@/pages/LibraryHealth'));
+const History = lazyPage(() => import('@/pages/History'));
 const Rules = lazyPage(() => import('@/pages/Rules'));
 const Digest = lazyPage(() => import('@/pages/Digest'));
 const Media = lazyPage(() => import('@/pages/MediaDetails').then((m) => ({ default: m.MediaPage })));
@@ -35,6 +38,7 @@ const Downloads = lazyPage(() => import('@/pages/Downloads'));
 const Audit = lazyPage(() => import('@/pages/Audit'));
 const Diagnose = lazyPage(() => import('@/pages/Diagnose'));
 const Settings = lazyPage(() => import('@/pages/Settings'));
+const SetupApps = lazyPage(() => import('@/pages/SetupApps'));
 const NotFound = lazyPage(() => import('@/pages/NotFound'));
 
 function Splash() {
@@ -46,10 +50,26 @@ function Splash() {
 }
 
 function Protected() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
+  const setup = useSetupState(status === 'authenticated' && !!user?.isAdmin);
   if (status === 'loading') return <Splash />;
   if (status === 'anonymous') return <Navigate to="/login" replace />;
+  // First run, step 2: the first admin connects their apps before the dashboard.
+  if (user?.isAdmin && setup.data?.appsDone === false) return <Navigate to="/setup" replace />;
   return <AppShell />;
+}
+
+/** Setup step 2, full screen (no sidebar). Admins only. */
+function SetupRoute() {
+  const { status, user } = useAuth();
+  if (status === 'loading') return <Splash />;
+  if (status === 'anonymous') return <Navigate to="/login" replace />;
+  if (!user?.isAdmin) return <Navigate to="/" replace />;
+  return (
+    <Suspense fallback={<Splash />}>
+      <SetupApps />
+    </Suspense>
+  );
 }
 
 function PublicOnly() {
@@ -65,7 +85,7 @@ function AreaGate({ area, children }: { area?: Area; children: React.ReactNode }
   if (area && !canSee(area)) {
     return (
       <Card>
-        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask a Jellyfin administrator if you need it." />
+        <EmptyState icon={Lock} title="Not available" description="Your account doesn’t have access to this page. Ask an administrator if you need it." />
       </Card>
     );
   }
@@ -97,6 +117,7 @@ function RouteError() {
 
 const router = createBrowserRouter([
   { element: <PublicOnly />, children: [{ path: '/login', element: <Login /> }] },
+  { path: '/setup', element: <SetupRoute />, errorElement: <RouteError /> },
   {
     element: <Protected />,
     errorElement: <RouteError />,
@@ -105,6 +126,7 @@ const router = createBrowserRouter([
       { path: '/now-playing', element: page(<NowPlaying />, 'now-playing') },
       { path: '/system', element: page(<System />, 'system') },
       { path: '/stats', element: page(<Stats />, 'stats') },
+      { path: '/history', element: page(<History />) },
       { path: '/library', element: page(<LibraryHealth />, 'library') },
       { path: '/settings', element: page(<Settings />) },
       { path: '/settings/:section', element: page(<Settings />) },
@@ -116,7 +138,11 @@ const router = createBrowserRouter([
       { path: '/digest', element: page(<Digest />) },
       { path: '/rules', element: page(<Rules />) },
       { path: '/downloads', element: page(<Downloads />, 'downloads') },
-      { path: '/jellyfin', element: page(<Jellyfin />, 'jellyfin') },
+      { path: '/jellyfin', element: page(<MediaServer type="jellyfin" />, 'jellyfin') },
+      { path: '/emby', element: page(<MediaServer type="emby" />, 'jellyfin') },
+      { path: '/plex', element: page(<MediaServer type="plex" />, 'jellyfin') },
+      { path: '/kometa', element: page(<Kometa />, 'system') },
+      { path: '/kometa/:id', element: page(<KometaCollection />, 'system') },
       { path: '/sonarr', element: page(<Sonarr />, 'sonarr') },
       { path: '/radarr', element: page(<Radarr />, 'radarr') },
       { path: '/prowlarr', element: page(<Prowlarr />, 'prowlarr') },

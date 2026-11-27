@@ -9,6 +9,8 @@ interface AuthState {
   /** Resolves with a challenge when a two-factor code is needed next. */
   login: (username: string, password: string) => Promise<{ mfaChallenge?: string }>;
   verifyMfa: (challenge: string, code: string) => Promise<void>;
+  /** Records a sign-in finished elsewhere (Sign in with Plex). */
+  signedIn: (user: User) => void;
   logout: () => Promise<void>;
 }
 
@@ -52,6 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated');
   }, []);
 
+  const signedIn = useCallback((u: User) => {
+    setUser(u);
+    setStatus('authenticated');
+  }, []);
+
   const logout = useCallback(async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
     setUser(null);
@@ -59,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     qc.clear();
   }, [qc]);
 
-  const value = useMemo(() => ({ user, status, login, verifyMfa, logout }), [user, status, login, verifyMfa, logout]);
+  const value = useMemo(() => ({ user, status, login, verifyMfa, signedIn, logout }), [user, status, login, verifyMfa, signedIn, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

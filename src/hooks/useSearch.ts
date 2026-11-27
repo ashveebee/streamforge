@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 
 export interface SearchHit {
   key: string;
-  source: 'jellyfin' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
+  source: 'jellyfin' | 'plex' | 'emby' | 'sonarr' | 'radarr' | 'lidarr' | 'readarr' | 'seerr';
   title: string;
   subtitle?: string;
   year?: number;

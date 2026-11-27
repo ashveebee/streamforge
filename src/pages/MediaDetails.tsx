@@ -34,13 +34,17 @@ import {
   type CastMember,
   type Episode,
   type LibraryInfo,
+  type MediaFile,
+  type TitleWatcher,
   type MediaDetails as Details,
   type MediaType,
   type Season,
   type WatchState,
 } from '@/hooks/useMedia';
-import { useAddMedia, useRequestMedia } from '@/hooks/useSearch';
+import { useRequestMedia } from '@/hooks/useSearch';
+import { AddToArrDialog } from '@/components/media/AddToArrDialog';
 import { bytes, dayLabel, relative } from '@/lib/format';
+import { History as HistoryIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -53,7 +57,9 @@ import { WillItPlay } from '@/components/media/WillItPlay';
 import { episodeLabel, longDate, MediaInfo, Row } from '@/components/media/parts';
 import { ProgressBar } from '@/components/ui/Progress';
 import { ErrorState } from '@/components/ui/States';
-import { SERVICES } from '@/components/ui/ServiceIcon';
+import { MEDIA_SERVERS, SERVICES } from '@/components/ui/ServiceIcon';
+import { ServerTag } from '@/components/ui/ServerTag';
+import { Avatar } from '@/components/ui/Image';
 
 const AVAILABILITY: Record<Availability, { label: string; tone: 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' }> = {
   available: { label: 'Available', tone: 'ok' },
@@ -75,7 +81,7 @@ function Back() {
   );
 }
 
-function Hero({ title, year, tagline, poster, backdrop, facts, children }: { title: string; year?: number; tagline?: string; poster?: string; backdrop?: string; facts: React.ReactNode; children?: React.ReactNode }) {
+function Hero({ title, year, tagline, poster, backdrop, facts, servers, children }: { title: string; year?: number; tagline?: string; poster?: string; backdrop?: string; facts: React.ReactNode; servers?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <section className="relative -mx-4 mb-6 overflow-hidden sm:mx-0 sm:rounded-[1.5rem] sm:border sm:border-line">
       <div className="absolute inset-0">
@@ -85,8 +91,8 @@ function Hero({ title, year, tagline, poster, backdrop, facts, children }: { tit
       </div>
       {/* Phones: poster beside the title, facts and buttons full width below.
           Wider: poster on the left, everything else stacked beside it. */}
-      <div className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 p-4 pt-20 sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-[1fr_auto_auto] sm:gap-x-6 sm:p-8 sm:pt-40">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="self-end sm:row-span-3">
+      <div className="relative grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 p-4 pt-20 sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-[1fr_auto_auto_auto] sm:gap-x-6 sm:p-8 sm:pt-40">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="self-end sm:row-span-4">
           <FadeImage src={poster} alt="" eager className="aspect-[2/3] rounded-xl shadow-2xl ring-1 ring-white/15" fallback={<div className="grid size-full place-items-center bg-surface-3"><Clapperboard className="size-8 text-ink-4" /></div>} />
         </motion.div>
         <div className="min-w-0 self-end">
@@ -96,6 +102,7 @@ function Hero({ title, year, tagline, poster, backdrop, facts, children }: { tit
           {tagline && <p className="mt-1 text-[13px] text-white/60 italic sm:text-sm">{tagline}</p>}
         </div>
         <div className="col-span-2 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/70 sm:col-span-1 sm:col-start-2 sm:mt-3">{facts}</div>
+        {servers && <div className="col-span-2 mt-3 sm:col-span-1 sm:col-start-2">{servers}</div>}
         {children && (
           <div className="col-span-2 mt-4 grid grid-cols-2 gap-2 sm:col-span-1 sm:col-start-2 sm:mt-5 sm:flex sm:flex-wrap sm:items-center max-sm:[&>*]:justify-center max-sm:[&>:first-child:nth-last-child(odd)]:col-span-2 max-sm:[&>p]:col-span-2">
             {children}
@@ -126,16 +133,63 @@ function Cast({ cast }: { cast: CastMember[] }) {
   );
 }
 
+/** Everyone who has watched it, on which server and device (admins). */
+function WhoWatched({ list, runtimeMin, several }: { list: TitleWatcher[]; runtimeMin?: number; several: boolean }) {
+  return (
+    <Card>
+      <CardHeader icon={HistoryIcon} title="Who’s watched it" subtitle={several ? 'Across every server' : `${list.length} ${list.length === 1 ? 'person' : 'people'}`} />
+      <CardBody>
+        <ul className="-mx-2">
+          {list.map((w) => {
+            const pctWatched = w.watchedMs && runtimeMin ? Math.min(100, Math.round((w.watchedMs / (runtimeMin * 60_000)) * 100)) : undefined;
+            const state = w.source === 'server' || (pctWatched !== undefined && pctWatched >= 90) ? 'Finished' : pctWatched ? `${pctWatched}%` : 'Watched';
+            return (
+              <li key={w.user}>
+                <Link
+                  to={`/history?user=${encodeURIComponent(w.user)}&days=0${w.serverId ? `&server=${encodeURIComponent(w.serverId)}` : ''}`}
+                  className="group flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.04]"
+                >
+                  <Avatar name={w.user} size={28} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium transition group-hover:text-brand">{w.user}</div>
+                    <div className="truncate text-[11px] text-ink-4">
+                      {state} · {relative(w.at)}
+                      {w.plays > 1 ? ` · ${w.plays} plays` : ''}
+                    </div>
+                  </div>
+                  <div className="hidden min-w-0 items-center gap-2 text-[11px] text-ink-3 sm:flex">
+                    {several && w.serverType && <ServerTag type={w.serverType} name={w.serverName} />}
+                    {(w.device || w.client) && <span className="truncate text-ink-4">{w.device ?? w.client}</span>}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** The title's files on the media server. */
+function allCopies(d: Details): { files: MediaFile[]; subtitle?: string } {
+  return { files: d.library?.files ?? d.availableOn?.[0]?.files ?? [] };
+}
+
 function Actions({ d }: { d: Details }) {
   const request = useRequestMedia();
-  const add = useAddMedia();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
   const refresh = useInvalidateMedia();
   const done = () => refresh(d.type, d.tmdbId);
-  const err = (request.error ?? add.error) as Error | null;
+  const err = request.error as Error | null;
   const partial = d.type === 'tv' && (d.availability === 'partial' || d.seasons?.some((s) => s.status === 'available'));
   return (
     <>
-      {d.jellyfin && <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />}
+      {d.jellyfin && (
+        <PlayButton itemId={d.jellyfin.itemId} url={d.jellyfin.url} library={d.library} />
+      )}
+      <PlayOnServer d={d} />
       {d.can.request && (
         <Button variant="primary" disabled={request.isPending || request.isSuccess} onClick={() => request.mutate({ mediaType: d.type, tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
           {request.isPending ? <LoaderCircle className="size-4 animate-spin" /> : request.isSuccess ? <Check className="size-4" /> : <Send className="size-4" />}
@@ -152,10 +206,21 @@ function Actions({ d }: { d: Details }) {
         </Button>
       )}
       {d.can.add && (
-        <Button disabled={add.isPending || add.isSuccess} onClick={() => add.mutate({ kind: d.type === 'tv' ? 'sonarr' : 'radarr', tmdbId: d.tmdbId, title: d.title }, { onSuccess: done })}>
-          {add.isPending ? <LoaderCircle className="size-4 animate-spin" /> : add.isSuccess ? <Check className="size-4" /> : <Plus className="size-4" />}
-          {add.isSuccess ? `Added to ${add.data?.instance}` : `Add to ${d.type === 'tv' ? 'Sonarr' : 'Radarr'}`}
+        <Button disabled={added} onClick={() => setAdding(true)}>
+          {added ? <Check className="size-4" /> : <Plus className="size-4" />}
+          {added ? 'Added' : `Add to ${d.type === 'tv' ? 'Sonarr' : 'Radarr'}…`}
         </Button>
+      )}
+      {adding && (
+        <AddToArrDialog
+          kind={d.type === 'tv' ? 'sonarr' : 'radarr'}
+          items={[{ tmdbId: d.tmdbId, title: d.title, year: d.year }]}
+          onClose={() => setAdding(false)}
+          onDone={() => {
+            setAdded(true);
+            done();
+          }}
+        />
       )}
       {d.trailer && (
         <a href={d.trailer} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-4 text-sm font-medium text-white transition hover:bg-white/[0.12]">
@@ -164,6 +229,23 @@ function Actions({ d }: { d: Details }) {
       )}
       {err && <p role="alert" className="basis-full text-xs text-bad">{err.message}</p>}
     </>
+  );
+}
+
+/** With Plex or Emby: opens the title in the server's own app, in its colour. */
+function PlayOnServer({ d }: { d: Details }) {
+  const a = !d.jellyfin ? d.availableOn?.find((x) => x.url && /^https?:\/\//.test(x.url)) : undefined;
+  if (!a) return null;
+  return (
+    <a
+      href={a.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-black transition hover:brightness-110"
+      style={{ background: MEDIA_SERVERS[a.type].color }}
+    >
+      <Play className="size-4 fill-current" /> Play on {MEDIA_SERVERS[a.type].name}
+    </a>
   );
 }
 
@@ -558,7 +640,11 @@ function DetailsView({ d }: { d: Details }) {
           )}
           {d.library?.nextUp && <UpNext e={d.library.nextUp} />}
           <Seasons seasons={d.seasons} tmdbId={d.type === 'tv' ? d.tmdbId : undefined} seriesId={d.library?.itemId} />
-          {d.library && <MediaInfo files={d.library.files} />}
+          {(() => {
+            const c = allCopies(d);
+            return c.files.length ? <MediaInfo files={c.files} subtitle={c.subtitle} /> : null;
+          })()}
+          {d.watchers && d.watchers.length > 0 && <WhoWatched list={d.watchers} runtimeMin={d.runtimeMin} several={false} />}
           <Cast cast={d.cast} />
         </div>
         <div className="min-w-0 space-y-5">

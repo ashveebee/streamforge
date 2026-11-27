@@ -24,6 +24,8 @@ export interface WatchState {
 
 export interface MediaFile {
   id: string;
+  /** Set when copies from several servers are shown together. */
+  serverType?: 'jellyfin' | 'plex' | 'emby';
   name?: string;
   container?: string;
   size?: number;
@@ -90,7 +92,43 @@ export interface Season {
   jellyfin?: { id: string; episodes: number; unplayed?: number };
 }
 
+/** A media server a title is on, with a link to open it there. */
+export interface AvailableOn {
+  server: string;
+  type: 'jellyfin' | 'plex' | 'emby';
+  name: string;
+  /** The sign-in server. */
+  main: boolean;
+  itemId: string;
+  url?: string;
+  /** A movie's copies on this server. */
+  files?: MediaFile[];
+  /** When it was added to this server. */
+  added?: string;
+  /** Plays StreamForge knows of on this server (admins). */
+  plays?: number;
+}
+
+/** Someone who has watched the title, and where (admins). */
+export interface TitleWatcher {
+  user: string;
+  at: string;
+  plays: number;
+  serverId?: string;
+  serverName?: string;
+  serverType?: 'jellyfin' | 'plex' | 'emby';
+  client?: string;
+  device?: string;
+  watchedMs?: number;
+  source: 'recorded' | 'server';
+}
+
 export interface MediaDetails {
+  /** Every media server StreamForge knows, so the page can say where the title isn't. */
+  servers?: { id: string; name: string; type: 'jellyfin' | 'plex' | 'emby'; main: boolean }[];
+  watchers?: TitleWatcher[];
+  /** Every media server the title is on, the sign-in server first. */
+  availableOn?: AvailableOn[];
   type: MediaType;
   tmdbId: number;
   title: string;
@@ -163,6 +201,18 @@ export const useJellyfinMedia = (itemId: string) =>
 export type EpisodeStatus = 'available' | 'missing' | 'unaired' | 'unmonitored';
 
 /** One episode of a season, whether or not you have it. */
+/** One server's watch state for an episode: by you (solid tick) and/or others (outlined tick). */
+export interface EpisodeWatch {
+  server: string;
+  type: 'jellyfin' | 'plex' | 'emby';
+  name: string;
+  me: boolean;
+  progress?: number;
+  others: number;
+  /** Admins only. */
+  otherNames?: string[];
+}
+
 export interface SeasonEpisode {
   number: number;
   season: number;
@@ -179,6 +229,8 @@ export interface SeasonEpisode {
   path?: string;
   file?: Omit<MediaFile, 'audio' | 'subtitles'> & { audio: Partial<MediaFile['audio'][number]>[]; subtitles: Partial<MediaFile['subtitles'][number]>[] };
   jellyfin?: { id: string; url?: string; watch?: WatchState };
+  /** Watched on each server (only servers with something to show). */
+  watched?: EpisodeWatch[];
   sonarr?: { instance: string; episodeId: number };
 }
 

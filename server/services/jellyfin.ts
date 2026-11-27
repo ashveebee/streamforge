@@ -171,6 +171,8 @@ interface JfMediaStream {
   AverageFrameRate?: number;
   Index?: number;
   BitDepth?: number;
+  /** Emby's name for VideoRangeType. */
+  VideoRange?: string;
 }
 
 interface JfItem {
@@ -296,6 +298,8 @@ function artworkFor(item: JfItem) {
   return { poster, backdrop, logo, thumb };
 }
 
+const rangeOf = (v?: JfMediaStream) => v?.VideoRangeType ?? v?.VideoRange;
+
 function normaliseSession(s: JfSession) {
   const item = s.NowPlayingItem!;
   const runtimeMs = Math.round((item.RunTimeTicks ?? 0) / TICKS_PER_MS);
@@ -340,7 +344,7 @@ function normaliseSession(s: JfSession) {
       communityRating: item.CommunityRating,
       runtimeMs,
       resolution: resolutionLabel(video?.Width, video?.Height),
-      hdr: video?.VideoRangeType && video.VideoRangeType !== 'SDR' ? video.VideoRangeType : undefined,
+      hdr: rangeOf(video) && rangeOf(video) !== 'SDR' ? rangeOf(video) : undefined,
       videoCodec: video?.Codec,
       /** Source video bitrate in bits/s, when Jellyfin reports it. */
       bitrate: video?.BitRate,
@@ -353,7 +357,7 @@ function normaliseSession(s: JfSession) {
     media: {
       container: item.Container,
       bitrate: item.Bitrate,
-      video: video && { codec: video.Codec, range: video.VideoRangeType, bitDepth: video.BitDepth, width: video.Width, height: video.Height },
+      video: video && { codec: video.Codec, range: rangeOf(video), bitDepth: video.BitDepth, width: video.Width, height: video.Height },
       audio: playingAudio && { codec: playingAudio.Codec, channels: playingAudio.Channels },
       subtitle: playingSub && { codec: playingSub.Codec },
     },
@@ -381,7 +385,12 @@ function normaliseSession(s: JfSession) {
       : undefined,
   };
 }
-export type NowPlaying = ReturnType<typeof normaliseSession>;
+export type NowPlaying = ReturnType<typeof normaliseSession> & {
+  /** Set for streams on an extra media server, or a main Plex or Emby server. */
+  server?: string;
+  serverName?: string;
+  serverType?: 'jellyfin' | 'emby' | 'plex';
+};
 
 async function rawSessions(ctx: JfCtx) {
   return cache.get(`jf:sessions:${serverToken(ctx) === ctx.token ? ctx.userId : 'srv'}`, 2_000, () =>
@@ -648,18 +657,18 @@ export type SessionCommand = 'pause' | 'unpause' | 'stop' | 'message';
 /** Controls a playback session. Needs an administrator token. */
 export async function controlSession(ctx: JfCtx, sessionId: string, command: SessionCommand, text?: string) {
   const token = serverToken(ctx);
-  await sendSessionCommand(base(), token, ctx.deviceId, sessionId, command, text);
+  await sendSessionCommand(base(), authHeader(token, ctx.deviceId), sessionId, command, text);
   cache.delete('jf:sessions:');
 }
 
-function sendSessionCommand(url: string, token: string, deviceId: string, sessionId: string, command: SessionCommand, text?: string) {
+function sendSessionCommand(url: string, headers: Record<string, string>, sessionId: string, command: SessionCommand, text?: string) {
   const path =
     command === 'message'
       ? `/Sessions/${sessionId}/Message`
       : `/Sessions/${sessionId}/Playing/${command === 'pause' ? 'Pause' : command === 'unpause' ? 'Unpause' : 'Stop'}`;
   return requestJson(buildUrl(url, path), {
     method: 'POST',
-    headers: authHeader(token, deviceId),
+    headers,
     body: command === 'message' ? { Header: 'Message from the server admin', Text: text ?? '', TimeoutMs: 15_000 } : undefined,
     service: 'jellyfin',
   });
@@ -740,18 +749,69 @@ export async function libraryItems(ctx: JfCtx) {
 /* Extra servers (monitored with their own API key)                    */
 /* ------------------------------------------------------------------ */
 
-/** What's needed to talk to an extra Jellyfin server. */
+/**
+ * What's needed to talk to an extra Jellyfin or Emby server. Emby shares
+ * Jellyfin's API (Jellyfin began as a fork of it), so the same calls work
+ * with Emby's URL prefix and token header.
+ */
 export interface JfServerTarget {
   id: string;
   name: string;
   url: string;
   apiKey: string;
+  type?: 'jellyfin' | 'emby' | 'plex';
 }
 
 const REMOTE_DEVICE = 'streamforge-server';
 
-function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>) {
-  return requestJson<T>(buildUrl(srv.url, path, query), { headers: authHeader(srv.apiKey, REMOTE_DEVICE), service: 'jellyfin' });
+/** Emby answers its API under `/emby`; Jellyfin at the root. */
+export function remoteBase(srv: Pick<JfServerTarget, 'url' | 'type'>) {
+  const url = srv.url.replace(/\/+$/, '');
+  return srv.type === 'emby' && !/\/emby$/i.test(url) ? `${url}/emby` : url;
+}
+
+export function remoteHeaders(srv: Pick<JfServerTarget, 'apiKey' | 'type'>): Record<string, string> {
+  if (srv.type !== 'emby') return authHeader(srv.apiKey, REMOTE_DEVICE);
+  // Emby reads the client description and token from its own headers.
+  return { 'X-Emby-Authorization': authHeader(undefined, REMOTE_DEVICE).Authorization, 'X-Emby-Token': srv.apiKey };
+}
+
+/** Item queries that can quietly skip libraries when made with an API key and no user. */
+const USER_SCOPED = new Set(['/Items', '/Items/Counts']);
+
+export async function remote<T>(srv: JfServerTarget, path: string, query?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  if (USER_SCOPED.has(path) && !query?.userId && !query?.UserId) {
+    const userId = await remoteAdminId(srv);
+    if (userId) query = { ...query, userId };
+  }
+  return requestJson<T>(buildUrl(remoteBase(srv), path, query), { headers: remoteHeaders(srv), service: 'jellyfin' });
+}
+
+/**
+ * Checks an Emby server, the way `probe` checks Jellyfin. Emby's public info
+ * has no ProductName; Jellyfin's says "Jellyfin Server", which tells them apart.
+ */
+export async function embyProbe(target: { url: string; apiKey?: string }): Promise<HealthProbe> {
+  const t = { url: target.url, apiKey: target.apiKey ?? '', type: 'emby' as const };
+  const info = await requestJson<JfPublicInfo>(buildUrl(remoteBase(t), '/System/Info/Public'), { service: 'jellyfin' });
+  if (!info?.Version || !info.ServerName) throw new UpstreamError('This does not look like an Emby server', undefined, 'jellyfin');
+  if (info.ProductName?.toLowerCase().includes('jellyfin')) {
+    throw new UpstreamError('This is a Jellyfin server. Add it as Jellyfin instead.', undefined, 'jellyfin');
+  }
+  const result: HealthProbe = { version: info.Version, issues: [], meta: { server: info.ServerName } };
+  if (target.apiKey) {
+    const sys = await requestJson<JfSystemInfo>(buildUrl(remoteBase(t), '/System/Info'), { headers: remoteHeaders(t), service: 'jellyfin' });
+    if (sys.HasPendingRestart) result.issues.push({ level: 'warning', message: 'Server restart pending', source: 'System' });
+    if (sys.HasUpdateAvailable) result.issues.push({ level: 'info', message: 'An update is available', source: 'System' });
+    if (sys.IsShuttingDown) result.issues.push({ level: 'error', message: 'Server is shutting down', source: 'System' });
+    result.meta = { ...result.meta, os: sys.OperatingSystemDisplayName ?? sys.OperatingSystem };
+  }
+  return result;
+}
+
+/** Ids on extra servers: Jellyfin's GUIDs, or Emby's numeric ids. */
+export function isValidRemoteId(id: string) {
+  return ID_RE.test(id) || /^\d{1,12}$/.test(id);
 }
 
 /** Points every artwork reference at the server it lives on. */
@@ -771,7 +831,13 @@ export async function remoteNowPlaying(srv: JfServerTarget) {
   return list
     .filter((s) => s.NowPlayingItem)
     .map(normaliseSession)
-    .map((s) => ({ ...s, item: onServer(s.item, srv.id), server: srv.id, serverName: srv.name }));
+    .map((s) => ({
+      ...s,
+      item: onServer(s.item, srv.id),
+      server: srv.id,
+      serverName: srv.name,
+      serverType: srv.type ?? 'jellyfin',
+    }));
 }
 
 /** The same shape as `overview`, for an extra server. */
@@ -903,13 +969,170 @@ export function remoteImage(
   type: string,
   opts: { tag?: string; maxWidth?: number; quality?: number },
 ) {
-  return requestRaw(buildUrl(srv.url, `/${kind}/${id}/Images/${type}`, { tag: opts.tag, maxWidth: opts.maxWidth, quality: opts.quality ?? 90 }), {
-    headers: { ...authHeader(srv.apiKey, REMOTE_DEVICE), Accept: 'image/*' },
+  return requestRaw(buildUrl(remoteBase(srv), `/${kind}/${id}/Images/${type}`, { tag: opts.tag, maxWidth: opts.maxWidth, quality: opts.quality ?? 90 }), {
+    headers: { ...remoteHeaders(srv), Accept: 'image/*' },
     service: 'jellyfin',
   });
 }
 
 export async function controlRemoteSession(srv: JfServerTarget, sessionId: string, command: SessionCommand, text?: string) {
-  await sendSessionCommand(srv.url, srv.apiKey, REMOTE_DEVICE, sessionId, command, text);
+  await sendSessionCommand(remoteBase(srv), remoteHeaders(srv), sessionId, command, text);
   cache.delete(`jfx:${srv.id}:sessions`);
+}
+
+/* ------------------------------------------------------------------ */
+/* A main Emby server (people sign in with Emby)                       */
+/* ------------------------------------------------------------------ */
+
+/** Every series and movie with its external ids, like `libraryItems`, via the server's API key. */
+/**
+ * An admin user on another server. Item queries made with only an API key and
+ * no user can skip whole libraries (Jellyfin 12 returns a partial,
+ * collection-heavy list), so `remote` runs them as an admin who sees everything.
+ */
+async function remoteAdminId(srv: JfServerTarget): Promise<string | undefined> {
+  return cache.get(`jfx:${srv.id}:adminId`, 60 * 60_000, async () => {
+    const users = await remote<JfUser[]>(srv, '/Users').catch(() => [] as JfUser[]);
+    const live = users.filter((u) => !u.Policy?.IsDisabled);
+    return (live.find((u) => u.Policy?.IsAdministrator) ?? live[0])?.Id;
+  });
+}
+
+export async function remoteLibraryItems(srv: JfServerTarget) {
+  return cache.get(`jfx:${srv.id}:libitems`, 10 * 60_000, async () => {
+    const res = await remote<{ Items: { Id: string; Name: string; Type: string; ProductionYear?: number; ProviderIds?: Record<string, string> }[] }>(srv, '/Items', {
+      IncludeItemTypes: 'Series,Movie',
+      Recursive: true,
+      Fields: 'ProviderIds',
+      EnableImages: false,
+    });
+    return res.Items.map((i) => ({
+      id: i.Id,
+      name: i.Name,
+      type: i.Type as 'Series' | 'Movie',
+      year: i.ProductionYear,
+      tvdb: i.ProviderIds?.Tvdb,
+      tmdb: i.ProviderIds?.Tmdb,
+      imdb: i.ProviderIds?.Imdb,
+    }));
+  });
+}
+
+/** Playback entries from the server's activity log since a time. */
+export async function remotePlaybackEntries(srv: JfServerTarget, since: Date) {
+  return cache.get(`jfx:${srv.id}:playentries:${since.toISOString().slice(0, 13)}`, 5 * 60_000, async () => {
+    const res = await remote<{ Items: JfActivity[] }>(srv, '/System/ActivityLog/Entries', { minDate: since.toISOString(), limit: 5000 });
+    return res.Items.filter((a) => a.Type === 'VideoPlayback' || a.Type === 'AudioPlayback').map((a) => ({ name: a.Name, date: a.Date, userId: a.UserId }));
+  });
+}
+
+/** Plays per day, like `playbackHistory`. */
+export async function remotePlaybackHistory(srv: JfServerTarget, days = 14) {
+  const minDate = new Date(Date.now() - days * 86_400_000);
+  minDate.setHours(0, 0, 0, 0);
+  const entries = await remotePlaybackEntries(srv, minDate);
+  const buckets = new Map<string, { date: string; plays: number; users: Set<string> }>();
+  for (let i = 0; i < days; i++) {
+    const key = new Date(minDate.getTime() + (i + 1) * 86_400_000).toISOString().slice(0, 10);
+    buckets.set(key, { date: key, plays: 0, users: new Set() });
+  }
+  for (const e of entries) {
+    const b = buckets.get(e.date.slice(0, 10));
+    if (!b) continue;
+    b.plays++;
+    if (e.userId) b.users.add(e.userId);
+  }
+  return [...buckets.values()].map((b) => ({ date: b.date, plays: b.plays, users: b.users.size }));
+}
+
+/** Scans one library (or all of them) on a Jellyfin or Emby server, via its API key. */
+export async function remoteScan(srv: JfServerTarget, library?: string, full = false) {
+  if (library && !isValidRemoteId(library)) throw new UpstreamError('Unknown library', 400, 'jellyfin');
+  const path = library ? `/Items/${library}/Refresh` : '/Library/Refresh';
+  const query = library
+    ? { Recursive: true, MetadataRefreshMode: full ? 'FullRefresh' : 'Default', ImageRefreshMode: full ? 'FullRefresh' : 'Default', ReplaceAllMetadata: full, ReplaceAllImages: false }
+    : undefined;
+  await requestJson(buildUrl(remoteBase(srv), path, query), { method: 'POST', headers: remoteHeaders(srv), service: 'jellyfin' });
+  cache.delete(`jfx:${srv.id}:libraries`);
+}
+
+interface EmbyAuthResult {
+  User: JfUser;
+  AccessToken: string;
+  ServerId?: string;
+}
+
+/** Signs a user in to an Emby server with their name and password. */
+export async function embyAuthenticate(url: string, username: string, password: string, deviceId: string) {
+  const t = { url, type: 'emby' as const };
+  try {
+    return await requestJson<EmbyAuthResult>(buildUrl(remoteBase(t), '/Users/AuthenticateByName'), {
+      method: 'POST',
+      headers: { 'X-Emby-Authorization': authHeader(undefined, deviceId).Authorization },
+      body: { Username: username, Pw: password },
+      service: 'jellyfin',
+    });
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status === 401) throw new UpstreamError('Invalid username or password', 401, 'jellyfin');
+    throw err;
+  }
+}
+
+/** One Emby user, read with that user's own token (to re-check a sign-in). */
+export function embyUser(url: string, token: string, userId: string) {
+  return remote<JfUser>({ id: 'emby-main', name: '', url, apiKey: token, type: 'emby' }, `/Users/${userId}`);
+}
+
+export async function embyLogout(url: string, token: string) {
+  const t = { url, apiKey: token, type: 'emby' as const };
+  await requestJson(buildUrl(remoteBase(t), '/Sessions/Logout'), { method: 'POST', headers: remoteHeaders(t), service: 'jellyfin' }).catch(() => undefined);
+}
+
+/**
+ * Creates an API key named "StreamForge" with an administrator's token, so
+ * background features (alerts, stats, Now Playing) work without anyone signed in.
+ */
+export async function embyCreateApiKey(url: string, adminToken: string) {
+  const t = { id: 'emby-setup', name: '', url, apiKey: adminToken, type: 'emby' as const };
+  await requestJson(buildUrl(remoteBase(t), '/Auth/Keys', { App: 'StreamForge' }), { method: 'POST', headers: remoteHeaders(t), service: 'jellyfin' });
+  const keys = await remote<{ Items?: { AccessToken: string; AppName?: string; DateCreated?: string }[] }>(t, '/Auth/Keys');
+  const ours = (keys.Items ?? []).filter((k) => k.AppName === 'StreamForge').sort((a, b) => (b.DateCreated ?? '').localeCompare(a.DateCreated ?? ''));
+  if (!ours[0]?.AccessToken) throw new UpstreamError('Emby didn’t return the new API key', undefined, 'jellyfin');
+  return ours[0].AccessToken;
+}
+
+/* ------------------------------------------------------------------ */
+/* Collections (BoxSets) on a Jellyfin or Emby server                  */
+/* ------------------------------------------------------------------ */
+
+/** Movie and TV libraries, for picking where a collection goes. */
+export async function remoteMovieAndShowLibraries(srv: JfServerTarget) {
+  const list = await remote<JfVirtualFolder[]>(srv, '/Library/VirtualFolders');
+  return list
+    .filter((f) => f.CollectionType === 'movies' || f.CollectionType === 'tvshows')
+    .map((f) => ({ id: f.ItemId, name: f.Name, kind: (f.CollectionType === 'movies' ? 'movie' : 'show') as 'movie' | 'show' }));
+}
+
+/** Every collection (BoxSet) on the server; Jellyfin and Emby keep them outside any one library. */
+export async function remoteCollections(srv: JfServerTarget) {
+  const res = await remote<{ Items: (JfItem & { ChildCount?: number })[] }>(srv, '/Items', { IncludeItemTypes: 'BoxSet', Recursive: true, Fields: 'ChildCount', Limit: 500 });
+  return res.Items.map((c) => ({
+    id: c.Id,
+    name: c.Name,
+    count: c.ChildCount ?? 0,
+    poster: c.ImageTags?.Primary ? { itemId: c.Id, type: 'Primary' as const, tag: c.ImageTags.Primary, server: srv.id } : undefined,
+  }));
+}
+
+/** The titles in a collection, with their TMDB/TVDB/IMDb ids. */
+export async function remoteCollectionItems(srv: JfServerTarget, collectionId: string) {
+  const res = await remote<{ Items: (JfItem & { ProviderIds?: Record<string, string> })[] }>(srv, '/Items', { ParentId: collectionId, Fields: 'ProviderIds,ProductionYear', Limit: 1000 });
+  return res.Items.map((i) => ({
+    id: i.Id,
+    title: i.Name,
+    year: i.ProductionYear,
+    tmdb: i.ProviderIds?.Tmdb,
+    tvdb: i.ProviderIds?.Tvdb,
+    poster: i.ImageTags?.Primary ? { itemId: i.Id, type: 'Primary' as const, tag: i.ImageTags.Primary, server: srv.id } : undefined,
+  }));
 }
