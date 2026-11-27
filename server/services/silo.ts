@@ -785,6 +785,8 @@ interface SiloRequest {
   created_at: string;
   updated_at?: string;
   last_error?: string;
+  download?: { phase?: string; percent?: number; bytes_left?: number; estimated_completion_at?: string };
+  targets?: { quality?: string; status?: string; instance_name?: string; integration_kind?: string; last_error?: string }[];
 }
 
 /** Whether Silo's requests are switched on (cached briefly). */
@@ -834,7 +836,28 @@ async function normaliseRequest(srv: JfServerTarget, r: SiloRequest) {
     requestedBy: (r.requested_by_user_id && names.get(r.requested_by_user_id)) || 'Someone',
     modifiedBy: undefined as string | undefined,
     createdAt: r.created_at,
+    /** Where Silo sent it (its request server), and how the download is going. */
+    delivery: deliveryOf(r),
   };
+}
+
+/** A request's journey after approval: the server it went to, download progress, or what went wrong. */
+function deliveryOf(r: SiloRequest) {
+  const t = r.targets?.[0];
+  const server = t?.instance_name || (t?.integration_kind ? t.integration_kind[0]!.toUpperCase() + t.integration_kind.slice(1) : undefined);
+  const error = r.last_error || r.targets?.find((x) => x.last_error)?.last_error;
+  if (r.state === 'approved' && !r.targets?.length) return { phase: 'waiting', server: undefined, message: 'No request server in Silo yet' };
+  if (error && r.state === 'failed') return { phase: 'failed', server, message: error };
+  if (r.download?.phase) {
+    return {
+      phase: r.download.phase,
+      server,
+      percent: typeof r.download.percent === 'number' ? r.download.percent : undefined,
+      eta: r.download.estimated_completion_at,
+      message: undefined as string | undefined,
+    };
+  }
+  return server ? { phase: t?.status ?? 'queued', server, message: undefined as string | undefined } : undefined;
 }
 
 /** Recent requests (newest first), optionally one queue view or one person's. */

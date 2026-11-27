@@ -737,6 +737,11 @@ async function requestWithSilo(session: Session, mediaType: 'movie' | 'tv', tmdb
       session.serverToken = fresh.refreshToken;
       sessions.save(session);
     }, mediaType, tmdbId);
+    // Like Seerr, an admin's own request doesn't wait for approval.
+    if (session.isAdmin && r.state === 'pending') {
+      await silo.decideRequest(si, r.id, 'approve').catch((err) => console.warn(`[silo] auto-approve ${r.id}: ${(err as Error).message}`));
+      return { ok: true, requestId: r.id, status: 2, asSelf: true };
+    }
     return { ok: true, requestId: r.id, status: r.state === 'pending' ? 1 : 2, asSelf: true };
   } catch (err) {
     if (err instanceof UpstreamError && err.status === 401) throw new HttpError(409, 'Your Silo sign-in has expired. Sign out and back in to make requests.');

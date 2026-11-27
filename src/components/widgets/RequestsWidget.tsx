@@ -56,6 +56,40 @@ export function RequestDecision({ r, compact }: { r: SeerrRequest; compact?: boo
   );
 }
 
+const PHASE: Record<string, string> = {
+  waiting: 'Approved',
+  queued: 'Queued',
+  downloading: 'Downloading',
+  paused: 'Paused',
+  stalled: 'Stalled',
+  importing: 'Importing',
+  import_blocked: 'Import blocked',
+  completed: 'Downloaded',
+  failed: 'Failed',
+};
+
+/** Silo requests: the request server it went to, download progress, or the problem. */
+function Delivery({ d }: { d: NonNullable<SeerrRequest['delivery']> }) {
+  const bad = d.phase === 'failed' || d.phase === 'stalled' || d.phase === 'import_blocked';
+  const parts = [
+    PHASE[d.phase] ?? d.phase,
+    d.percent !== undefined ? `${d.percent}%` : undefined,
+    d.eta && Date.parse(d.eta) > Date.now() ? `done ${relative(d.eta)}` : undefined,
+    d.server ? `via ${d.server}` : undefined,
+  ].filter(Boolean);
+  return (
+    <div className={cn('mt-0.5 truncate text-[11px]', bad ? 'text-bad' : d.phase === 'waiting' ? 'text-warn' : 'text-ink-3')} title={d.message}>
+      {parts.join(' · ')}
+      {d.message ? ` — ${d.message}` : ''}
+      {d.percent !== undefined && (
+        <span className="mt-1 block h-1 w-full max-w-40 overflow-hidden rounded-full bg-white/[0.06]">
+          <span className="block h-full rounded-full bg-[var(--color-silo)]" style={{ width: `${Math.min(100, Math.max(0, d.percent))}%` }} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function RequestRow({ r }: { r: SeerrRequest }) {
   const { user } = useAuth();
   return (
@@ -72,6 +106,7 @@ export function RequestRow({ r }: { r: SeerrRequest }) {
           {r.is4k && ' · 4K'} · {r.requestedBy}
         </div>
         <div className="text-[11px] text-ink-4">{relative(r.createdAt)}</div>
+        {r.delivery && r.mediaStatus !== 'available' && <Delivery d={r.delivery} />}
       </div>
       {r.status === 'pending' && user?.isAdmin ? (
         <RequestDecision r={r} compact />

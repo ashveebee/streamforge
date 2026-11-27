@@ -27,7 +27,7 @@ export default function SeerrPage() {
     <>
       {/* With Silo's own requests, this page shows those instead of Seerr's. */}
       {silo ? (
-        <PageHeader icon={<ServiceIcon id="silo" size={52} />} eyebrow="Silo" title="Requests" description="Requests made in Silo or here, with approvals. Silo sends approved requests to Sonarr and Radarr." />
+        <PageHeader icon={<ServiceIcon id="silo" size={52} />} eyebrow="Silo" title="Requests" description="Requests made in Silo or here. Approved ones go to the request servers set up in Silo, such as its Sonarr & Radarr or Seerr plugins." />
       ) : (
         <ServiceHeader id="seerr" />
       )}

@@ -561,7 +561,8 @@ function ServicesTab() {
             {g.id === 'requests' && config.data?.requests === 'silo' && (
               <li className="px-1 text-[11px] leading-relaxed text-ink-4">
                 Silo’s own requests are on, so StreamForge uses them for the Requests page, Request buttons and approvals instead of Seerr. Requests are made in each person’s
-                own name and go to Sonarr and Radarr through Silo’s request integrations.
+                own name. Silo sends approved ones to the request servers set up in Silo (Admin → Requests → Settings → Servers), such as the community Sonarr &amp;
+                Radarr or Seerr plugins.
               </li>
             )}
             {g.id === 'indexers' && (

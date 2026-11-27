@@ -342,7 +342,9 @@ server you use. People sign in to StreamForge with their account on it.
   key on Silo for background features, and everyone else signs in with their
   Silo account. Silo is pre-release; StreamForge uses its native `/api/v2`.
   When Silo's own requests are switched on, StreamForge uses them instead of
-  Seerr for the Requests page, Request buttons and approvals.
+  Seerr for the Requests page, Request buttons and approvals, with each
+  request's download progress. Silo sends approved requests through its
+  request servers, such as the community Sonarr & Radarr or Seerr plugins.
 
 Each install watches the one media server you choose. Running two? Run a
 StreamForge for each.

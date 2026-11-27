@@ -28,7 +28,23 @@ On first run, StreamForge asks which media server you use:
   Silo has its own request system. When it's switched on in Silo, StreamForge
   uses it instead of Seerr: the Requests page, Request buttons, approvals and
   your requests all go through Silo, and requests are made in each person's
-  own Silo account.
+  own Silo account. An admin's own requests are approved straight away.
+
+  Silo hands approved requests to its **request servers**, which come from
+  plugins. To send them to Sonarr and Radarr:
+
+  1. In Silo, open **Admin → Integrations → Plugins → Catalog**, turn on
+     **Include approved community plugins**, and install the Sonarr & Radarr
+     requests plugin (or the Seerr one, to go through Seerr).
+  2. Add your Sonarr and Radarr under **Admin → Requests → Settings →
+     Servers**, with a root folder and quality profile for each.
+  3. Under **Admin → Autoscan → Sources**, add a **Sonarr/Radarr Webhook**
+     source and point Sonarr's and Radarr's webhooks at it, so a finished
+     download shows up in Silo, and the request is marked available, straight
+     away.
+
+  StreamForge's Requests page then shows where each request went and how its
+  download is going.
 
 People then sign in to StreamForge with their account on that server, and its
 admins are StreamForge admins. Everything in StreamForge reads it: Now

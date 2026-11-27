@@ -348,6 +348,8 @@ export interface ProwlarrOverview {
 export interface SeerrRequest {
   /** Seerr's ids are numbers; Silo's are long numbers kept as strings. */
   id: number | string;
+  /** Silo only: where it was sent after approval and how the download is going. */
+  delivery?: { phase: string; server?: string; percent?: number; eta?: string; message?: string };
   type: 'movie' | 'tv';
   title: string;
   year?: number;
