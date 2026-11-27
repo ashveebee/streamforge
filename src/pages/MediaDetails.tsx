@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
+import { ScrollRow } from '@/components/ui/ScrollRow';
 import {
   ArrowLeft,
   Check,
@@ -129,7 +130,7 @@ function MoreLikeThis({ items }: { items: SimilarTitle[] }) {
     <Card>
       <CardHeader icon={Sparkles} accent="var(--color-brand)" title="More like this" subtitle={`${items.filter((x) => x.status === 'available' || x.status === 'partial').length} in your library`} />
       <CardBody>
-        <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+        <ScrollRow label="similar titles">
           {items.map((x) => {
             const badge = SIMILAR_BADGE[x.status];
             return (
@@ -148,7 +149,7 @@ function MoreLikeThis({ items }: { items: SimilarTitle[] }) {
               </Link>
             );
           })}
-        </div>
+        </ScrollRow>
       </CardBody>
     </Card>
   );
@@ -160,7 +161,7 @@ function Cast({ cast }: { cast: CastMember[] }) {
     <Card>
       <CardHeader icon={Users} accent="var(--color-seerr)" title="Cast" />
       <CardBody>
-        <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+        <ScrollRow label="cast">
           {cast.map((c, i) => (
             <div key={`${c.name}-${i}`} className="w-24 shrink-0 snap-start text-center">
               <FadeImage src={c.image} alt="" className="mx-auto aspect-[2/3] w-24 rounded-lg ring-1 ring-white/10" fallback={<div className="grid size-full place-items-center bg-surface-3 text-lg font-semibold text-ink-4">{c.name.charAt(0)}</div>} />
@@ -168,7 +169,7 @@ function Cast({ cast }: { cast: CastMember[] }) {
               {c.character && <div className="truncate text-[11px] text-ink-4" title={c.character}>{c.character}</div>}
             </div>
           ))}
-        </div>
+        </ScrollRow>
       </CardBody>
     </Card>
   );

@@ -17,11 +17,12 @@ import { EmptyState, QueryState, SkeletonRows } from '@/components/ui/States';
 import { REQUEST_TONE } from '@/components/widgets/RequestsWidget';
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { TitleLink } from '@/components/ui/TitleLink';
+import { ScrollRow } from '@/components/ui/ScrollRow';
 
 function Shelf({ items, empty }: { items: MeCard[]; empty: string }) {
   if (!items.length) return <p className="py-6 text-center text-sm text-ink-4">{empty}</p>;
   return (
-    <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+    <ScrollRow label="titles">
       {items.map((i) => (
         <TitleLink key={i.id} to={`/media/jellyfin/${i.id}`} className="block w-56 shrink-0 snap-start">
           <div className="relative overflow-hidden rounded-xl border border-line">
@@ -32,7 +33,7 @@ function Shelf({ items, empty }: { items: MeCard[]; empty: string }) {
           <div className="truncate text-[11px] text-ink-3">{[i.subtitle, i.remainingMs ? `${duration(i.remainingMs)} left` : undefined].filter(Boolean).join(' · ')}</div>
         </TitleLink>
       ))}
-    </div>
+    </ScrollRow>
   );
 }
 
