@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.0.0](https://github.com/ashveebee/streamforge/compare/v1.8.0...v2.0.0) (2026-11-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* StreamForge no longer monitors more than one media server. Installs that added extra Jellyfin, Plex or Emby servers keep their sign-in server only; run a separate StreamForge for each other server.
+
+### Features
+
+* add titles to Sonarr/Radarr with options, one or many at a time ([c1e4764](https://github.com/ashveebee/streamforge/commit/c1e4764ac102e5034006e81b68abc09b8030006c))
+* clickable titles and viewers in watch history and stats ([b702262](https://github.com/ashveebee/streamforge/commit/b7022626f6c1dc880ea18fa311decb030f6e6e59))
+* count plays and check libraries on every media server ([a63e769](https://github.com/ashveebee/streamforge/commit/a63e7699c5c47db8f7d51709aeb19f7d1ed6a667))
+* filter playback stats by media server ([15f2935](https://github.com/ashveebee/streamforge/commit/15f2935a3708ab0b5cffc5b95ab77e8fc0425ce8))
+* give Emby and Plex their own pages, sidebar entries and settings cards ([b7b379a](https://github.com/ashveebee/streamforge/commit/b7b379a16c0ed91ad1f45dcfd02bd5d49a78c0cd))
+* group the Settings services tab by what each app does ([f2706e0](https://github.com/ashveebee/streamforge/commit/f2706e063e40e25fa5dcf924a510d8ca8d0993ab))
+* let Emby-only households sign in with Emby ([5ee3bfe](https://github.com/ashveebee/streamforge/commit/5ee3bfee51c85b3959f2b1c7764c985b1face210))
+* let Plex-only households use StreamForge with Sign in with Plex ([2c235be](https://github.com/ashveebee/streamforge/commit/2c235be240214b6dfb60f0db4e8fe02a132ad5f6))
+* make Kometa collections from StreamForge ([4a1d6bb](https://github.com/ashveebee/streamforge/commit/4a1d6bbc2895cb6cdb0cd000e4a40509b65b2764))
+* monitor Emby and Plex servers alongside Jellyfin ([cd53049](https://github.com/ashveebee/streamforge/commit/cd53049af15cebd6edf153e3548d49298dd5e0d7))
+* one media server per install, and a setup step that finds your apps ([d57ac06](https://github.com/ashveebee/streamforge/commit/d57ac06102cf09228add9f931e7a82981010c63d))
+* Plex and Emby support, watch history for every user, Kometa collections and bulk add to Sonarr/Radarr ([cbc8e1b](https://github.com/ashveebee/streamforge/commit/cbc8e1bb57bc0d804464242071ad796bd4e99c8b))
+* posters and media server filter in watch history ([4628d42](https://github.com/ashveebee/streamforge/commit/4628d42edff4633cecdcb2809fefdccb9e5e0f36))
+* show Kometa runs, errors and changes from its webhooks ([79b5cea](https://github.com/ashveebee/streamforge/commit/79b5ceac4fd8d7cbc548af048e4704513fab6e53))
+* show what every user has watched, and remove it in bulk ([340bead](https://github.com/ashveebee/streamforge/commit/340bead45a720e7b0ff2dbcd516cd17e54ba8a48))
+* show which servers have a title, with each copy, on title pages ([165ed86](https://github.com/ashveebee/streamforge/commit/165ed8626432906a296d8ac59ae87c33ff3d15a8))
+* watch history for every user ([5171d8e](https://github.com/ashveebee/streamforge/commit/5171d8ed071ea4a2d7b93adf95bf7559baa00683))
+
+
+### Bug Fixes
+
+* create an empty Kometa file for every library up front ([0cfd8cf](https://github.com/ashveebee/streamforge/commit/0cfd8cff263ea40fe208d9a5e61d6d7febe34b48))
+* keep one-server installs uncluttered ([78e2618](https://github.com/ashveebee/streamforge/commit/78e2618e3534ff15c9fa5fa49134fcd8a3c048c3))
+* switch off the apps left out of setup ([07147d7](https://github.com/ashveebee/streamforge/commit/07147d70c858f4652c87879c216f1f7886173d70))
+* title pages, search, stats and history for Plex and Emby installs ([fd4f6a0](https://github.com/ashveebee/streamforge/commit/fd4f6a0db7384f51f8407b5089f5206300be24dd))
+
+
+### Documentation
+
+* add install, media server, Kometa and other guides, published on the website ([9a7b3ad](https://github.com/ashveebee/streamforge/commit/9a7b3ada2ef90d00610087ba6f5184868042c322))
+* add Reddit community banner and icon ([a73087b](https://github.com/ashveebee/streamforge/commit/a73087b1c4565253a5ae1521e4b9fce6156dedf6))
+* new screenshots and website for one server and two-step setup ([f28540e](https://github.com/ashveebee/streamforge/commit/f28540e62bd98aec1a89658404f2c543d603ec07))
+* refresh screenshots with Emby and Plex servers ([b6a057f](https://github.com/ashveebee/streamforge/commit/b6a057f35533bfce800c89eb991beb18c3539af2))
+* **site:** mention Emby and Plex support and multiple media servers ([0733b11](https://github.com/ashveebee/streamforge/commit/0733b112650eaddbb0a7959d781210c702e0a9a8))
+
 ## [1.8.0](https://github.com/ashveebee/streamforge/compare/v1.7.0...v1.8.0) (2026-11-25)
 
 
