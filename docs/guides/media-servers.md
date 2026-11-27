@@ -25,6 +25,11 @@ On first run, StreamForge asks which media server you use:
   username and password. StreamForge creates its own admin API key on Silo.
   Silo is pre-release, so its API can still change before 1.0.
 
+  Silo has its own request system. When it's switched on in Silo, StreamForge
+  uses it instead of Seerr: the Requests page, Request buttons, approvals and
+  your requests all go through Silo, and requests are made in each person's
+  own Silo account.
+
 People then sign in to StreamForge with their account on that server, and its
 admins are StreamForge admins. Everything in StreamForge reads it: Now
 Playing, stats, watch history, title pages, search, library health, alerts and
@@ -87,6 +92,7 @@ Keep it private, because it gives full access to your Plex account.
 | Watched by everyone (Library health) | ✓ | — | — | — |
 | Single sign-on | ✓ | — | — | — |
 | Kometa collections | develop build | develop build | ✓ | — |
+| Requests | Seerr | Seerr | Seerr | Silo's own, or Seerr |
 
 ## How titles are matched with your apps
 

@@ -341,6 +341,8 @@ server you use. People sign in to StreamForge with their account on it.
   sign in with a **Silo admin** account. StreamForge creates its own admin API
   key on Silo for background features, and everyone else signs in with their
   Silo account. Silo is pre-release; StreamForge uses its native `/api/v2`.
+  When Silo's own requests are switched on, StreamForge uses them instead of
+  Seerr for the Requests page, Request buttons and approvals.
 
 Each install watches the one media server you choose. Running two? Run a
 StreamForge for each.
