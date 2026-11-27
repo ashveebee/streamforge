@@ -888,11 +888,25 @@ export async function requestsBy(srv: JfServerTarget, userId: string) {
   return listRequests(srv, { user: userId, limit: 20 });
 }
 
-/** Approves or declines a request (admin key). */
+/**
+ * Approves or declines a request (admin key). Approving one that's already
+ * approved (another admin, a second click, auto-approval) counts as done.
+ */
 export async function decideRequest(srv: JfServerTarget, id: string, decision: 'approve' | 'decline') {
   if (!/^[0-9]{1,30}$/.test(id)) throw new UpstreamError('Unknown request', 400, 'seerr');
-  await post(srv, `/admin/requests/${id}/${decision}`, {});
-  cache.delete(`silo:${srv.id}:requests:`);
+  try {
+    await post(srv, `/admin/requests/${id}/${decision}`, {});
+  } catch (err) {
+    if (!(err instanceof UpstreamError) || err.status !== 409) throw err;
+    // Silo answers 409 when the request has already moved on: see where it is now.
+    const now = (await silo<Page<SiloRequest>>(srv, '/admin/requests', { limit: 50 }).catch(() => undefined))?.items?.find((r) => r.id === id);
+    const done = decision === 'approve' ? now && now.state !== 'pending' && now.outcome === 'active' : now && (now.state === 'declined' || now.state === 'cancelled');
+    if (!done) throw new UpstreamError(now ? `This request is already ${now.state.replace('_', ' ')}.` : 'This request has already been handled.', 409, 'seerr');
+  } finally {
+    // Title pages cache each title's request state too.
+    cache.delete(`silo:${srv.id}:requests:`);
+    cache.delete(`silo:${srv.id}:reqdetail:`);
+  }
 }
 
 interface SiloRequestDetail {
@@ -928,7 +942,7 @@ const REQUEST_NUM: Record<string, number> = { pending: 1, declined: 3, cancelled
  * read from Seerr (so they work the same either way).
  */
 export async function titleDetail(srv: JfServerTarget, type: 'movie' | 'tv', tmdbId: number) {
-  return cache.get(`silo:${srv.id}:reqdetail:${type}:${tmdbId}`, 60_000, async () => {
+  return cache.get(`silo:${srv.id}:reqdetail:${type}:${tmdbId}`, 15_000, async () => {
     const profile = await profileId(srv);
     const d = await silo<SiloRequestDetail>(srv, `/requests/detail/${type === 'tv' ? 'series' : 'movie'}/${tmdbId}`, undefined, profile);
     // The request itself, for who asked and which seasons.

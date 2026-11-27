@@ -182,6 +182,8 @@ export async function decideRequest(id: string, decision: 'approve' | 'decline')
   await seerr()!.post(`/api/v1/request/${id}/${decision}`, {});
   cache.delete('seerr:requests:');
   cache.delete('seerr:count');
+  // Title pages cache each title's details and request state.
+  cache.delete('seerr:details:');
 }
 
 /*
