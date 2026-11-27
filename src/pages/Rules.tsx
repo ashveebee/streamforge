@@ -119,7 +119,7 @@ function RuleRow({ meta, r }: { meta: RulesStatus; r: Rule }) {
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium">{r.name}</div>
         <div className="text-[11px] text-ink-3">
-          {t('admin.rules.if')} {lower(condLabel(meta, r.condition).replace('N', String(r.value)))} → {r.actions.map((a) => lower(actionLabel(meta, a))).join(', ')}
+          {t('admin.rules.if')} {lower(condLabel(meta, r.condition).replace(/\bN\b/, String(r.value)))} → {r.actions.map((a) => lower(actionLabel(meta, a))).join(', ')}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-4">
           {s.lastError ? <span className="text-bad">{s.lastError}</span> : s.summary ? <span>{s.summary}</span> : <span>{t('admin.rules.notChecked')}</span>}
