@@ -69,7 +69,7 @@ const kometa: Messages['kometa'] = {
     add: 'Añadir colección',
   },
   col: {
-    onList: 'Lo que hay en la {source} y lo que tienes',
+    onList: 'Lo que hay en «{source}» y lo que tienes',
     list: 'lista',
     inCollection: 'En la colección del servidor',
     canAdd: 'de {count} que puedes añadir',
