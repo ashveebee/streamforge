@@ -41,7 +41,19 @@ export interface ClientView {
   upLimit?: number;
   paused?: boolean;
   freeSpace?: number;
+  /** At most a few hundred, chosen by the server; `summary` counts all of them. */
   items?: ClientItem[];
+  summary?: ItemSummary;
+}
+
+export interface ItemSummary {
+  total: number;
+  downloading: number;
+  active: number;
+  seeding: number;
+  paused: number;
+  error: number;
+  remaining: number;
 }
 
 export interface ClientsSnapshot {
@@ -78,7 +90,7 @@ export const useHasClients = () => !!useServiceConfig().data?.downloadClients;
 
 export function useClients() {
   const on = useHasClients();
-  return useQuery({ queryKey: ['clients'], queryFn: ({ signal }) => api<ClientsSnapshot>('/clients', { signal }), refetchInterval: 5000, enabled: on });
+  return useQuery({ queryKey: ['clients'], queryFn: ({ signal }) => api<ClientsSnapshot>('/clients', { signal }), refetchInterval: (q) => q.state.data?.sampleIntervalMs ?? 5000, enabled: on });
 }
 
 function useClientMutation<V>(fn: (v: V) => Promise<ClientsSnapshot>) {

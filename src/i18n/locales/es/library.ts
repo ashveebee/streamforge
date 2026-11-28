@@ -94,6 +94,7 @@ const library: Messages['library'] = {
     total: '{count} en total',
     remaining: 'Restante',
     offlineCount: '{count} sin conexión',
+    showingSome: 'Se muestran los {shown} más relevantes de {total}',
     throughput: 'Rendimiento',
     last15: 'Últimos 15 minutos',
     down: 'Bajada',

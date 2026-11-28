@@ -1,3 +1,4 @@
+import { config } from '../../config.js';
 import { buildUrl, requestRaw, UpstreamError } from '../../lib/http.js';
 import type { ClientAdapter, ClientConfig, ClientItem, ItemState } from './types.js';
 
@@ -28,7 +29,6 @@ const STATES: Record<string, ItemState> = {
 };
 
 interface Torrent {
-  hash: string;
   name: string;
   state: string;
   progress: number;
@@ -41,6 +41,54 @@ interface Torrent {
   category?: string;
   added_on: number;
 }
+
+interface ServerState {
+  dl_info_speed?: number;
+  up_info_speed?: number;
+  dl_rate_limit?: number;
+  up_rate_limit?: number;
+  free_space_on_disk?: number;
+}
+
+/** A `sync/maindata` response. After the first, only what changed since `rid` is included. */
+export interface MainData {
+  rid: number;
+  full_update?: boolean;
+  torrents?: Record<string, Partial<Torrent>>;
+  torrents_removed?: string[];
+  server_state?: ServerState;
+}
+
+/*
+ * Keeps the torrent list in step with qBittorrent through `sync/maindata`, so
+ * after the first call each sample carries only what changed instead of the
+ * whole library. One call covers torrents, speeds, limits and free space.
+ */
+export class MainDataSync {
+  rid = 0;
+  torrents = new Map<string, Partial<Torrent>>();
+  server: ServerState = {};
+
+  apply(d: MainData) {
+    if (d.full_update || this.rid === 0) {
+      this.torrents.clear();
+      this.server = {};
+    }
+    for (const [hash, patch] of Object.entries(d.torrents ?? {})) this.torrents.set(hash, { ...this.torrents.get(hash), ...patch });
+    for (const hash of d.torrents_removed ?? []) this.torrents.delete(hash);
+    Object.assign(this.server, d.server_state);
+    this.rid = d.rid;
+  }
+
+  reset() {
+    this.rid = 0;
+    this.torrents.clear();
+    this.server = {};
+  }
+}
+
+/* The first sync returns every torrent, which takes a while on a large library. Only one is ever in flight, so waiting is safe. */
+const SYNC_TIMEOUT_MS = Math.max(config.requestTimeoutMs, 60_000);
 
 /*
  * qBittorrent 5.2 names the session cookie `QBT_SID_<port>`; older versions use `SID`.
@@ -81,7 +129,7 @@ export function qbittorrent(c: ClientConfig): ClientAdapter {
     session = parseSessionCookie(res.headers.getSetCookie()) ?? null;
   }
 
-  async function call(path: string, form?: Record<string, string>, retry = true): Promise<string> {
+  async function call(path: string, form?: Record<string, string>, retry = true, timeoutMs?: number): Promise<string> {
     if (!apiKey && session === undefined) await login();
     const res = await requestRaw(buildUrl(c.url, path), {
       method: form ? 'POST' : 'GET',
@@ -93,12 +141,13 @@ export function qbittorrent(c: ClientConfig): ClientAdapter {
         ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
       },
       rawBody: form ? new URLSearchParams(form).toString() : undefined,
+      timeoutMs,
     });
     if (apiKey && res.status === 401) throw new UpstreamError('API key rejected — check it in qBittorrent’s Web UI settings', 401, 'qbittorrent');
     if (!apiKey && res.status === 403) {
       if (retry) {
         session = undefined;
-        return call(path, form, false);
+        return call(path, form, false, timeoutMs);
       }
       throw new UpstreamError(
         hasLogin ? 'qBittorrent rejected the session (HTTP 403)' : 'qBittorrent needs a username and password or an API key — StreamForge’s address isn’t covered by its authentication bypass',
@@ -109,7 +158,9 @@ export function qbittorrent(c: ClientConfig): ClientAdapter {
     if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`, res.status, 'qbittorrent');
     return res.text();
   }
-  const json = async <T>(path: string) => JSON.parse(await call(path)) as T;
+  const sync = new MainDataSync();
+  /* The version doesn't change while qBittorrent runs; it's asked again after a failure in case it was upgraded. */
+  let version: string | undefined;
 
   /* qBittorrent 5 renamed pause/resume to stop/start. */
   async function either(newPath: string, oldPath: string, form: Record<string, string>) {
@@ -124,35 +175,42 @@ export function qbittorrent(c: ClientConfig): ClientAdapter {
   return {
     version: async () => (await call('/api/v2/app/version')).trim(),
     async snapshot() {
-      const [version, info, torrents, main] = await Promise.all([
-        call('/api/v2/app/version'),
-        json<{ dl_info_speed: number; up_info_speed: number; dl_rate_limit: number; up_rate_limit: number }>('/api/v2/transfer/info'),
-        json<Torrent[]>('/api/v2/torrents/info'),
-        json<{ server_state?: { free_space_on_disk?: number } }>('/api/v2/sync/maindata').catch(() => ({}) as { server_state?: { free_space_on_disk?: number } }),
-      ]);
-      const items: ClientItem[] = torrents.map((t) => ({
-        id: t.hash,
-        name: t.name,
-        state: STATES[t.state] ?? 'queued',
-        progress: t.progress,
-        size: t.size,
-        downloaded: t.downloaded,
-        downSpeed: t.dlspeed,
-        upSpeed: t.upspeed,
-        eta: t.eta > 0 && t.eta < 8_640_000 ? t.eta : undefined,
-        ratio: t.ratio,
-        category: t.category || undefined,
-        addedAt: new Date(t.added_on * 1000).toISOString(),
-      }));
+      try {
+        version ??= (await call('/api/v2/app/version')).trim();
+        sync.apply(JSON.parse(await call(`/api/v2/sync/maindata?rid=${sync.rid}`, undefined, true, SYNC_TIMEOUT_MS)) as MainData);
+      } catch (err) {
+        version = undefined;
+        sync.reset();
+        throw err;
+      }
+      const items: ClientItem[] = [];
+      for (const [hash, t] of sync.torrents) {
+        const eta = t.eta ?? 0;
+        items.push({
+          id: hash,
+          name: t.name ?? hash,
+          state: STATES[t.state ?? ''] ?? 'queued',
+          progress: t.progress ?? 0,
+          size: t.size ?? 0,
+          downloaded: t.downloaded ?? 0,
+          downSpeed: t.dlspeed ?? 0,
+          upSpeed: t.upspeed ?? 0,
+          eta: eta > 0 && eta < 8_640_000 ? eta : undefined,
+          ratio: t.ratio,
+          category: t.category || undefined,
+          addedAt: t.added_on ? new Date(t.added_on * 1000).toISOString() : undefined,
+        });
+      }
+      const st = sync.server;
       return {
-        version: version.trim(),
+        version,
         protocol: 'torrent' as const,
-        downSpeed: info.dl_info_speed,
-        upSpeed: info.up_info_speed,
-        downLimit: info.dl_rate_limit || undefined,
-        upLimit: info.up_rate_limit || undefined,
+        downSpeed: st.dl_info_speed ?? 0,
+        upSpeed: st.up_info_speed ?? 0,
+        downLimit: st.dl_rate_limit || undefined,
+        upLimit: st.up_rate_limit || undefined,
         paused: items.length > 0 && items.every((i) => i.state === 'paused' || i.state === 'completed'),
-        freeSpace: main.server_state?.free_space_on_disk,
+        freeSpace: st.free_space_on_disk,
         items,
       };
     },

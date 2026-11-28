@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDown, ArrowUp, CircleAlert, Download, Gauge, HardDrive, LoaderCircle, Pause, Play, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useClientItem, useClientLimits, useClientPause, useClients, useHasClients, type ClientItem, type ClientView, type ItemState } from '@/hooks/useClients';
+import { useClientItem, useClientLimits, useClientPause, useClients, useHasClients, type ClientItem, type ClientView, type ItemState, type ItemSummary } from '@/hooks/useClients';
 import { bytes, duration, relative, speed } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -37,6 +37,17 @@ const matches = (f: Filter, i: ClientItem) =>
   (f === 'seeding' && (i.state === 'seeding' || i.state === 'completed')) ||
   (f === 'paused' && i.state === 'paused') ||
   (f === 'error' && i.state === 'error');
+
+/* For servers too old to send `summary`. */
+const summarise = (items: ClientItem[]): ItemSummary => ({
+  total: items.length,
+  downloading: items.filter((i) => i.state === 'downloading').length,
+  active: items.filter((i) => matches('active', i)).length,
+  seeding: items.filter((i) => matches('seeding', i)).length,
+  paused: items.filter((i) => matches('paused', i)).length,
+  error: items.filter((i) => matches('error', i)).length,
+  remaining: items.filter((i) => i.state !== 'seeding' && i.state !== 'completed').reduce((n, i) => n + i.size - i.downloaded, 0),
+});
 
 function ItemRow({ c, i }: { c: ClientView; i: ClientItem }) {
   const { user } = useAuth();
@@ -116,6 +127,7 @@ function ClientCard({ c }: { c: ClientView }) {
   const t = useT();
   const [filter, setFilter] = useState<Filter>('all');
   const items = (c.items ?? []).filter((i) => matches(filter, i)).sort((a, b) => b.downSpeed - a.downSpeed || a.progress - b.progress);
+  const inFilter = c.summary ? (filter === 'all' ? c.summary.total : c.summary[filter]) : items.length;
   return (
     <Card>
       <CardHeader
@@ -146,7 +158,7 @@ function ClientCard({ c }: { c: ClientView }) {
             {user?.isAdmin && <div className="mb-3"><Limits key={`${c.downLimit}-${c.upLimit}`} c={c} /></div>}
             <div className="mb-2 flex flex-wrap gap-1" role="tablist" aria-label={t('library.dl.filter')}>
               {FILTERS.filter((f) => c.protocol === 'torrent' || f !== 'seeding').map((f) => {
-                const n = (c.items ?? []).filter((i) => matches(f, i)).length;
+                const n = c.summary ? (f === 'all' ? c.summary.total : c.summary[f]) : (c.items ?? []).filter((i) => matches(f, i)).length;
                 return (
                   <button
                     key={f}
@@ -165,6 +177,7 @@ function ClientCard({ c }: { c: ClientView }) {
             ) : (
               <ul className="max-h-[560px] divide-y divide-line overflow-y-auto">{items.map((i) => <ItemRow key={i.id} c={c} i={i} />)}</ul>
             )}
+            {inFilter > items.length && <p className="mt-2 text-xs text-ink-4">{t('library.dl.showingSome', { shown: items.length, total: inFilter })}</p>}
             {pause.error && <p className="mt-2 text-xs text-bad">{(pause.error as Error).message}</p>}
           </>
         )}
@@ -188,14 +201,15 @@ export default function DownloadsPage() {
             const online = d.clients.filter((c) => c.online);
             const down = online.reduce((n, c) => n + (c.downSpeed ?? 0), 0);
             const up = online.reduce((n, c) => n + (c.upSpeed ?? 0), 0);
-            const all = online.flatMap((c) => c.items ?? []);
-            const left = all.filter((i) => i.state !== 'seeding' && i.state !== 'completed').reduce((n, i) => n + i.size - i.downloaded, 0);
+            const totals = online.map((c) => c.summary ?? summarise(c.items ?? []));
+            const total = (k: keyof ItemSummary) => totals.reduce((n, s) => n + s[k], 0);
+            const left = total('remaining');
             return (
               <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatTile label={t('widgets.requests.phase.downloading')} value={down} format={(n) => speed(n)} icon={ArrowDown} accent="var(--color-downloads)" />
                   <StatTile label={t('library.dl.uploading')} value={up} format={(n) => speed(n)} icon={ArrowUp} accent="var(--color-ok)" />
-                  <StatTile label={t('library.dl.active')} value={all.filter((i) => i.state === 'downloading').length} icon={Download} accent="var(--color-brand)" hint={t('library.dl.total', { count: all.length })} />
+                  <StatTile label={t('library.dl.active')} value={total('downloading')} icon={Download} accent="var(--color-brand)" hint={t('library.dl.total', { count: total('total') })} />
                   <StatTile label={t('library.dl.remaining')} value={left} format={(n) => bytes(n)} icon={HardDrive} accent="var(--color-infinidisk)" hint={t('library.dl.offlineCount', { count: d.clients.length - online.length })} />
                 </div>
                 <Card>

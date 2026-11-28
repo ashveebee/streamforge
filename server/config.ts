@@ -74,6 +74,8 @@ const schema = z.object({
   // Ask GitHub every 6 hours whether a newer StreamForge release exists.
   UPDATE_CHECK: bool(true),
   HOST_METRICS_INTERVAL_SECONDS: int(5, 1),
+  // How often download clients are sampled. Slow or failing clients back off on their own.
+  CLIENT_SAMPLE_INTERVAL_SECONDS: int(5, 2),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -103,6 +105,7 @@ export const config = {
   hostMetrics: env.HOST_METRICS,
   updateCheck: env.UPDATE_CHECK,
   hostMetricsIntervalMs: env.HOST_METRICS_INTERVAL_SECONDS * 1000,
+  clientSampleIntervalMs: env.CLIENT_SAMPLE_INTERVAL_SECONDS * 1000,
 
   dataDir: env.DATA_DIR,
 

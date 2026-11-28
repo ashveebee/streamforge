@@ -93,6 +93,7 @@ export default {
     total: '{count} total',
     remaining: 'Remaining',
     offlineCount: '{count} offline',
+    showingSome: 'Showing the {shown} most relevant of {total}',
     throughput: 'Throughput',
     last15: 'Last 15 minutes',
     down: 'Down',
