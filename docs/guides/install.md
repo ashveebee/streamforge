@@ -146,7 +146,8 @@ you don't use and they disappear from the sidebar.
 | Sonarr, Radarr, Lidarr, Readarr, Prowlarr | Settings → General → Security → API Key |
 | Bazarr | Settings → General → Security → API Key |
 | Seerr (Overseerr / Jellyseerr) | Settings → General → API Key |
-| qBittorrent, Transmission, NZBGet | Your web UI username and password (**Settings → Download clients**) |
+| qBittorrent | Your web UI username and password, or an API key on qBittorrent 5.2+ (**Settings → Download clients**). If qBittorrent's authentication bypass covers StreamForge's address, you can leave all three blank. |
+| Transmission, NZBGet | Your web UI username and password (**Settings → Download clients**) |
 | SABnzbd | Config → General → API Key (**Settings → Download clients**) |
 | Infinidisk | Your Infinidisk settings (optional if its status endpoint is public) |
 
