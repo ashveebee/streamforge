@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.1](https://github.com/ashveebee/streamforge/compare/v2.2.0...v2.2.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* **clients:** qBittorrent 5.2 sign-in and API key support ([3f671fb](https://github.com/ashveebee/streamforge/commit/3f671fbc358704659005f1f8e782b7a5d933316e))
+* **clients:** qBittorrent 5.2 sign-in and API key support ([df5eac2](https://github.com/ashveebee/streamforge/commit/df5eac28a25b5c26b142974acb676628aa4c261f)), closes [#35](https://github.com/ashveebee/streamforge/issues/35)
+
 ## [2.2.0](https://github.com/ashveebee/streamforge/compare/v2.1.0...v2.2.0) (2026-11-27)
 
 
