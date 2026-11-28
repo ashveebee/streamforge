@@ -15,13 +15,20 @@ import type { HealthProbe } from './types.js';
  * Everything here returns the same shapes as the Plex and Jellyfin functions,
  * so the rest of StreamForge treats Silo like any other media server.
  *
- * Artwork: Silo serves signed, public image URLs under /api/v2/artwork/. A
- * ref carries the path after that prefix in `tag`; the image proxy fetches it
- * from the Silo server, so the browser never talks to Silo directly.
+ * Artwork: Silo serves signed, public image URLs under /api/v2/artwork/ and,
+ * for art not yet cached from S3-compatible storage, /api/v2/item-posters/. A
+ * ref carries the path after that prefix in `tag` (item-poster tags start with
+ * `p:`); the image proxy fetches it from the Silo server, so the browser never
+ * talks to Silo directly. Presigned object-store URLs (which catalog reads
+ * return on S3-backed servers) aren't proxied: posters come from the admin
+ * catalog instead, which links to Silo itself, and backdrops are left out.
  */
 
 const base = (url: string) => url.replace(/\/+$/, '');
 const ARTWORK = '/api/v2/artwork/';
+const ITEM_POSTERS = '/api/v2/item-posters/';
+/** Marks an item-poster tag. Artwork tags never contain ':'. */
+const POSTER_TAG = 'p:';
 
 function headers(apiKey: string, profile?: string): Record<string, string> {
   return { Accept: 'application/json', Authorization: `Bearer ${apiKey}`, ...(profile ? { 'X-Profile-Id': profile } : {}) };
@@ -267,12 +274,68 @@ export async function userStatus(srv: JfServerTarget, userId: string) {
 
 const TYPE: Record<string, string> = { movie: 'Movie', episode: 'Episode', series: 'Series', season: 'Season', track: 'Audio', audiobook: 'AudioBook' };
 
+const ARTWORK_TAG = /^[A-Za-z0-9._/-]{1,300}(\?[A-Za-z0-9=&_.-]{1,300})?$/;
+// A content id (which can contain ':' and may be percent-encoded), one segment.
+const POSTER_ID = /^(?:[A-Za-z0-9._:~-]|%[0-9A-Fa-f]{2}){1,200}$/;
+const POSTER_QUERY = /^[A-Za-z0-9=&_.~:+%-]{1,1000}$/;
+
+/** The Silo path an artwork tag stands for, or undefined if it isn't one of Silo's image routes. */
+function tagPath(tag: string) {
+  if (tag.startsWith(POSTER_TAG)) {
+    const [id, query, ...rest] = tag.slice(POSTER_TAG.length).split('?');
+    // One path segment only: no '/', no dot segments, encoded or not.
+    if (rest.length || !POSTER_ID.test(id) || /^\.+$/.test(id) || /%(2e|2f|5c)/i.test(id)) return undefined;
+    if (query !== undefined && !POSTER_QUERY.test(query)) return undefined;
+    return `${ITEM_POSTERS}${tag.slice(POSTER_TAG.length)}`;
+  }
+  if (!ARTWORK_TAG.test(tag) || tag.includes('..')) return undefined;
+  return `${ARTWORK}${tag}`;
+}
+
 /** A Silo artwork URL → an artwork ref the image proxy understands. */
 function art(url: string | undefined, itemId: string, type: ArtworkRef['type'], server: string): ArtworkRef | undefined {
   if (!url) return undefined;
+  let tag: string | undefined;
   const at = url.indexOf(ARTWORK);
-  if (at < 0) return undefined;
-  return { itemId: itemId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 100) || 'item', type, tag: url.slice(at + ARTWORK.length), server };
+  const posterAt = url.indexOf(ITEM_POSTERS);
+  if (at >= 0) tag = url.slice(at + ARTWORK.length);
+  else if (posterAt >= 0) tag = `${POSTER_TAG}${url.slice(posterAt + ITEM_POSTERS.length)}`;
+  if (!tag || !tagPath(tag)) return undefined;
+  return { itemId: itemId.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 100) || 'item', type, tag, server };
+}
+
+/** The first of several artwork URLs that the image proxy can serve. */
+function firstArt(urls: (string | undefined)[], itemId: string, type: ArtworkRef['type'], server: string) {
+  for (const url of urls) {
+    const a = art(url, itemId, type, server);
+    if (a) return a;
+  }
+  return undefined;
+}
+
+/**
+ * Admin catalog entries by id (cached). On S3-backed servers their poster_url
+ * points at Silo (signed artwork or item-poster links) where catalog reads
+ * return presigned object-store URLs. Older builds that ignore `content_ids`
+ * just return a page of other items, which the id match filters out.
+ */
+async function adminItems(srv: JfServerTarget, ids: (string | undefined)[]) {
+  const want = [...new Set(ids.filter((id): id is string => !!id && isValidId(id)))].sort();
+  const out = new Map<string, SiloItem>();
+  if (!want.length) return out;
+  const items = await cache.get(`silo:${srv.id}:admin-items:${want.join(',')}`, 10 * 60_000, () =>
+    silo<Page<SiloItem>>(srv, '/admin/catalog/items', { content_ids: want.join(','), limit: Math.min(want.length, 200) })
+      .then((r) => r.items ?? [])
+      .catch(() => [] as SiloItem[]),
+  );
+  for (const i of items) if (want.includes(i.content_id)) out.set(i.content_id, i);
+  return out;
+}
+
+/** A poster from the admin catalog, for when catalog reads only gave an object-store URL. */
+async function adminPoster(srv: JfServerTarget, contentId: string | undefined, itemId: string) {
+  if (!contentId) return undefined;
+  return art((await adminItems(srv, [contentId])).get(contentId)?.poster_url, itemId, 'Primary', srv.id);
 }
 
 function resolutionLabel(height?: number, label?: string) {
@@ -311,7 +374,10 @@ async function normalise(s: SiloSession, srv: JfServerTarget): Promise<NowPlayin
   const positionMs = Math.round(s.position_seconds * 1000);
   const method = playMethod(s);
   const id = s.media_item_id ?? s.session_id;
-  const poster = art(ep ? (detail?.series_poster_url ?? s.poster_url) : (detail?.poster_url ?? s.poster_url), id, 'Primary', srv.id);
+  // Catalog art first (sized, on local storage), then Silo-hosted links from the admin side.
+  const poster = ep
+    ? (art(detail?.series_poster_url, id, 'Primary', srv.id) ?? (await adminPoster(srv, detail?.series_id, id)) ?? art(s.poster_url, id, 'Primary', srv.id))
+    : (firstArt([detail?.poster_url, s.poster_url], id, 'Primary', srv.id) ?? (await adminPoster(srv, s.media_item_id, id)));
   const backdrop = art(ep ? (detail?.series_backdrop_url ?? detail?.backdrop_url) : detail?.backdrop_url, id, 'Backdrop', srv.id);
   return {
     sessionId: s.session_id,
@@ -613,10 +679,14 @@ export async function libraryItems(srv: JfServerTarget) {
 export async function search(srv: JfServerTarget, q: string, limit = 12) {
   const profile = await profileId(srv);
   const res = await silo<Page<SiloItem>>(srv, '/catalog', { q, limit: Math.min(limit, 50), poster_width: 300 }, profile);
-  return (res.items ?? []).slice(0, limit).map((m) => {
+  const found = (res.items ?? []).slice(0, limit);
+  // Posters the catalog only gave as object-store URLs, from the admin catalog in one call.
+  const missing = found.filter((m) => !art(m.poster_url, m.content_id, 'Primary', srv.id)).map((m) => m.content_id);
+  const admin = missing.length ? await adminItems(srv, missing) : new Map<string, SiloItem>();
+  return found.map((m) => {
     const kind = TYPE[m.type] ?? m.type;
     const titlePage = m.tmdb_id && /^\d+$/.test(m.tmdb_id) && (m.type === 'movie' || m.type === 'series') ? `/media/${m.type === 'movie' ? 'movie' : 'tv'}/${m.tmdb_id}` : undefined;
-    const a = art(m.poster_url, m.content_id, 'Primary', srv.id);
+    const a = firstArt([m.poster_url, admin.get(m.content_id)?.poster_url], m.content_id, 'Primary', srv.id);
     return {
       key: `silo:${srv.id}:${m.content_id}`,
       source: 'silo' as const,
@@ -673,7 +743,7 @@ export async function itemDetails(srv: JfServerTarget, id: string) {
   const episodes = m.type === 'series' ? (await catalog(srv, 'episode').catch(() => [] as SiloItem[])).filter((e) => e.series_id === m.content_id) : [];
   const perSeason = new Map<number, number>();
   for (const e of episodes) if (e.season_number !== undefined) perSeason.set(e.season_number, (perSeason.get(e.season_number) ?? 0) + 1);
-  const poster = art(m.poster_url, m.content_id, 'Primary', srv.id);
+  const poster = art(m.poster_url, m.content_id, 'Primary', srv.id) ?? (await adminPoster(srv, m.content_id, m.content_id));
   const backdrop = art(m.backdrop_url, m.content_id, 'Backdrop', srv.id);
   return {
     title: m.title,
@@ -745,12 +815,28 @@ function imageUrl(a: ArtworkRef, w: number) {
   return `/api/jellyfin/image/items/${encodeURIComponent(a.itemId)}/${a.type}?w=${w}&tag=${encodeURIComponent(a.tag ?? '')}&server=${encodeURIComponent(a.server ?? '')}`;
 }
 
-/** Fetches a Silo artwork image (its signed, public /api/v2/artwork/ URL). */
-export function image(srv: JfServerTarget, _id: string, _type: string, opts: { tag?: string }) {
-  const tag = opts.tag ?? '';
-  // Only Silo's artwork paths: letters, digits and . _ - / with a signature query.
-  if (!/^[A-Za-z0-9._/-]{1,300}(\?[A-Za-z0-9=&_.-]{1,300})?$/.test(tag) || tag.includes('..')) return Promise.resolve(new Response(null, { status: 404 }));
-  return requestRaw(`${base(srv.url)}${ARTWORK}${tag}`, { headers: { Accept: 'image/*' }, service: 'jellyfin' });
+/**
+ * The artwork tag for an item that came without one (Watch History only knows
+ * item ids), from the admin catalog: an episode's series poster, else its own.
+ */
+async function tagFor(srv: JfServerTarget, id: string, type: string) {
+  if (!isValidId(id) || (type !== 'Primary' && type !== 'Backdrop')) return undefined;
+  const pick = (i?: SiloItem) => art(type === 'Primary' ? i?.poster_url : i?.backdrop_url, id, type, srv.id)?.tag;
+  const item = (await adminItems(srv, [id])).get(id);
+  const series = item?.type === 'episode' && item.series_id ? (await adminItems(srv, [item.series_id])).get(item.series_id) : undefined;
+  return pick(series) ?? pick(item);
+}
+
+/**
+ * Fetches a Silo image from its signed, public URL: /api/v2/artwork/ or
+ * /api/v2/item-posters/ (whose bad or expired signatures are a 404, and whose
+ * 429 and 503 replies pass through as they are). With no tag, the item's own
+ * artwork is looked up by id.
+ */
+export async function image(srv: JfServerTarget, id: string, type: string, opts: { tag?: string }) {
+  const path = tagPath(opts.tag || (await tagFor(srv, id, type)) || '');
+  if (!path) return new Response(null, { status: 404 });
+  return requestRaw(`${base(srv.url)}${path}`, { headers: { Accept: 'image/*' }, service: 'jellyfin' });
 }
 
 /* -------------------------------- requests -------------------------------- */
