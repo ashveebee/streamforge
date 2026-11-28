@@ -21,7 +21,7 @@ export const CLIENT_NAMES: Record<ClientType, string> = { qbittorrent: 'qBittorr
 const FACTORIES: Record<ClientType, (c: ClientConfig) => ClientAdapter> = { qbittorrent, transmission, sabnzbd, nzbget };
 /** Which credential fields each type uses. */
 export const CLIENT_FIELDS: Record<ClientType, ('username' | 'password' | 'apiKey')[]> = {
-  qbittorrent: ['username', 'password'],
+  qbittorrent: ['username', 'password', 'apiKey'],
   transmission: ['username', 'password'],
   sabnzbd: ['apiKey'],
   nzbget: ['username', 'password'],

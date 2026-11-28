@@ -68,6 +68,7 @@ export default {
     type: 'Client type',
     namePh: 'Name, e.g. Seedbox',
     keyPh: 'API key (Config → General)',
+    keyPhQbt: 'API key (optional, v5.2+)',
     confirmRemove: 'Remove the download client “{name}”?',
     intro: 'Connect your torrent and usenet clients for real transfer speeds, pausing, removing and speed limits.',
     stay: 'Passwords and API keys stay on the StreamForge server.',

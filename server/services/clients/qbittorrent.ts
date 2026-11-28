@@ -1,7 +1,7 @@
 import { buildUrl, requestRaw, UpstreamError } from '../../lib/http.js';
 import type { ClientAdapter, ClientConfig, ClientItem, ItemState } from './types.js';
 
-/* qBittorrent Web API v2. Signs in with a cookie and re-signs in when it expires. */
+/* qBittorrent Web API v2. Uses an API key when given (5.2+), else signs in with a cookie and re-signs in when it expires. */
 
 const STATES: Record<string, ItemState> = {
   downloading: 'downloading',
@@ -42,9 +42,24 @@ interface Torrent {
   added_on: number;
 }
 
+/*
+ * qBittorrent 5.2 names the session cookie `QBT_SID_<port>`; older versions use `SID`.
+ * Returns the name and value so the same cookie can be sent back.
+ */
+export function parseSessionCookie(setCookies: string[]): { name: string; value: string } | undefined {
+  for (const line of setCookies) {
+    const m = line.match(/^\s*(QBT_SID_\d+|SID)=([^;]*)/);
+    if (m?.[2]) return { name: m[1]!, value: m[2] };
+  }
+  return undefined;
+}
+
 export function qbittorrent(c: ClientConfig): ClientAdapter {
-  let sid: string | undefined;
+  /* undefined = not signed in yet; null = signed in without a cookie (authentication bypass). */
+  let session: { name: string; value: string } | null | undefined;
   const origin = new URL(c.url).origin;
+  const apiKey = c.apiKey?.trim();
+  const hasLogin = !!(c.username || c.password);
 
   async function login() {
     const res = await requestRaw(buildUrl(c.url, '/api/v2/auth/login'), {
@@ -53,29 +68,43 @@ export function qbittorrent(c: ClientConfig): ClientAdapter {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: origin, Origin: origin },
       rawBody: new URLSearchParams({ username: c.username ?? '', password: c.password ?? '' }).toString(),
     });
-    const text = await res.text();
-    const cookie = res.headers.get('set-cookie')?.match(/SID=([^;]+)/)?.[1];
-    if (!res.ok || text.trim() === 'Fails.') throw new UpstreamError('Sign-in failed — check the username and password', 401, 'qbittorrent');
-    // Local-network bypass: no cookie, but requests work anyway.
-    sid = cookie ?? '';
+    const text = (await res.text()).trim();
+    if (res.status === 403 && /banned/i.test(text)) throw new UpstreamError(text, 403, 'qbittorrent');
+    if (!res.ok || text === 'Fails.') {
+      throw new UpstreamError(
+        hasLogin ? 'Sign-in failed — check the username and password' : 'qBittorrent needs a username and password or an API key — StreamForge’s address isn’t covered by its authentication bypass',
+        401,
+        'qbittorrent',
+      );
+    }
+    // Authentication bypass may answer without a cookie; requests still work.
+    session = parseSessionCookie(res.headers.getSetCookie()) ?? null;
   }
 
   async function call(path: string, form?: Record<string, string>, retry = true): Promise<string> {
-    if (sid === undefined) await login();
+    if (!apiKey && session === undefined) await login();
     const res = await requestRaw(buildUrl(c.url, path), {
       method: form ? 'POST' : 'GET',
       service: 'qbittorrent',
       headers: {
         Referer: origin,
         Origin: origin,
-        ...(sid ? { Cookie: `SID=${sid}` } : {}),
+        ...(apiKey ? { 'X-API-Key': apiKey } : session ? { Cookie: `${session.name}=${session.value}` } : {}),
         ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
       },
       rawBody: form ? new URLSearchParams(form).toString() : undefined,
     });
-    if (res.status === 403 && retry) {
-      sid = undefined;
-      return call(path, form, false);
+    if (apiKey && res.status === 401) throw new UpstreamError('API key rejected — check it in qBittorrent’s Web UI settings', 401, 'qbittorrent');
+    if (!apiKey && res.status === 403) {
+      if (retry) {
+        session = undefined;
+        return call(path, form, false);
+      }
+      throw new UpstreamError(
+        hasLogin ? 'qBittorrent rejected the session (HTTP 403)' : 'qBittorrent needs a username and password or an API key — StreamForge’s address isn’t covered by its authentication bypass',
+        403,
+        'qbittorrent',
+      );
     }
     if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`, res.status, 'qbittorrent');
     return res.text();

@@ -51,13 +51,13 @@ function ClientRow({ c, types, onDone }: { c?: ClientSettingsView; types: { id: 
         <Input className="h-9" aria-label={t('kometa.form.name')} placeholder={t('sec.clients.namePh')} value={form.name} aria-invalid={err?.field === 'name'} onChange={(e) => set('name', e.target.value)} />
         <Input className="h-9" aria-label={t('settings.service.address')} type="url" inputMode="url" spellCheck={false} autoComplete="off" placeholder={`http://192.168.1.10:${PORT[form.type]}`} value={form.url} aria-invalid={err?.field === 'url'} onChange={(e) => set('url', e.target.value)} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className={cn('grid gap-3', fields.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
         {fields.includes('username') && <Input className="h-9" aria-label={t('common.username')} autoComplete="off" placeholder={t('common.username')} value={form.username} onChange={(e) => set('username', e.target.value)} />}
         {fields.includes('password') && (
           <Input className="h-9" aria-label={t('common.password')} type="password" autoComplete="new-password" placeholder={c?.passwordSet ? t('sec.savedBlank') : t('common.password')} value={form.password} aria-invalid={err?.field === 'password'} onChange={(e) => set('password', e.target.value)} />
         )}
         {fields.includes('apiKey') && (
-          <Input className="h-9 font-mono text-[13px]" aria-label={t('settings.service.apiKey')} type="password" autoComplete="new-password" placeholder={c?.apiKeySet ? t('sec.savedHint', { hint: c.apiKeyHint ?? '••••' }) : t('sec.clients.keyPh')} value={form.apiKey} aria-invalid={err?.field === 'apiKey'} onChange={(e) => set('apiKey', e.target.value)} />
+          <Input className="h-9 font-mono text-[13px]" aria-label={t('settings.service.apiKey')} type="password" autoComplete="new-password" placeholder={c?.apiKeySet ? t('sec.savedHint', { hint: c.apiKeyHint ?? '••••' }) : t(form.type === 'qbittorrent' ? 'sec.clients.keyPhQbt' : 'sec.clients.keyPh')} value={form.apiKey} aria-invalid={err?.field === 'apiKey'} onChange={(e) => set('apiKey', e.target.value)} />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">

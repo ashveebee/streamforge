@@ -69,6 +69,7 @@ const sec: Messages['sec'] = {
     type: 'Client-Typ',
     namePh: 'Name, z. B. Seedbox',
     keyPh: 'API-Schlüssel (Config → General)',
+    keyPhQbt: 'API-Schlüssel (optional, v5.2+)',
     confirmRemove: 'Den Download-Client „{name}“ entfernen?',
     intro: 'Verbinde deine Torrent- und Usenet-Clients für echte Geschwindigkeiten, Pausieren, Entfernen und Geschwindigkeitslimits.',
     stay: 'Passwörter und API-Schlüssel bleiben auf dem StreamForge-Server.',

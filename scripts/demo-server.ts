@@ -1375,7 +1375,7 @@ app.get('/api/settings/clients', json(() => ({
     { id: 'sab', type: 'sabnzbd', name: 'Usenet', url: 'https://sab.example.com', username: '', enabled: true, passwordSet: false, apiKeySet: true, apiKeyHint: '••••a91c', createdAt: iso(40 * DAY) },
   ],
   types: [
-    { id: 'qbittorrent', name: 'qBittorrent', fields: ['username', 'password'] },
+    { id: 'qbittorrent', name: 'qBittorrent', fields: ['username', 'password', 'apiKey'] },
     { id: 'transmission', name: 'Transmission', fields: ['username', 'password'] },
     { id: 'sabnzbd', name: 'SABnzbd', fields: ['apiKey'] },
     { id: 'nzbget', name: 'NZBGet', fields: ['username', 'password'] },
