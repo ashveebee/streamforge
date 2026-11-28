@@ -816,13 +816,26 @@ function imageUrl(a: ArtworkRef, w: number) {
 }
 
 /**
+ * The artwork tag for an item that came without one (Watch History only knows
+ * item ids), from the admin catalog: an episode's series poster, else its own.
+ */
+async function tagFor(srv: JfServerTarget, id: string, type: string) {
+  if (!isValidId(id) || (type !== 'Primary' && type !== 'Backdrop')) return undefined;
+  const pick = (i?: SiloItem) => art(type === 'Primary' ? i?.poster_url : i?.backdrop_url, id, type, srv.id)?.tag;
+  const item = (await adminItems(srv, [id])).get(id);
+  const series = item?.type === 'episode' && item.series_id ? (await adminItems(srv, [item.series_id])).get(item.series_id) : undefined;
+  return pick(series) ?? pick(item);
+}
+
+/**
  * Fetches a Silo image from its signed, public URL: /api/v2/artwork/ or
  * /api/v2/item-posters/ (whose bad or expired signatures are a 404, and whose
- * 429 and 503 replies pass through as they are).
+ * 429 and 503 replies pass through as they are). With no tag, the item's own
+ * artwork is looked up by id.
  */
-export function image(srv: JfServerTarget, _id: string, _type: string, opts: { tag?: string }) {
-  const path = tagPath(opts.tag ?? '');
-  if (!path) return Promise.resolve(new Response(null, { status: 404 }));
+export async function image(srv: JfServerTarget, id: string, type: string, opts: { tag?: string }) {
+  const path = tagPath(opts.tag || (await tagFor(srv, id, type)) || '');
+  if (!path) return new Response(null, { status: 404 });
   return requestRaw(`${base(srv.url)}${path}`, { headers: { Accept: 'image/*' }, service: 'jellyfin' });
 }
 
